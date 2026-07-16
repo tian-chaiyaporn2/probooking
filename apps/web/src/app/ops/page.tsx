@@ -48,6 +48,7 @@ export default function OpsPage() {
   async function verify(kind: "clinic" | "professional", id: string) {
     setBusy(true);
     try {
+      await ensureOpsToken(); // re-assert in case another dashboard overwrote the shared token
       if (kind === "clinic") await verifyClinic(id);
       else await verifyProfessional(id);
       await load();
@@ -61,6 +62,7 @@ export default function OpsPage() {
   async function resolve(bookingId: string) {
     setBusy(true);
     try {
+      await ensureOpsToken(); // re-assert in case another dashboard overwrote the shared token
       await resolveHold(bookingId);
       await load();
     } catch (e) {

@@ -17,6 +17,15 @@ const SWEEP_MS = Number(process.env.AUTO_ACCEPT_SWEEP_MS ?? 60_000);
 const runOnce = process.argv.includes("--once");
 
 async function tick(): Promise<void> {
+  try {
+    await runSweeps();
+  } catch (e) {
+    // A transient DB/API error must not kill the loop — log and skip this pass.
+    console.error("[worker] sweep pass failed, skipping:", (e as Error).message);
+  }
+}
+
+async function runSweeps(): Promise<void> {
   const now = Date.now();
   const aa = await autoAcceptSweep(now);
   if (aa.due > 0 || aa.failed > 0) {
@@ -45,9 +54,10 @@ async function main(): Promise<void> {
     await prisma.$disconnect();
     process.exit(0);
   }
-  setInterval(() => {
-    void tick();
-  }, SWEEP_MS);
+  // Self-scheduling loop: wait for each pass to finish before arming the next, so a
+  // slow pass can't overlap with the following one and double-act on the same rows.
+  const loop = () => setTimeout(() => void tick().finally(loop), SWEEP_MS);
+  loop();
 }
 
 void main();

@@ -57,6 +57,42 @@ test("ops dashboard verifies a pending clinic", async ({ page }) => {
   await expect(page.getByTestId(`pending-${clinic.id}`)).toHaveCount(0);
 });
 
+test("a suspended professional cannot be confirmed (VER-04 gate)", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: Awaited<ReturnType<typeof page.request.post>>) => (await r.json()) as any;
+
+  // Operations token for the guarded verify/suspend endpoints.
+  const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
+  const auth = { authorization: `Bearer ${ops.token}` };
+
+  const clinic = await j(await page.request.post(`${api}/clinics`, {
+    data: { branchName: `Susp ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66sc${uniq}` },
+  }));
+  await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: auth });
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Susp", profession: "physician", phone: `+66sp${uniq}`, payoutRef: "x-1" },
+  }));
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: auth });
+
+  const shift = await j(await page.request.post(`${api}/shifts`, {
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+  }));
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: pro.id } });
+  const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
+    data: { professionalId: pro.id },
+  }));
+  await page.request.post(`${api}/offers/${offer.id}/accept`);
+
+  // Ops suspends the licence AFTER acceptance — confirm must now be rejected (§6.3).
+  await page.request.post(`${api}/ops/professionals/${pro.id}/suspend-credential`, { headers: auth });
+  const confirm = await page.request.post(`${api}/offers/${offer.id}/confirm`, {
+    data: { prefundingSucceeded: true },
+  });
+  expect(confirm.status()).toBe(400);
+  expect(await confirm.text()).toContain("suspended");
+});
+
 test("completion pays out, then both parties review", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();

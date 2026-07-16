@@ -139,7 +139,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       where: { id: offerId },
       include: {
         shift: { include: { workspace: true } },
-        professional: { include: { insurance: true } },
+        professional: { include: { insurance: true, credentials: true } },
       },
     });
     if (!offer) return null;
@@ -150,9 +150,17 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       offer.professional.insurance.some(
         (i) => i.state === "Verified" && i.validUntil !== null && i.validUntil.getTime() >= shiftEnd,
       );
+    // VER-04: the licence credential gates confirmation — a suspended or expired
+    // licence must block the booking even after the offer was accepted.
+    const licence = offer.professional.credentials.find((c) => c.kind === "licence");
+    const professionalNotSuspended = licence?.state !== "Suspended";
+    const licenceValidThroughShiftEnd =
+      !licence?.validUntil || licence.validUntil.getTime() >= shiftEnd;
     return {
       clinicVerified: offer.shift.workspace.verification === "Verified",
       professionalVerified: offer.professional.verification === "Verified",
+      professionalNotSuspended,
+      licenceValidThroughShiftEnd,
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,
     };
@@ -677,10 +685,11 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async reconcile(): Promise<Reconciliation> {
     // PAY-11: reconcile each payment order's events against captured funds. Conserved
     // when funds out (payouts + refunds) do not exceed captured (PAY-08).
+    // No `take`: a conservation audit (PAY-11) must inspect every order — capping to
+    // the newest N would hide a leak in an older order from Finance.
     const orders = await prisma.paymentOrder.findMany({
       include: { events: { select: { type: true, amount: true } } },
       orderBy: { createdAt: "desc" },
-      take: 100,
     });
     const rows = orders.map((o) => {
       const payouts = o.events.filter((e) => e.type === "Payout").reduce((s, e) => s + e.amount, 0);

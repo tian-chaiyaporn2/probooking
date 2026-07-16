@@ -87,6 +87,8 @@ export interface EntityRef {
 export interface OfferEligibility {
   clinicVerified: boolean;
   professionalVerified: boolean;
+  professionalNotSuspended: boolean; // VER-04: licence credential not suspended by Ops
+  licenceValidThroughShiftEnd: boolean; // VER-04: licence not expired before shift ends
   insuranceRequired: boolean; // VER-05: does the shift require insurance?
   insuranceValidThroughShiftEnd: boolean;
 }

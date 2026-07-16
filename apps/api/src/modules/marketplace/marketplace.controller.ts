@@ -212,6 +212,11 @@ export class MarketplaceController {
     if (!can(role, "clinic.publish_shift")) {
       throw new BadRequestException("only a clinic owner/admin may publish a shift");
     }
+    // Validate money up front: a non-positive/non-integer compensation would otherwise
+    // surface as a 500 from satang() at offer/confirm time (satang is integer-only).
+    if (!Number.isInteger(dto.compensation) || dto.compensation <= 0) {
+      throw new BadRequestException("compensation must be a positive integer (satang)");
+    }
     // AUTH-04: an unverified clinic cannot transact.
     const clinicV = await this.repo.clinicVerification(dto.clinicWorkspaceId);
     if (clinicV === null) throw new NotFoundException("clinic not found");
@@ -428,13 +433,15 @@ export class MarketplaceController {
     const ctx: ConfirmationContext = {
       clinicActiveVerified: eligibility?.clinicVerified ?? false,
       professionalActiveVerified: eligibility?.professionalVerified ?? false,
-      licenceValidThroughShiftEnd: true,
+      // VER-04: read licence suspension/expiry at confirm time — a credential the
+      // professional held at offer time may have been suspended by Operations since.
+      licenceValidThroughShiftEnd: eligibility?.licenceValidThroughShiftEnd ?? false,
       specialtyValidThroughShiftEnd: true,
       insuranceRequired: eligibility?.insuranceRequired ?? false,
       insuranceValidThroughShiftEnd: eligibility?.insuranceValidThroughShiftEnd ?? true,
       clinicServiceSupported: true,
       shiftCategorySupported: true,
-      hasSuspension: false,
+      hasSuspension: !(eligibility?.professionalNotSuspended ?? false),
       hasBlockingHold: false,
       hasScheduleOverlap: overlap,
       offerExpired: Date.now() > offer.expiresAt, // §6.3: late payment after expiry never books
@@ -445,6 +452,10 @@ export class MarketplaceController {
       this.bookings.assertEligible(ctx); // §6.3 gate — throws NOT_ELIGIBLE with reasons
       advanceOffer(offer.state, "Converted"); // throws if the offer was never accepted
     } catch (e) {
+      // A concurrent confirm may have already booked this offer — the overlap check
+      // then trips on that very booking. Return it idempotently instead of a 400.
+      const won = await this.repo.getBookingByOffer(id);
+      if (won) return { booking: won, checkout: this.payments.checkout(satang(offer.compensation)) };
       throw new BadRequestException((e as Error).message);
     }
 
@@ -504,8 +515,18 @@ export class MarketplaceController {
     if (booking.state !== "Confirmed" && booking.state !== "InProgress") {
       throw new BadRequestException(`booking is ${booking.state}; cannot mark completion`);
     }
-    const updated = await this.repo.markCompletion(id);
-    return { id, state: updated?.state ?? "AwaitingCompletion" };
+    try {
+      const updated = await this.repo.markCompletion(id);
+      return { id, state: updated?.state ?? "AwaitingCompletion" };
+    } catch (e) {
+      // A concurrent complete may have already advanced it (illegal self-transition
+      // throws in the domain). Return the current state idempotently, not a 500.
+      const current = await this.repo.getBooking(id);
+      if (current?.state === "AwaitingCompletion" || current?.state === "ServiceCompleted") {
+        return { id, state: current.state };
+      }
+      throw new BadRequestException((e as Error).message);
+    }
   }
 
   @Post("bookings/:id/accept-completion")

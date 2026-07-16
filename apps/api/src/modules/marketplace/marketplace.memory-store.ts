@@ -77,6 +77,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly supportCases = new Map<string, ReviewCase>(); // keyed by `${bookingId}:${kind}`
   private readonly clinics = new Map<string, VerificationState>();
   private readonly professionals = new Map<string, VerificationState>();
+  private readonly professionalProfiles = new Map<string, { displayName: string; profession: string }>();
   private readonly suspendedCredentials = new Set<string>();
   private readonly reviews: MemReview[] = [];
   private readonly shifts = new Map<string, MemShift>();
@@ -91,9 +92,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async registerProfessional(input: RegisterProfessionalInput): Promise<EntityRef> {
-    void input;
     const id = randomUUID();
     this.professionals.set(id, "Submitted");
+    this.professionalProfiles.set(id, { displayName: input.displayName, profession: input.profession });
     return { id, verification: "Submitted" };
   }
 
@@ -132,6 +133,10 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return {
       clinicVerified: this.clinics.get(o.clinicWorkspaceId) === "Verified",
       professionalVerified: this.professionals.get(o.professionalId) === "Verified",
+      // VER-04: block a suspended licence at confirm. The in-memory store does not
+      // track licence expiry, so it treats an unsuspended licence as valid.
+      professionalNotSuspended: !this.suspendedCredentials.has(o.professionalId),
+      licenceValidThroughShiftEnd: true,
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,
     };
@@ -272,13 +277,22 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async searchProfessionals(filters: ProfessionalFilters): Promise<ProfessionalSearchResult[]> {
-    // In-memory keeps only verification state per professional; details are minimal.
-    void filters;
+    // SRC-01: filter Verified professionals by profession (case-insensitive). The
+    // in-memory store keeps no specialty, so a specialty filter matches nothing.
+    const wantProfession = filters.profession?.toLowerCase();
     const out: ProfessionalSearchResult[] = [];
     for (const [id, v] of this.professionals) {
-      if (v === "Verified") {
-        out.push({ id, displayName: "", profession: filters.profession ?? "", specialty: null, rating: null });
-      }
+      if (v !== "Verified") continue;
+      const profile = this.professionalProfiles.get(id);
+      if (wantProfession && profile?.profession.toLowerCase() !== wantProfession) continue;
+      if (filters.specialty) continue; // no specialty data in-memory
+      out.push({
+        id,
+        displayName: profile?.displayName ?? "",
+        profession: profile?.profession ?? "",
+        specialty: null,
+        rating: null,
+      });
     }
     return out;
   }
