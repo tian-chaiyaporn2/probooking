@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { advanceOffer } from "../src/state-machines/offer.js";
 import { advanceBooking } from "../src/state-machines/booking.js";
 import { advancePayout } from "../src/state-machines/payment.js";
+import { advanceVerification } from "../src/state-machines/verification.js";
 import { IllegalTransitionError } from "../src/state-machines/transition.js";
 
 describe("state machines (§6.2)", () => {
@@ -16,5 +17,10 @@ describe("state machines (§6.2)", () => {
 
   it("payout cannot go Paid -> Processing (no double payout, §6.4)", () => {
     expect(() => advancePayout("Paid", "Processing")).toThrow(IllegalTransitionError);
+  });
+
+  it("verification: Submitted -> Verified is allowed; Draft -> Verified is not (VER-02)", () => {
+    expect(advanceVerification("Submitted", "Verified")).toBe("Verified");
+    expect(() => advanceVerification("Draft", "Verified")).toThrow(IllegalTransitionError);
   });
 });

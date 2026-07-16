@@ -9,3 +9,4 @@ export * from "./state-machines/shift.js";
 export * from "./state-machines/offer.js";
 export * from "./state-machines/booking.js";
 export * from "./state-machines/payment.js";
+export * from "./state-machines/verification.js";

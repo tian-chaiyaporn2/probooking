@@ -29,20 +29,22 @@ import { MARKETPLACE_REPOSITORY, type MarketplaceRepository } from "./marketplac
 const HOUR_MS = 60 * 60 * 1000;
 
 interface CreateOfferDto {
-  shiftId: string;
+  clinicWorkspaceId: string;
   professionalId: string;
   compensation: number; // integer satang
+  category?: string;
   urgency?: ShiftUrgency;
   actorRole?: Role;
   shiftStartInHours?: number;
 }
 
 /**
- * The Phase 0 booking flow as controlled API endpoints (OFF-01..04, §6.3, PAY-02):
- *   POST /offers            create a binding offer   (authority gate, OFF-01)
+ * Onboarding, verification, and the Phase 0 booking flow as controlled API endpoints:
+ *   POST /clinics / /professionals        register (ORG-01, PRO-01) -> Submitted
+ *   POST /ops/{clinics,professionals}/:id/verify   Operations verifies (VER-01/02)
+ *   POST /offers            create a binding offer   (OFF-01, verified clinic only)
  *   POST /offers/:id/accept professional accepts     (soft hold, OFF-04)
  *   POST /offers/:id/confirm confirm the booking      (eligibility §6.3 + atomic)
- *   GET  /offers/:id         current offer + booking status
  *
  * All state transitions run through @probook/domain; persistence is behind the
  * MarketplaceRepository port (Prisma/Postgres or in-memory).
@@ -56,6 +58,42 @@ export class MarketplaceController {
     @Inject(MARKETPLACE_REPOSITORY) private readonly repo: MarketplaceRepository,
   ) {}
 
+  @Post("clinics")
+  async registerClinic(
+    @Body() dto: { branchName: string; licenceNo: string; address: string; ownerPhone: string },
+  ) {
+    try {
+      return await this.repo.registerClinic(dto);
+    } catch {
+      throw new BadRequestException("could not register clinic (duplicate owner phone?)");
+    }
+  }
+
+  @Post("professionals")
+  async registerProfessional(
+    @Body() dto: { displayName: string; profession: string; phone: string; payoutRef: string },
+  ) {
+    try {
+      return await this.repo.registerProfessional(dto);
+    } catch {
+      throw new BadRequestException("could not register professional (duplicate phone?)");
+    }
+  }
+
+  @Post("ops/clinics/:id/verify")
+  async verifyClinic(@Param("id") id: string) {
+    const r = await this.repo.verifyClinic(id);
+    if (!r) throw new NotFoundException("clinic not found");
+    return r;
+  }
+
+  @Post("ops/professionals/:id/verify")
+  async verifyProfessional(@Param("id") id: string) {
+    const r = await this.repo.verifyProfessional(id);
+    if (!r) throw new NotFoundException("professional not found");
+    return r;
+  }
+
   @Post("offers")
   async createOffer(@Body() dto: CreateOfferDto) {
     const role: Role = dto.actorRole ?? "clinic_owner";
@@ -66,20 +104,33 @@ export class MarketplaceController {
       throw new BadRequestException((e as Error).message);
     }
 
+    // AUTH-04: an unverified clinic cannot transact.
+    const clinicV = await this.repo.clinicVerification(dto.clinicWorkspaceId);
+    if (clinicV === null) throw new NotFoundException("clinic not found");
+    if (clinicV !== "Verified") {
+      throw new BadRequestException(`clinic is ${clinicV}; must be Verified to post a shift`);
+    }
+
     const now = Date.now();
     const shiftStart = now + (dto.shiftStartInHours ?? 48) * HOUR_MS;
     const urgency: ShiftUrgency = dto.urgency ?? "standard";
     const expiresAt = this.offers.computeExpiry(now, shiftStart, urgency);
 
-    const offer = await this.repo.createOffer({
-      shiftLabel: dto.shiftId,
-      professionalId: dto.professionalId,
-      compensation: dto.compensation,
-      urgency,
-      sentAt: now,
-      shiftStart,
-      expiresAt,
-    });
+    let offer;
+    try {
+      offer = await this.repo.createOffer({
+        clinicWorkspaceId: dto.clinicWorkspaceId,
+        professionalId: dto.professionalId,
+        category: dto.category ?? "general",
+        compensation: dto.compensation,
+        urgency,
+        sentAt: now,
+        shiftStart,
+        expiresAt,
+      });
+    } catch {
+      throw new BadRequestException("invalid professional reference");
+    }
 
     return {
       id: offer.id,
@@ -114,9 +165,11 @@ export class MarketplaceController {
       return { booking: existing, checkout: this.payments.checkout(satang(offer.compensation)) };
     }
 
+    // §6.3: read the real verification facts for this offer's clinic + professional.
+    const eligibility = await this.repo.getOfferEligibility(id);
     const ctx: ConfirmationContext = {
-      clinicActiveVerified: true,
-      professionalActiveVerified: true,
+      clinicActiveVerified: eligibility?.clinicVerified ?? false,
+      professionalActiveVerified: eligibility?.professionalVerified ?? false,
       licenceValidThroughShiftEnd: true,
       specialtyValidThroughShiftEnd: true,
       insuranceRequired: false,

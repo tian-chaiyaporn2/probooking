@@ -40,8 +40,31 @@ export interface Confirmed {
   checkout: Checkout;
 }
 
+export interface Registered {
+  id: string;
+  verification: string;
+}
+
+export const registerClinic = (input: {
+  branchName: string;
+  licenceNo: string;
+  address: string;
+  ownerPhone: string;
+}) => post<Registered>("/clinics", input);
+
+export const registerProfessional = (input: {
+  displayName: string;
+  profession: string;
+  phone: string;
+  payoutRef: string;
+}) => post<Registered>("/professionals", input);
+
+export const verifyClinic = (id: string) => post<Registered>(`/ops/clinics/${id}/verify`);
+export const verifyProfessional = (id: string) =>
+  post<Registered>(`/ops/professionals/${id}/verify`);
+
 export const createOffer = (input: {
-  shiftId: string;
+  clinicWorkspaceId: string;
   professionalId: string;
   compensation: number;
   urgency?: "standard" | "urgent";

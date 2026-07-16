@@ -4,6 +4,7 @@ import type {
   PayoutState,
   RefundState,
   CaseState,
+  VerificationState,
   ShiftUrgency,
 } from "@probook/domain";
 
@@ -11,6 +12,7 @@ import type {
 export interface OfferRecord {
   id: string;
   shiftId: string;
+  clinicWorkspaceId: string;
   professionalId: string;
   compensation: number; // integer satang
   urgency: ShiftUrgency;
@@ -19,6 +21,33 @@ export interface OfferRecord {
   shiftStart: number; // epoch ms UTC
   expiresAt: number; // epoch ms UTC
   fundingDueAt: number | null;
+}
+
+// ----- Onboarding & verification (ORG-01, PRO-01, VER-01..02) -----
+export interface RegisterClinicInput {
+  branchName: string;
+  licenceNo: string;
+  address: string;
+  ownerPhone: string;
+}
+
+export interface RegisterProfessionalInput {
+  displayName: string;
+  profession: string; // physician | dentist (Phase 1)
+  phone: string;
+  payoutRef: string; // masked payout account reference (VER-07)
+}
+
+/** A verifiable entity (clinic or professional). */
+export interface EntityRef {
+  id: string;
+  verification: VerificationState;
+}
+
+/** Verification facts read at confirmation (§6.3). */
+export interface OfferEligibility {
+  clinicVerified: boolean;
+  professionalVerified: boolean;
 }
 
 export interface BookingRecord {
@@ -30,8 +59,9 @@ export interface BookingRecord {
 }
 
 export interface CreateOfferInput {
-  shiftLabel: string; // client-facing shift identifier / category
-  professionalId: string;
+  clinicWorkspaceId: string; // the verified clinic branch posting the shift
+  professionalId: string; // the professional the binding offer is sent to
+  category: string; // shift category / scope label
   compensation: number; // integer satang
   urgency: ShiftUrgency;
   sentAt: number;
@@ -114,6 +144,16 @@ export interface CancelResult {
  * The controller depends only on this interface.
  */
 export interface MarketplaceRepository {
+  // --- Onboarding & verification ---
+  registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }>;
+  registerProfessional(input: RegisterProfessionalInput): Promise<EntityRef>;
+  /** Operations moves an entity to Verified via the domain machine (VER-01). */
+  verifyClinic(id: string): Promise<EntityRef | null>;
+  verifyProfessional(id: string): Promise<EntityRef | null>;
+  clinicVerification(id: string): Promise<VerificationState | null>;
+  /** Verification facts for an offer's clinic and professional (§6.3). */
+  getOfferEligibility(offerId: string): Promise<OfferEligibility | null>;
+
   createOffer(input: CreateOfferInput): Promise<OfferRecord>;
   getOffer(id: string): Promise<OfferRecord | null>;
   /** Transition an offer's state (and optionally set fundingDueAt). Returns the updated record. */

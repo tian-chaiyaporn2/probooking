@@ -7,9 +7,9 @@ Legend: ✅ implemented in scaffold · 🟡 stubbed / partial · ⬜ not started
 
 | Req | Summary | Code | BDD | Status |
 |---|---|---|---|---|
-| AUTH-01..04 | OTP login, verified email, restricted browsing | `db: User` | `01-*` | ⬜ |
-| ORG-01 / PRO-01 | Clinic & professional onboarding | `db: ClinicWorkspace, ProfessionalProfile` | `01-*` | 🟡 |
-| VER-01..07 | Verification states, validity through shift end, payout match | `domain: states (VerificationState)`, `db: Credential/InsuranceEvidence/PayoutAccount` | `01-*`, `13-*` | 🟡 |
+| AUTH-01..04 | OTP login, verified email, restricted browsing | `db: User`; AUTH-04 enforced (unverified clinic can't post) | `01-*` | 🟡 |
+| ORG-01 / PRO-01 | Clinic & professional onboarding | `api: POST /clinics, /professionals`, `store: registerClinic/registerProfessional` (User+Workspace+Membership / User+Profile+Credential+PayoutAccount) | `01-*` | ✅ |
+| VER-01..07 | Verification states, Ops verify, gating | `domain: advanceVerification (VER-02)`, `api: POST /ops/*/verify` (idempotent), confirm gates on real verification (§6.3), VER-04/07 credential+payout verified | `01-*`, `13-*` | 🟡 (01/02/03/04/07 live) |
 | AVL-01..03 | Availability blocks, Open to requests, conflict block | `db: Availability` | `02-*` | ⬜ |
 | SRC-01..04 | Search filters, deterministic sort, empty-state assist | — | `03-*` | ⬜ |
 | SHF-01..04 | One-position shift, scope fit, states, terms lock | `domain: state-machines/shift`, `db: Shift` | `03-*` | 🟡 |

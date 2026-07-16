@@ -58,8 +58,11 @@ A pure **domain** package holds all business rules and is depended on by everyth
 
 ## Vertical slice (Phase 0)
 
-The first end-to-end path is live: **create offer → accept (soft hold) → confirm →
-complete → pay out**.
+The first end-to-end path is live: **register → verify → create offer → accept
+(soft hold) → confirm → complete → pay out**. Clinics and professionals register
+(ORG-01/PRO-01) into `Submitted`, Operations verifies them to `Verified` (VER-01/02,
+`advanceVerification`), an unverified clinic can't post a shift (AUTH-04), and confirm
+gates on both parties being verified (§6.3) — the demo identity fixtures are gone.
 - API: `apps/api/src/modules/marketplace` — controlled endpoints composing
   `OffersService`, `BookingsService`, `PaymentsService`, behind a `MarketplaceRepository`
   port with two implementations selected at boot by `DATABASE_URL`:

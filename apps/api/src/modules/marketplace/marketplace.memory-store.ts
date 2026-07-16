@@ -12,8 +12,13 @@ import type {
   ReviewCase,
   CancelInput,
   CancelResult,
+  RegisterClinicInput,
+  RegisterProfessionalInput,
+  EntityRef,
+  OfferEligibility,
 } from "./marketplace.types.js";
-import type { OfferState } from "@probook/domain";
+import { advanceVerification } from "@probook/domain";
+import type { OfferState, VerificationState } from "@probook/domain";
 
 /**
  * Zero-dependency in-memory implementation. Used when DATABASE_URL is unset so the
@@ -24,11 +29,59 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly bookings = new Map<string, BookingDetail>();
   private readonly bookingByOffer = new Map<string, string>();
   private readonly supportCases = new Map<string, ReviewCase>(); // keyed by `${bookingId}:${kind}`
+  private readonly clinics = new Map<string, VerificationState>();
+  private readonly professionals = new Map<string, VerificationState>();
+
+  async registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }> {
+    void input;
+    const id = randomUUID();
+    this.clinics.set(id, "Submitted");
+    return { id, verification: "Submitted", ownerUserId: randomUUID() };
+  }
+
+  async registerProfessional(input: RegisterProfessionalInput): Promise<EntityRef> {
+    void input;
+    const id = randomUUID();
+    this.professionals.set(id, "Submitted");
+    return { id, verification: "Submitted" };
+  }
+
+  async verifyClinic(id: string): Promise<EntityRef | null> {
+    const current = this.clinics.get(id);
+    if (current === undefined) return null;
+    if (current === "Verified") return { id, verification: "Verified" }; // idempotent
+    const next = advanceVerification(current, "Verified");
+    this.clinics.set(id, next);
+    return { id, verification: next };
+  }
+
+  async verifyProfessional(id: string): Promise<EntityRef | null> {
+    const current = this.professionals.get(id);
+    if (current === undefined) return null;
+    if (current === "Verified") return { id, verification: "Verified" }; // idempotent
+    const next = advanceVerification(current, "Verified");
+    this.professionals.set(id, next);
+    return { id, verification: next };
+  }
+
+  async clinicVerification(id: string): Promise<VerificationState | null> {
+    return this.clinics.get(id) ?? null;
+  }
+
+  async getOfferEligibility(offerId: string): Promise<OfferEligibility | null> {
+    const o = this.offers.get(offerId);
+    if (!o) return null;
+    return {
+      clinicVerified: this.clinics.get(o.clinicWorkspaceId) === "Verified",
+      professionalVerified: this.professionals.get(o.professionalId) === "Verified",
+    };
+  }
 
   async createOffer(input: CreateOfferInput): Promise<OfferRecord> {
     const record: OfferRecord = {
       id: randomUUID(),
       shiftId: randomUUID(),
+      clinicWorkspaceId: input.clinicWorkspaceId,
       professionalId: input.professionalId,
       compensation: input.compensation,
       urgency: input.urgency,

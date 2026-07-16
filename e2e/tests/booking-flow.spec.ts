@@ -22,12 +22,14 @@ test("booking flow confirms a booking with the correct checkout total", async ({
   await expect(page.getByTestId("checkout-total")).toHaveText("฿11,200.00");
   await expect(page.getByTestId("booking-id")).not.toBeEmpty();
 
-  // The three lifecycle steps were logged in order.
+  // Onboarding + verification + lifecycle steps were logged in order.
   const steps = page.getByTestId("steps").locator("li");
-  await expect(steps).toHaveCount(3);
-  await expect(steps.nth(0)).toContainText("Offer created");
-  await expect(steps.nth(1)).toContainText("accepted");
-  await expect(steps.nth(2)).toContainText("Booking confirmed");
+  await expect(steps).toHaveCount(5);
+  await expect(steps.nth(0)).toContainText("Registered");
+  await expect(steps.nth(1)).toContainText("verified");
+  await expect(steps.nth(2)).toContainText("Offer created");
+  await expect(steps.nth(3)).toContainText("accepted");
+  await expect(steps.nth(4)).toContainText("Booking confirmed");
 });
 
 test("completion pays out the professional's compensation", async ({ page }) => {

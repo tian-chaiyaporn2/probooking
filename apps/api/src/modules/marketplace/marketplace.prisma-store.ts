@@ -1,10 +1,11 @@
 import { prisma } from "@probook/db";
-import { autoAcceptDueAt } from "@probook/domain";
+import { autoAcceptDueAt, advanceVerification } from "@probook/domain";
 import type {
   OfferState,
   BookingState,
   PayoutState,
   CaseState,
+  VerificationState,
   ShiftUrgency,
 } from "@probook/domain";
 import type {
@@ -20,21 +21,13 @@ import type {
   ReviewCase,
   CancelInput,
   CancelResult,
+  RegisterClinicInput,
+  RegisterProfessionalInput,
+  EntityRef,
+  OfferEligibility,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
-
-// Fixed Phase-0 identity fixtures. In later phases these come from real
-// registration/verification (ORG-01, PRO-01); here they are ensured idempotently
-// so the flow references a real ClinicWorkspace + ProfessionalProfile.
-const DEMO = {
-  workspaceId: "demo-clinic",
-  ownerUserId: "demo-owner",
-  ownerPhone: "+66800000001",
-  proUserId: "demo-pro-user",
-  proPhone: "+66800000002",
-  professionalId: "demo-pro",
-} as const;
 
 type OfferWithShift = {
   id: string;
@@ -43,42 +36,126 @@ type OfferWithShift = {
   sentAt: Date;
   expiresAt: Date;
   fundingDueAt: Date | null;
-  shift: { id: string; compensation: number; urgency: string; startsAt: Date };
+  shift: { id: string; workspaceId: string; compensation: number; urgency: string; startsAt: Date };
 };
 
 /**
  * Postgres-backed implementation via @probook/db (Prisma). Persists the real graph:
- * ClinicWorkspace + owner User + Membership, a ProfessionalProfile (+ its User), a
+ * registered ClinicWorkspace (+ owner User + Membership) and ProfessionalProfile
+ * (+ User, Credential, PayoutAccount) that Operations verifies (VER-01/02), then a
  * Shift, the Offer, and — on confirmation — the Booking plus its Payment Protected
  * money records, all in one transaction (BKG-02). Booking's unique constraints on
  * shiftId/offerId enforce §6.4 at the database level.
  */
 export class PrismaMarketplaceStore implements MarketplaceRepository {
-  async createOffer(input: CreateOfferInput): Promise<OfferRecord> {
-    const { workspaceId, professionalId } = await this.ensureIdentity();
-    const shift = await prisma.shift.create({
+  async registerClinic(
+    input: RegisterClinicInput,
+  ): Promise<EntityRef & { ownerUserId: string }> {
+    const owner = await prisma.user.create({ data: { phone: input.ownerPhone } });
+    const clinic = await prisma.clinicWorkspace.create({
       data: {
-        workspaceId,
-        state: "Published",
-        urgency: input.urgency,
-        category: input.shiftLabel,
-        scope: input.shiftLabel,
-        startsAt: new Date(input.shiftStart),
-        endsAt: new Date(input.shiftStart + SHIFT_LENGTH_MS),
-        compensation: input.compensation,
-        termsLocked: true,
+        branchName: input.branchName,
+        licenceNo: input.licenceNo,
+        address: input.address,
+        verification: "Submitted",
       },
     });
-    const offer = await prisma.offer.create({
+    await prisma.membership.create({
+      data: { userId: owner.id, workspaceId: clinic.id, role: "clinic_owner" },
+    });
+    return { id: clinic.id, verification: "Submitted", ownerUserId: owner.id };
+  }
+
+  async registerProfessional(input: RegisterProfessionalInput): Promise<EntityRef> {
+    const user = await prisma.user.create({ data: { phone: input.phone } });
+    const profile = await prisma.professionalProfile.create({
       data: {
-        shiftId: shift.id,
-        professionalId, // real ProfessionalProfile reference
-        state: "PendingResponse",
-        termsSnapshot: { compensation: input.compensation, urgency: input.urgency },
-        sentAt: new Date(input.sentAt),
-        expiresAt: new Date(input.expiresAt),
+        userId: user.id,
+        displayName: input.displayName,
+        profession: input.profession,
+        verification: "Submitted",
       },
-      include: { shift: true },
+    });
+    await prisma.credential.create({
+      data: { professionalId: profile.id, kind: "licence", state: "Submitted" },
+    });
+    await prisma.payoutAccount.create({
+      data: { professionalId: profile.id, bankRefMasked: input.payoutRef, verified: false },
+    });
+    return { id: profile.id, verification: "Submitted" };
+  }
+
+  async verifyClinic(id: string): Promise<EntityRef | null> {
+    const clinic = await prisma.clinicWorkspace.findUnique({ where: { id } });
+    if (!clinic) return null;
+    if (clinic.verification === "Verified") return { id, verification: "Verified" }; // idempotent
+    const next = advanceVerification(clinic.verification as VerificationState, "Verified");
+    await prisma.clinicWorkspace.update({ where: { id }, data: { verification: next } });
+    return { id, verification: next };
+  }
+
+  async verifyProfessional(id: string): Promise<EntityRef | null> {
+    const p = await prisma.professionalProfile.findUnique({ where: { id } });
+    if (!p) return null;
+    if (p.verification === "Verified") return { id, verification: "Verified" }; // idempotent
+    const next = advanceVerification(p.verification as VerificationState, "Verified");
+    await prisma.$transaction([
+      prisma.professionalProfile.update({ where: { id }, data: { verification: next } }),
+      // VER-04/07: the licence credential and the payout account are confirmed too.
+      prisma.credential.updateMany({ where: { professionalId: id }, data: { state: "Verified" } }),
+      prisma.payoutAccount.updateMany({ where: { professionalId: id }, data: { verified: true } }),
+    ]);
+    return { id, verification: next };
+  }
+
+  async clinicVerification(id: string): Promise<VerificationState | null> {
+    const c = await prisma.clinicWorkspace.findUnique({
+      where: { id },
+      select: { verification: true },
+    });
+    return c ? (c.verification as VerificationState) : null;
+  }
+
+  async getOfferEligibility(offerId: string): Promise<OfferEligibility | null> {
+    const offer = await prisma.offer.findUnique({
+      where: { id: offerId },
+      include: { shift: { include: { workspace: true } }, professional: true },
+    });
+    if (!offer) return null;
+    return {
+      clinicVerified: offer.shift.workspace.verification === "Verified",
+      professionalVerified: offer.professional.verification === "Verified",
+    };
+  }
+
+  async createOffer(input: CreateOfferInput): Promise<OfferRecord> {
+    // One transaction so a bad professionalId (FK violation on the offer) rolls back
+    // the shift too — no orphan Published shift.
+    const offer = await prisma.$transaction(async (tx) => {
+      const shift = await tx.shift.create({
+        data: {
+          workspaceId: input.clinicWorkspaceId,
+          state: "Published",
+          urgency: input.urgency,
+          category: input.category,
+          scope: input.category,
+          startsAt: new Date(input.shiftStart),
+          endsAt: new Date(input.shiftStart + SHIFT_LENGTH_MS),
+          compensation: input.compensation,
+          termsLocked: true,
+        },
+      });
+      return tx.offer.create({
+        data: {
+          shiftId: shift.id,
+          professionalId: input.professionalId,
+          state: "PendingResponse",
+          termsSnapshot: { compensation: input.compensation, urgency: input.urgency },
+          sentAt: new Date(input.sentAt),
+          expiresAt: new Date(input.expiresAt),
+        },
+        include: { shift: true },
+      });
     });
     return this.toRecord(offer as OfferWithShift);
   }
@@ -299,56 +376,11 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     });
   }
 
-  /**
-   * Idempotently ensure the demo clinic (with an owner User + Membership) and the
-   * demo professional (with its User) exist, so Shift.workspaceId and
-   * Offer.professionalId reference real rows.
-   */
-  private async ensureIdentity(): Promise<{ workspaceId: string; professionalId: string }> {
-    await prisma.clinicWorkspace.upsert({
-      where: { id: DEMO.workspaceId },
-      update: {},
-      create: {
-        id: DEMO.workspaceId,
-        branchName: "Demo Clinic — Sukhumvit",
-        licenceNo: "TH-DEMO-001",
-        address: "Bangkok",
-        verification: "Verified",
-      },
-    });
-    await prisma.user.upsert({
-      where: { id: DEMO.ownerUserId },
-      update: {},
-      create: { id: DEMO.ownerUserId, phone: DEMO.ownerPhone },
-    });
-    await prisma.membership.upsert({
-      where: { userId_workspaceId: { userId: DEMO.ownerUserId, workspaceId: DEMO.workspaceId } },
-      update: {},
-      create: { userId: DEMO.ownerUserId, workspaceId: DEMO.workspaceId, role: "clinic_owner" },
-    });
-    await prisma.user.upsert({
-      where: { id: DEMO.proUserId },
-      update: {},
-      create: { id: DEMO.proUserId, phone: DEMO.proPhone },
-    });
-    await prisma.professionalProfile.upsert({
-      where: { id: DEMO.professionalId },
-      update: {},
-      create: {
-        id: DEMO.professionalId,
-        userId: DEMO.proUserId,
-        displayName: "Dr. Demo",
-        profession: "physician",
-        verification: "Verified",
-      },
-    });
-    return { workspaceId: DEMO.workspaceId, professionalId: DEMO.professionalId };
-  }
-
   private toRecord(o: OfferWithShift): OfferRecord {
     return {
       id: o.id,
       shiftId: o.shift.id,
+      clinicWorkspaceId: o.shift.workspaceId,
       professionalId: o.professionalId,
       compensation: o.shift.compensation,
       urgency: o.shift.urgency as ShiftUrgency,

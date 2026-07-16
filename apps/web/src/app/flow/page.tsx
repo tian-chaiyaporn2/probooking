@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import {
+  registerClinic,
+  registerProfessional,
+  verifyClinic,
+  verifyProfessional,
   createOffer,
   acceptOffer,
   confirmOffer,
@@ -38,9 +42,29 @@ export default function FlowPage() {
     const log = (label: string, detail: string) =>
       setSteps((s) => [...s, { label, detail }]);
     try {
+      // Onboard + verify a clinic and professional (unique phones per run).
+      const uniq = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      const clinic = await registerClinic({
+        branchName: "Sukhumvit Clinic",
+        licenceNo: "TH-DEMO",
+        address: "Bangkok",
+        ownerPhone: `+66c${uniq}`,
+      });
+      const pro = await registerProfessional({
+        displayName: "Dr. Demo",
+        profession: "physician",
+        phone: `+66p${uniq}`,
+        payoutRef: "xxxx-1234",
+      });
+      log("Registered", `clinic + professional (both ${clinic.verification})`);
+
+      await verifyClinic(clinic.id);
+      await verifyProfessional(pro.id);
+      log("Operations verified", "clinic + professional → Verified");
+
       const offer = await createOffer({
-        shiftId: "shift-1",
-        professionalId: "pro-1",
+        clinicWorkspaceId: clinic.id,
+        professionalId: pro.id,
         compensation: 1_000_000, // 10,000 THB in satang
       });
       log("Offer created", `state=${offer.state}, fee=${formatThb(offer.checkout.serviceFee)}`);
@@ -78,8 +102,8 @@ export default function FlowPage() {
     <main style={{ maxWidth: 640, margin: "3rem auto", padding: "0 1.5rem", fontFamily: "system-ui" }}>
       <h1>ProBooking — booking flow</h1>
       <p style={{ color: "#555" }}>
-        Create a binding offer, accept it (soft hold), confirm the booking, then
-        complete it and pay out the professional.
+        Onboard and verify a clinic and professional, create a binding offer, accept it
+        (soft hold), confirm the booking, then complete it and pay out the professional.
       </p>
 
       <button
