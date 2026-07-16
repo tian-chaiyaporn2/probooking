@@ -48,15 +48,24 @@ their `autoAcceptAt` deadline still in `AwaitingCompletion` and triggers
 Covered by: `packages/domain/test/*`, `features/04`, `features/05`, `e2e/tests/booking-flow.spec.ts`
 (the e2e runs against Postgres when `.env` provides `DATABASE_URL`).
 
-## BDD coverage (§9.4)
+## BDD coverage (§9.4 + edge/error/success cases)
 
-All **14** §9.4 acceptance areas now have executable Gherkin with step definitions —
-no `@wip` scenarios remain (`pnpm test:bdd` → **35 scenarios / 95 steps** green). The
-suite drives the **pure domain** in-process (money conservation, state machines,
-cancellation, eligibility, urgency, rating, auto-accept/review windows, patient-data
-predicate); scenarios whose logic lives in the store/API (profile split, empty-search
-assist, hold overlays, audit immutability) assert the rule against representative
-models. Files: `features/01`…`14`, `features/step-definitions/*.steps.ts`.
+All 14 §9.4 acceptance areas plus dedicated success/edge/error case suites are
+executable — `pnpm test:bdd` → **78 scenarios / 193 steps** green, no `@wip`.
+
+The steps exercise **real code**, not inline restatements of the rule:
+- Pure rules call the actual domain functions the API uses (conserves, withinAllocation,
+  dualControlSatisfied, canLeaveReview, cancellationOutcome, checkConfirmationEligibility,
+  isUrgentEligible, aggregateRating, advance* machines, containsProhibitedPatientData).
+- Stateful/idempotency scenarios drive the **real in-memory MarketplaceRepository** via
+  `features/support/store.ts` (register→verify→post→apply→offer→accept→confirm), so
+  duplicate confirm/payout/cancel, hold overlays, the VER-03 profile split, schedule
+  overlap, and the audit trail run against production persistence code.
+
+Proven non-tautological by mutation (breaking a rule fails its scenario). Case suites:
+`15` confirmation, `16` completion/payout, `17` cancellation, `18` offer lifecycle,
+`19` authorization matrix, `20` onboarding/verification. Files: `features/01`…`20`,
+`features/step-definitions/*.steps.ts`, `features/support/store.ts`.
 
 ## Phase gates (Rollout Plan)
 
