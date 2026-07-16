@@ -183,6 +183,7 @@ model ProfessionalProfile {
   payoutAccount PayoutAccount?
   availability  Availability[]
   applications  Application[]
+  invitations   Invitation[]
   offers        Offer[]
   bookings      Booking[]
   createdAt     DateTime           @default(now()) @db.Timestamptz(3)
@@ -203,7 +204,7 @@ model Credential {
 model InsuranceEvidence {
   id             String              @id @default(cuid())
   professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
-  professionalId String
+  professionalId String              @unique // one current insurance evidence per professional (VER-05)
   // Verified | UnderReview | Expired | NotProvided | Unverified (VER-05)
   state          VerificationState   @default(Submitted)
   validUntil     DateTime? @db.Timestamptz(3)
@@ -266,12 +267,15 @@ model Application {
 }
 
 model Invitation {
-  id             String          @id @default(cuid())
-  shift          Shift           @relation(fields: [shiftId], references: [id])
+  id             String              @id @default(cuid())
+  shift          Shift               @relation(fields: [shiftId], references: [id])
   shiftId        String
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
   professionalId String
-  state          InvitationState @default(Sent)
-  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  state          InvitationState     @default(Sent)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@unique([shiftId, professionalId]) // one invitation per professional per shift (parity with Application)
 }
 
 model Offer {

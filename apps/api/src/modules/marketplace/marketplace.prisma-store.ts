@@ -178,31 +178,31 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async submitInsurance(professionalId: string, validUntil: number): Promise<InsuranceStatus> {
-    const existing = await prisma.insuranceEvidence.findFirst({ where: { professionalId } });
-    const rec = existing
-      ? await prisma.insuranceEvidence.update({
-          where: { id: existing.id },
-          data: { state: "Submitted", validUntil: new Date(validUntil) },
-        })
-      : await prisma.insuranceEvidence.create({
-          data: { professionalId, state: "Submitted", validUntil: new Date(validUntil) },
-        });
+    // professionalId is unique, so upsert is deterministic (no findFirst race / dup rows).
+    const rec = await prisma.insuranceEvidence.upsert({
+      where: { professionalId },
+      update: { state: "Submitted", validUntil: new Date(validUntil) },
+      create: { professionalId, state: "Submitted", validUntil: new Date(validUntil) },
+    });
     return { state: rec.state, validUntil: rec.validUntil ? rec.validUntil.getTime() : null };
   }
 
   async verifyInsurance(professionalId: string): Promise<InsuranceStatus | null> {
-    const ins = await prisma.insuranceEvidence.findFirst({ where: { professionalId } });
+    const ins = await prisma.insuranceEvidence.findUnique({ where: { professionalId } });
     if (!ins) return null;
     if (ins.state !== "Verified") {
       const next = advanceVerification(ins.state as VerificationState, "Verified");
-      await prisma.insuranceEvidence.update({ where: { id: ins.id }, data: { state: next } });
+      const updated = await prisma.insuranceEvidence.update({
+        where: { professionalId },
+        data: { state: next },
+      });
+      return { state: updated.state, validUntil: updated.validUntil ? updated.validUntil.getTime() : null };
     }
-    const fresh = await prisma.insuranceEvidence.findUnique({ where: { id: ins.id } });
-    return { state: fresh!.state, validUntil: fresh!.validUntil ? fresh!.validUntil.getTime() : null };
+    return { state: ins.state, validUntil: ins.validUntil ? ins.validUntil.getTime() : null };
   }
 
   async getInsuranceStatus(professionalId: string): Promise<InsuranceStatus> {
-    const ins = await prisma.insuranceEvidence.findFirst({ where: { professionalId } });
+    const ins = await prisma.insuranceEvidence.findUnique({ where: { professionalId } });
     if (!ins) return { state: "NotProvided", validUntil: null };
     return { state: ins.state, validUntil: ins.validUntil ? ins.validUntil.getTime() : null };
   }
