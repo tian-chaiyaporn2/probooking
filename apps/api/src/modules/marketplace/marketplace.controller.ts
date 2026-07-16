@@ -24,6 +24,7 @@ import {
   cancellationOutcome,
   payableFromFraction,
   isUrgentEligible,
+  canLeaveReview,
   can,
   satang,
   type ConfirmationContext,
@@ -838,7 +839,7 @@ export class MarketplaceController {
     const booking = await this.requireBooking(id);
     // REV-01/05: only a completed paid booking creates review rights (cancelled or
     // unfinished bookings never reach ServiceCompleted, so they earn no reputation).
-    if (booking.state !== "ServiceCompleted") {
+    if (!canLeaveReview(booking.state)) {
       throw new BadRequestException(
         `booking is ${booking.state}; reviews require a completed booking`,
       );

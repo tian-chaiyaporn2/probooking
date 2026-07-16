@@ -1,19 +1,29 @@
 import { Given, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
-import { aggregateRating } from "@probook/domain";
+import { aggregateRating, canLeaveReview, countsTowardPublicReputation } from "@probook/domain";
+import { newStore, seedConfirmedBooking } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
 /** Area 12 (§9.4-12): review rights, cold-start rating, related-party exclusion (REV-01..05). */
 
-// REV-01/05: only a completed paid production booking creates review rights.
-const canReview = (bookingState: string) => bookingState === "ServiceCompleted";
-
-Given("a cancelled booking", function (this: ProBookingWorld) {
-  this.state.bookingState = "Cancelled";
+Given("a cancelled booking", async function (this: ProBookingWorld) {
+  // Drive the real store: seed a confirmed booking then cancel it, so the state that
+  // canLeaveReview() reads is produced by the store, not asserted by the step.
+  const store = newStore();
+  const b = await seedConfirmedBooking(store);
+  await store.cancelBooking({
+    bookingId: b.bookingId,
+    payable: 0,
+    refund: b.captured,
+    payoutKey: `cancel-payout:${b.bookingId}`,
+    refundKey: `cancel-refund:${b.bookingId}`,
+  });
+  const cancelled = await store.getBooking(b.bookingId);
+  this.state.bookingState = cancelled?.state;
 });
 
 Then("neither party may leave a review", function (this: ProBookingWorld) {
-  assert.equal(canReview(this.state.bookingState), false);
+  assert.equal(canLeaveReview(this.state.bookingState), false); // REV-01/05 (real domain gate)
 });
 
 Given("a professional with two published reviews", function (this: ProBookingWorld) {
@@ -29,6 +39,5 @@ Given("a related-party booking", function (this: ProBookingWorld) {
 });
 
 Then("it creates no public reputation", function (this: ProBookingWorld) {
-  const createsPublicReputation = (relatedParty: boolean) => !relatedParty;
-  assert.equal(createsPublicReputation(this.state.relatedParty), false);
+  assert.equal(countsTowardPublicReputation(this.state.relatedParty), false); // REV-05 (real domain rule)
 });

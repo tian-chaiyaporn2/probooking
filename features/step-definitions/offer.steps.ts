@@ -4,9 +4,9 @@ import { can, advanceOffer, IllegalTransitionError, type Role } from "@probook/d
 import type { ProBookingWorld } from "../support/world.js";
 
 /**
- * Sample step definitions for area 4 (clinic authority & one active offer).
- * These exercise the pure domain directly. Remaining feature files are @wip until
- * their steps are implemented — this file shows the intended pattern.
+ * Step definitions for area 4 (clinic authority & one active offer). These exercise
+ * the pure domain directly (can/advanceOffer); other areas either call real domain
+ * functions or drive the in-memory store via features/support/store.ts.
  */
 
 Given("a user with role {string}", function (this: ProBookingWorld, role: string) {

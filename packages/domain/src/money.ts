@@ -38,6 +38,14 @@ export function subSatang(a: Satang, b: Satang): Satang {
   return satang(a - b);
 }
 
+/**
+ * PAY-08: a payout/refund may not exceed the funds available for it (nor go negative).
+ * Pure predicate so the API and the acceptance spec share one definition.
+ */
+export function withinAllocation(amount: Satang, available: Satang): boolean {
+  return amount >= 0 && amount <= available;
+}
+
 /** Default clinic-paid service fee: 12% of professional compensation (PAY-02, Decision #8). */
 export const DEFAULT_SERVICE_FEE_BPS = 1200; // basis points (12.00%)
 

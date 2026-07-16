@@ -113,3 +113,17 @@ export const DUAL_CONTROL_CAPABILITIES: ReadonlySet<Capability> = new Set([
 export function requiresDualControl(capability: Capability): boolean {
   return DUAL_CONTROL_CAPABILITIES.has(capability);
 }
+
+/**
+ * §6.4 different-person approval: a dual-control action is satisfied only when the
+ * executor is a DIFFERENT authorized person than the initiator. Non-dual-control
+ * actions are always satisfiable by a single actor.
+ */
+export function dualControlSatisfied(
+  capability: Capability,
+  initiatorId: string,
+  executorId: string,
+): boolean {
+  if (!requiresDualControl(capability)) return true;
+  return initiatorId !== executorId;
+}

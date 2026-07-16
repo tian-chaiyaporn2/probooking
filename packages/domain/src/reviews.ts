@@ -30,3 +30,19 @@ export function aggregateRating(publishedScores: readonly number[]): RatingSumma
 export function reviewPublishDueAt(createdAt: number): number {
   return createdAt + REVIEW_PUBLISH_AFTER;
 }
+
+/**
+ * REV-01/05: only a completed, paid production booking confers review rights. A
+ * cancelled or unfinished booking never reaches ServiceCompleted, so it earns none.
+ */
+export function canLeaveReview(bookingState: string): boolean {
+  return bookingState === "ServiceCompleted";
+}
+
+/**
+ * REV-05: a related-party booking creates no public reputation (it would let a party
+ * inflate its own rating). Returns whether a review should count toward the public rating.
+ */
+export function countsTowardPublicReputation(isRelatedParty: boolean): boolean {
+  return !isRelatedParty;
+}
