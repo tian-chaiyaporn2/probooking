@@ -18,9 +18,9 @@ import type {
   PayoutInput,
   PayoutResult,
   ReviewCase,
+  CancelInput,
+  CancelResult,
 } from "./marketplace.types.js";
-
-const REVIEW_KIND = "completion_review";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
 
@@ -236,24 +236,67 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     });
   }
 
-  async findReviewCase(bookingId: string): Promise<ReviewCase | null> {
+  async findSupportCase(bookingId: string, kind: string): Promise<ReviewCase | null> {
     const c = await prisma.supportCase.findFirst({
-      where: { refType: "Booking", refId: bookingId, kind: REVIEW_KIND },
+      where: { refType: "Booking", refId: bookingId, kind },
     });
     return c ? { id: c.id, state: c.state as CaseState, bookingId } : null;
   }
 
-  async createReviewCase(bookingId: string): Promise<ReviewCase> {
+  async createSupportCase(bookingId: string, kind: string, subject: string): Promise<ReviewCase> {
     const c = await prisma.supportCase.create({
-      data: {
-        subject: "Clinic inactivity — completion needs Operations review (CMP-04)",
-        kind: REVIEW_KIND,
-        state: "Open",
-        refType: "Booking",
-        refId: bookingId,
-      },
+      data: { subject, kind, state: "Open", refType: "Booking", refId: bookingId },
     });
     return { id: c.id, state: "Open", bookingId };
+  }
+
+  async cancelBooking(input: CancelInput): Promise<CancelResult> {
+    // Atomic: booking -> Cancelled, professional payout (if any), clinic refund, and
+    // the payment-order/allocation states, all commit together.
+    return prisma.$transaction(async (tx) => {
+      const po = await tx.paymentOrder.findUnique({
+        where: { bookingId: input.bookingId },
+        include: { allocation: true },
+      });
+      if (!po?.allocation) throw new Error("no payment allocation for booking");
+
+      await tx.booking.update({ where: { id: input.bookingId }, data: { state: "Cancelled" } });
+
+      if (input.payable > 0) {
+        await tx.financialEvent.create({
+          data: {
+            paymentOrderId: po.id,
+            type: "Payout",
+            amount: input.payable,
+            idempotencyKey: input.payoutKey,
+          },
+        });
+      }
+      await tx.financialEvent.create({
+        data: {
+          paymentOrderId: po.id,
+          type: "Refund",
+          amount: input.refund,
+          idempotencyKey: input.refundKey,
+        },
+      });
+
+      const payoutState = input.payable > 0 ? "Paid" : "NotEligible";
+      const refundState = input.payable > 0 ? "PartiallyRefunded" : "Refunded";
+      await tx.financialAllocation.update({
+        where: { paymentOrderId: po.id },
+        data: { payoutState, refundState },
+      });
+      await tx.paymentOrder.update({ where: { id: po.id }, data: { state: "Refunded" } });
+
+      return {
+        bookingState: "Cancelled" as const,
+        payoutState,
+        refundState,
+        payable: input.payable,
+        refund: input.refund,
+      };
+    });
   }
 
   /**

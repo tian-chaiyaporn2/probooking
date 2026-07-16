@@ -12,10 +12,14 @@ import {
   advanceOffer,
   advanceBooking,
   advancePayout,
+  cancellationOutcome,
+  payableFromFraction,
   satang,
   type ConfirmationContext,
   type Role,
   type ShiftUrgency,
+  type CancelActor,
+  type CancelReason,
 } from "@probook/domain";
 import { OffersService } from "../offers/offers.service.js";
 import { BookingsService } from "../bookings/bookings.service.js";
@@ -236,12 +240,82 @@ export class MarketplaceController {
       );
     }
     // Idempotent: one review case per booking.
-    const existing = await this.repo.findReviewCase(id);
+    const existing = await this.repo.findSupportCase(id, "completion_review");
     if (existing) {
       return { id, caseId: existing.id, state: existing.state, created: false };
     }
-    const created = await this.repo.createReviewCase(id);
+    const created = await this.repo.createSupportCase(
+      id,
+      "completion_review",
+      "Clinic inactivity — completion needs Operations review (CMP-04)",
+    );
     return { id, caseId: created.id, state: created.state, created: true };
+  }
+
+  @Post("bookings/:id/cancel")
+  async cancel(
+    @Param("id") id: string,
+    @Body() dto: { actor: CancelActor; reason: CancelReason; hoursBeforeStart?: number; arrived?: boolean },
+  ) {
+    const booking = await this.requireBooking(id);
+    // Idempotent: a cancelled booking is terminal for this action.
+    if (booking.state === "Cancelled") {
+      return { id, outcome: "cancelled", bookingState: "Cancelled", alreadyCancelled: true };
+    }
+
+    // CAN-01..05: the domain decides the professional's payable fraction, or that the
+    // case must be resolved by support.
+    const outcome = cancellationOutcome({
+      actor: dto.actor,
+      reason: dto.reason,
+      hoursBeforeStart: dto.hoursBeforeStart ?? 0,
+      arrived: dto.arrived ?? false,
+    });
+
+    if ("support" in outcome) {
+      const existing = await this.repo.findSupportCase(id, "cancellation_support");
+      const c =
+        existing ??
+        (await this.repo.createSupportCase(
+          id,
+          "cancellation_support",
+          `Cancellation requires support (reason: ${dto.reason})`,
+        ));
+      return { id, outcome: "support", caseId: c.id };
+    }
+
+    // Fractional outcome: validate the booking can be cancelled, then move money.
+    try {
+      advanceBooking(booking.state, "Cancelled");
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+
+    const payable = payableFromFraction(satang(booking.compensation), outcome.fraction);
+    const refund = satang(booking.captured - payable);
+
+    // PAY-07 conservation: captured == payout(payable) + refund. The platform fee is
+    // waived on cancellation (refunded to the clinic as part of `refund`), so nothing
+    // is retained as fee/tax; protected funds are fully released.
+    this.payments.assertConserved({
+      captured: satang(booking.captured),
+      protectedRemainder: satang(0),
+      payout: payable,
+      fee: satang(0),
+      tax: satang(0),
+      refunds: refund,
+      providerCosts: satang(0),
+      adjustments: satang(0),
+    });
+
+    const result = await this.repo.cancelBooking({
+      bookingId: id,
+      payable,
+      refund,
+      payoutKey: `cancel-payout:${id}`,
+      refundKey: `cancel-refund:${id}`,
+    });
+    return { id, outcome: "cancelled", fraction: outcome.fraction, ...result };
   }
 
   @Get("offers/:id")

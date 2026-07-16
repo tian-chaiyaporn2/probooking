@@ -10,6 +10,8 @@ import type {
   PayoutInput,
   PayoutResult,
   ReviewCase,
+  CancelInput,
+  CancelResult,
 } from "./marketplace.types.js";
 import type { OfferState } from "@probook/domain";
 
@@ -21,7 +23,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly offers = new Map<string, OfferRecord>();
   private readonly bookings = new Map<string, BookingDetail>();
   private readonly bookingByOffer = new Map<string, string>();
-  private readonly reviewCases = new Map<string, ReviewCase>(); // keyed by bookingId
+  private readonly supportCases = new Map<string, ReviewCase>(); // keyed by `${bookingId}:${kind}`
 
   async createOffer(input: CreateOfferInput): Promise<OfferRecord> {
     const record: OfferRecord = {
@@ -102,14 +104,28 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     };
   }
 
-  async findReviewCase(bookingId: string): Promise<ReviewCase | null> {
-    return this.reviewCases.get(bookingId) ?? null;
+  async findSupportCase(bookingId: string, kind: string): Promise<ReviewCase | null> {
+    return this.supportCases.get(`${bookingId}:${kind}`) ?? null;
   }
 
-  async createReviewCase(bookingId: string): Promise<ReviewCase> {
+  async createSupportCase(bookingId: string, kind: string, _subject: string): Promise<ReviewCase> {
     const c: ReviewCase = { id: randomUUID(), state: "Open", bookingId };
-    this.reviewCases.set(bookingId, c);
+    this.supportCases.set(`${bookingId}:${kind}`, c);
     return c;
+  }
+
+  async cancelBooking(input: CancelInput): Promise<CancelResult> {
+    const detail = this.bookings.get(input.bookingId);
+    if (!detail) throw new Error("booking not found");
+    detail.state = "Cancelled";
+    detail.payoutState = input.payable > 0 ? "Paid" : "NotEligible";
+    return {
+      bookingState: "Cancelled",
+      payoutState: detail.payoutState,
+      refundState: input.payable > 0 ? "PartiallyRefunded" : "Refunded",
+      payable: input.payable,
+      refund: input.refund,
+    };
   }
 
   private toRecord(d: BookingDetail): BookingRecord {

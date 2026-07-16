@@ -19,7 +19,7 @@ Legend: ✅ implemented in scaffold · 🟡 stubbed / partial · ⬜ not started
 | NOT-01 / URG-01 | Email/SMS alerts, urgent badge (no guarantee) | `worker: reminders queue`, `domain: URGENT_WINDOW` | `07-*` | 🟡 |
 | PAY-01..11 | Prefunding, checkout split, immutable events, conservation, idempotency, reconciliation | `domain: money`, `api: PaymentsService`, `db: PaymentOrder/FinancialAllocation/FinancialEvent`, `worker: reconciliation` | `06-*`, `11-*` | ✅ |
 | CMP-01..05 | Completion, 24h auto-accept, 48h clinic fallback | `domain: policies (autoAcceptDueAt)`, `api: complete/accept-completion`, `worker: autoAcceptSweep` | `09-*` | 🟡 (01/02/03 live; 04/05 pending) |
-| CAN-01..05 | Cancellation compensation & support routing | `domain: policies (cancellationOutcome)` | `10-*` | ✅ |
+| CAN-01..05 | Cancellation compensation & support routing | `domain: cancellationOutcome`, `api: POST /bookings/:id/cancel` (Payout+Refund events, conservation), `store: cancelBooking` | `10-*` | ✅ |
 | REV-01..05 | Review rights, cold-start, related-party exclusion | `db: Review` | `12-*` | 🟡 |
 | SUP-01..02 / ADM / RSK | Generic cases, internal tools, risk | `db: SupportCase/RiskIncident`, `apps/ops` | `14-*` | 🟡 |
 | §6.4 | Integrity: one booking/shift, no dup payout, immutable audit | `domain: state-machines`, `db: unique constraints, AuditRecord` | `05-*`, `11-*`, `14-*` | ✅ |

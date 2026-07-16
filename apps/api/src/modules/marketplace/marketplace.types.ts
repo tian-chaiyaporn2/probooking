@@ -2,6 +2,7 @@ import type {
   OfferState,
   BookingState,
   PayoutState,
+  RefundState,
   CaseState,
   ShiftUrgency,
 } from "@probook/domain";
@@ -83,11 +84,27 @@ export interface PayoutResult {
   payoutAmount: number;
 }
 
-/** An Operations review case raised for a booking (SUP-01). */
+/** An Operations case raised for a booking (SUP-01). */
 export interface ReviewCase {
   id: string;
   state: CaseState;
   bookingId: string;
+}
+
+export interface CancelInput {
+  bookingId: string;
+  payable: number; // to the professional (satang)
+  refund: number; // to the clinic (satang)
+  payoutKey: string; // idempotency key for the payout event (PAY-04)
+  refundKey: string; // idempotency key for the refund event (PAY-04)
+}
+
+export interface CancelResult {
+  bookingState: BookingState;
+  payoutState: PayoutState;
+  refundState: RefundState;
+  payable: number;
+  refund: number;
 }
 
 /**
@@ -119,10 +136,17 @@ export interface MarketplaceRepository {
    */
   recordPayout(input: PayoutInput): Promise<PayoutResult>;
 
-  // --- Operations review (CMP-04) ---
-  /** Existing clinic-inactivity review case for a booking, if any. */
-  findReviewCase(bookingId: string): Promise<ReviewCase | null>;
-  createReviewCase(bookingId: string): Promise<ReviewCase>;
+  // --- Operations cases (SUP-01) — one per (booking, kind) ---
+  findSupportCase(bookingId: string, kind: string): Promise<ReviewCase | null>;
+  createSupportCase(bookingId: string, kind: string, subject: string): Promise<ReviewCase>;
+
+  // --- Cancellation & refund (CAN-01..05) ---
+  /**
+   * Atomically cancel a booking and move money: pay the professional `payable`
+   * (if > 0) and refund the clinic `refund`, writing immutable Payout/Refund events
+   * and updating the allocation/payment-order states. Idempotent by the event keys.
+   */
+  cancelBooking(input: CancelInput): Promise<CancelResult>;
 }
 
 /** DI token for the repository. */
