@@ -34,6 +34,14 @@ export function autoAcceptDueAt(scheduledEnd: number, submittedAt: number): numb
   return Math.max(scheduledEnd, submittedAt) + AUTO_ACCEPT_AFTER;
 }
 
+/**
+ * CMP-04: if the professional never submits completion, the booking is routed to
+ * Operations 48h after the scheduled shift end. Returns that epoch-ms instant.
+ */
+export function completionReviewDueAt(scheduledEnd: number): number {
+  return scheduledEnd + CLINIC_COMPLETION_REVIEW_AFTER;
+}
+
 export type ShiftUrgency = "standard" | "urgent";
 
 export function offerExpiryFor(urgency: ShiftUrgency): number {

@@ -225,6 +225,25 @@ export class MarketplaceController {
     return { id, ...result };
   }
 
+  @Post("bookings/:id/flag-inactive")
+  async flagInactive(@Param("id") id: string) {
+    const booking = await this.requireBooking(id);
+    // CMP-04 applies only when the professional never submitted completion — i.e. the
+    // booking is still Confirmed/InProgress (not AwaitingCompletion/ServiceCompleted).
+    if (booking.state !== "Confirmed" && booking.state !== "InProgress") {
+      throw new BadRequestException(
+        `booking is ${booking.state}; not eligible for inactivity review`,
+      );
+    }
+    // Idempotent: one review case per booking.
+    const existing = await this.repo.findReviewCase(id);
+    if (existing) {
+      return { id, caseId: existing.id, state: existing.state, created: false };
+    }
+    const created = await this.repo.createReviewCase(id);
+    return { id, caseId: created.id, state: created.state, created: true };
+  }
+
   @Get("offers/:id")
   async getOffer(@Param("id") id: string) {
     const offer = await this.requireOffer(id);

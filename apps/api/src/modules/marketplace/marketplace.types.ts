@@ -1,4 +1,10 @@
-import type { OfferState, BookingState, PayoutState, ShiftUrgency } from "@probook/domain";
+import type {
+  OfferState,
+  BookingState,
+  PayoutState,
+  CaseState,
+  ShiftUrgency,
+} from "@probook/domain";
 
 /** The offer view the flow works with (joins Shift fields for compensation/urgency/start). */
 export interface OfferRecord {
@@ -77,6 +83,13 @@ export interface PayoutResult {
   payoutAmount: number;
 }
 
+/** An Operations review case raised for a booking (SUP-01). */
+export interface ReviewCase {
+  id: string;
+  state: CaseState;
+  bookingId: string;
+}
+
 /**
  * Persistence port for the booking flow. Two implementations exist:
  *  - InMemoryMarketplaceStore  (no DATABASE_URL — zero-service dev/e2e)
@@ -105,6 +118,11 @@ export interface MarketplaceRepository {
    * ServiceCompleted, allocation payout state -> Paid, and an immutable Payout event.
    */
   recordPayout(input: PayoutInput): Promise<PayoutResult>;
+
+  // --- Operations review (CMP-04) ---
+  /** Existing clinic-inactivity review case for a booking, if any. */
+  findReviewCase(bookingId: string): Promise<ReviewCase | null>;
+  createReviewCase(bookingId: string): Promise<ReviewCase>;
 }
 
 /** DI token for the repository. */

@@ -9,6 +9,7 @@ import type {
   ConfirmBookingResult,
   PayoutInput,
   PayoutResult,
+  ReviewCase,
 } from "./marketplace.types.js";
 import type { OfferState } from "@probook/domain";
 
@@ -20,6 +21,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly offers = new Map<string, OfferRecord>();
   private readonly bookings = new Map<string, BookingDetail>();
   private readonly bookingByOffer = new Map<string, string>();
+  private readonly reviewCases = new Map<string, ReviewCase>(); // keyed by bookingId
 
   async createOffer(input: CreateOfferInput): Promise<OfferRecord> {
     const record: OfferRecord = {
@@ -98,6 +100,16 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       payoutState: "Paid",
       payoutAmount: input.payoutAmount,
     };
+  }
+
+  async findReviewCase(bookingId: string): Promise<ReviewCase | null> {
+    return this.reviewCases.get(bookingId) ?? null;
+  }
+
+  async createReviewCase(bookingId: string): Promise<ReviewCase> {
+    const c: ReviewCase = { id: randomUUID(), state: "Open", bookingId };
+    this.reviewCases.set(bookingId, c);
+    return c;
   }
 
   private toRecord(d: BookingDetail): BookingRecord {

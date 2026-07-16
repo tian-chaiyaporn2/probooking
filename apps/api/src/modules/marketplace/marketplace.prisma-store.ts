@@ -1,6 +1,12 @@
 import { prisma } from "@probook/db";
 import { autoAcceptDueAt } from "@probook/domain";
-import type { OfferState, BookingState, PayoutState, ShiftUrgency } from "@probook/domain";
+import type {
+  OfferState,
+  BookingState,
+  PayoutState,
+  CaseState,
+  ShiftUrgency,
+} from "@probook/domain";
 import type {
   MarketplaceRepository,
   OfferRecord,
@@ -11,7 +17,10 @@ import type {
   ConfirmBookingResult,
   PayoutInput,
   PayoutResult,
+  ReviewCase,
 } from "./marketplace.types.js";
+
+const REVIEW_KIND = "completion_review";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
 
@@ -225,6 +234,26 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         payoutAmount: input.payoutAmount,
       };
     });
+  }
+
+  async findReviewCase(bookingId: string): Promise<ReviewCase | null> {
+    const c = await prisma.supportCase.findFirst({
+      where: { refType: "Booking", refId: bookingId, kind: REVIEW_KIND },
+    });
+    return c ? { id: c.id, state: c.state as CaseState, bookingId } : null;
+  }
+
+  async createReviewCase(bookingId: string): Promise<ReviewCase> {
+    const c = await prisma.supportCase.create({
+      data: {
+        subject: "Clinic inactivity — completion needs Operations review (CMP-04)",
+        kind: REVIEW_KIND,
+        state: "Open",
+        refType: "Booking",
+        refId: bookingId,
+      },
+    });
+    return { id: c.id, state: "Open", bookingId };
   }
 
   /**

@@ -3,7 +3,9 @@ import {
   cancellationOutcome,
   effectiveOfferExpiry,
   autoAcceptDueAt,
+  completionReviewDueAt,
   AUTO_ACCEPT_AFTER,
+  CLINIC_COMPLETION_REVIEW_AFTER,
   OFFER_TIMERS,
 } from "../src/policies.js";
 
@@ -69,5 +71,11 @@ describe("auto-accept due time (CMP-03)", () => {
     const scheduledEnd = 9000;
     const submittedAt = 5000;
     expect(autoAcceptDueAt(scheduledEnd, submittedAt)).toBe(9000 + AUTO_ACCEPT_AFTER);
+  });
+});
+
+describe("clinic completion review due time (CMP-04)", () => {
+  it("is 48h after the scheduled shift end", () => {
+    expect(completionReviewDueAt(10_000)).toBe(10_000 + CLINIC_COMPLETION_REVIEW_AFTER);
   });
 });
