@@ -284,13 +284,12 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async hasScheduleOverlap(professionalId: string, startsAt: number, endsAt: number): Promise<boolean> {
-    const SHIFT_LEN = 4 * 60 * 60 * 1000;
     for (const b of this.bookings.values()) {
       if (b.professionalId !== professionalId) continue;
       if (b.state !== "Confirmed" && b.state !== "InProgress" && b.state !== "AwaitingCompletion") continue;
       const shift = this.shifts.get(b.shiftId);
       if (!shift) continue;
-      if (shift.startsAt < endsAt && shift.startsAt + SHIFT_LEN > startsAt) return true;
+      if (shift.startsAt < endsAt && shift.startsAt + SHIFT_LEN_MS > startsAt) return true;
     }
     return false;
   }

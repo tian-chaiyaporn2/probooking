@@ -32,7 +32,9 @@ export const PAYOUT_TRANSITIONS: TransitionMap<PayoutState> = {
 export const REFUND_TRANSITIONS: TransitionMap<RefundState> = {
   None: ["Pending"],
   Pending: ["PartiallyRefunded", "Refunded", "Failed", "Exception"],
-  PartiallyRefunded: ["Refunded", "Failed", "Exception"],
+  // Self-loop allows successive partial refunds (e.g. compensation then fee) before
+  // the order is fully Refunded (PAY-08 caps the cumulative amount at captured).
+  PartiallyRefunded: ["PartiallyRefunded", "Refunded", "Failed", "Exception"],
   Failed: ["Pending", "Exception"],
   Refunded: [],
   Exception: [],

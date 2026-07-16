@@ -16,8 +16,10 @@
 export type Satang = number & { readonly __brand: "Satang" };
 
 export function satang(value: number): Satang {
-  if (!Number.isInteger(value)) {
-    throw new RangeError(`Money must be integer satang, got ${value}`);
+  // isSafeInteger (not isInteger): beyond 2^53 integer arithmetic loses precision, so a
+  // sum that overflows must throw rather than silently corrupt a balance (PAY-07).
+  if (!Number.isSafeInteger(value)) {
+    throw new RangeError(`Money must be a safe integer number of satang, got ${value}`);
   }
   return value as Satang;
 }

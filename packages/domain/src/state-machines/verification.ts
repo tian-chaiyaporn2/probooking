@@ -12,7 +12,9 @@ export const VERIFICATION_TRANSITIONS: TransitionMap<VerificationState> = {
   Submitted: ["UnderReview", "NeedsInformation", "Verified", "Rejected"],
   UnderReview: ["Verified", "Rejected", "NeedsInformation"],
   NeedsInformation: ["Submitted", "UnderReview", "Rejected", "Closed"],
-  Verified: ["Suspended", "Expired"],
+  // Fraud/ineligibility discovered on an already-Verified record goes straight to
+  // Rejected (VER-04) — no need to launder it through Suspended first.
+  Verified: ["Suspended", "Expired", "Rejected"],
   Rejected: ["Closed"],
   Suspended: ["Verified", "Closed"], // reinstatement after review
   Expired: ["Submitted", "Closed"], // re-verify
