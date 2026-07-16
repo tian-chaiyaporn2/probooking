@@ -4,7 +4,6 @@ import { autoAcceptSweep } from "./jobs/autoAccept.js";
 import { clinicCompletionReviewSweep } from "./jobs/clinicReview.js";
 import { reviewPublishSweep } from "./jobs/reviewPublish.js";
 import { reminderSweep } from "./jobs/reminders.js";
-import { credentialHoldSweep } from "./jobs/credentialHold.js";
 
 /**
  * ProBooking worker. Runs time-driven jobs (§7.2): the CMP-03 auto-accept sweep and
@@ -34,10 +33,6 @@ async function tick(): Promise<void> {
   const rm = await reminderSweep(now);
   if (rm.sent > 0) {
     console.log(`[reminders] sent=${rm.sent}`);
-  }
-  const ch = await credentialHoldSweep();
-  if (ch.due > 0 || ch.failed > 0) {
-    console.log(`[credential-hold] due=${ch.due} held=${ch.held} failed=${ch.failed}`);
   }
 }
 
