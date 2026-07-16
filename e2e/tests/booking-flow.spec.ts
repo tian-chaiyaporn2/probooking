@@ -176,6 +176,22 @@ test("reporting: history, receipt, metrics, and finance CSV export (REP-01..03)"
   expect(csv).toContain("Payout");
 });
 
+test("OTP verify is single-use and locks out after repeated wrong codes (AUTH-01)", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const phone = `+66otp${Date.now()}`;
+  const req = await page.request.post(`${api}/auth/otp/request`, { data: { phone } });
+  expect(req.status()).toBe(201);
+  const { devCode } = (await req.json()) as { devCode: string };
+
+  // Five wrong attempts burn the code (brute-force guard); the correct code then fails.
+  for (let i = 0; i < 5; i++) {
+    const wrong = await page.request.post(`${api}/auth/otp/verify`, { data: { phone, code: "000000" } });
+    expect(wrong.status()).toBe(401);
+  }
+  const afterLockout = await page.request.post(`${api}/auth/otp/verify`, { data: { phone, code: devCode } });
+  expect(afterLockout.status()).toBe(401);
+});
+
 test("privacy & security: audit trail, OTP rate limit, patient-data guard (§7.3)", async ({ page }) => {
   const api = "http://localhost:4000";
   const uniq = `${Date.now()}`;
