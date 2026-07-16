@@ -2,6 +2,7 @@ import "./env.js"; // MUST be first: loads DATABASE_URL before @probook/db is im
 import { prisma } from "@probook/db";
 import { autoAcceptSweep } from "./jobs/autoAccept.js";
 import { clinicCompletionReviewSweep } from "./jobs/clinicReview.js";
+import { reviewPublishSweep } from "./jobs/reviewPublish.js";
 
 /**
  * ProBooking worker. Runs time-driven jobs (§7.2): the CMP-03 auto-accept sweep and
@@ -23,6 +24,10 @@ async function tick(): Promise<void> {
   const cr = await clinicCompletionReviewSweep(now);
   if (cr.due > 0 || cr.failed > 0) {
     console.log(`[clinic-review] due=${cr.due} flagged=${cr.flagged} failed=${cr.failed}`);
+  }
+  const rp = await reviewPublishSweep(now);
+  if (rp.published > 0) {
+    console.log(`[review-publish] published=${rp.published}`);
   }
 }
 

@@ -83,6 +83,13 @@ gates on both parties being verified (§6.3) — the demo identity fixtures are 
 Every rule in the flow (authority OFF-01, soft hold OFF-04, eligibility §6.3, fee
 PAY-02) is enforced by `@probook/domain`, not by the controller.
 
+**Reviews (REV-01..05).** After a booking is `ServiceCompleted`, either party may
+review the other (`POST /bookings/:id/reviews`), one per party (REV-02). Reviews
+publish when both parties submit, or after 7 days via a worker sweep (REV-03). A
+professional's aggregate rating (`GET /professionals/:id/rating`) appears only after
+three published reviews (REV-04); cancelled/unfinished bookings never reach
+`ServiceCompleted`, so they earn no reputation (REV-05).
+
 **Auto-accept (CMP-03).** When a professional submits completion, `markCompletion`
 stamps `Booking.autoAcceptAt` = `autoAcceptDueAt(shiftEnd, now)` (24h after the later
 of shift end and submission). `apps/worker` polls for bookings past that deadline still

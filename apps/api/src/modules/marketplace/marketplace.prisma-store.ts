@@ -1,5 +1,5 @@
 import { prisma } from "@probook/db";
-import { autoAcceptDueAt, advanceVerification } from "@probook/domain";
+import { autoAcceptDueAt, advanceVerification, aggregateRating } from "@probook/domain";
 import type {
   OfferState,
   BookingState,
@@ -7,6 +7,7 @@ import type {
   CaseState,
   VerificationState,
   ShiftUrgency,
+  RatingSummary,
 } from "@probook/domain";
 import type {
   MarketplaceRepository,
@@ -25,6 +26,8 @@ import type {
   RegisterProfessionalInput,
   EntityRef,
   OfferEligibility,
+  ReviewInput,
+  ReviewResult,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -246,7 +249,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async getBooking(id: string): Promise<BookingDetail | null> {
     const b = await prisma.booking.findUnique({
       where: { id },
-      include: { paymentOrder: { include: { allocation: true } } },
+      include: { paymentOrder: { include: { allocation: true } }, shift: true },
     });
     if (!b) return null;
     const alloc = b.paymentOrder?.allocation ?? null;
@@ -254,6 +257,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       id: b.id,
       offerId: b.offerId,
       shiftId: b.shiftId,
+      clinicWorkspaceId: b.shift.workspaceId,
       professionalId: b.professionalId,
       state: b.state as BookingState,
       compensation: alloc?.compensation ?? 0,
@@ -374,6 +378,43 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         refund: input.refund,
       };
     });
+  }
+
+  async createReview(input: ReviewInput): Promise<ReviewResult> {
+    return prisma.$transaction(async (tx) => {
+      const review = await tx.review.create({
+        data: {
+          bookingId: input.bookingId,
+          authorId: input.authorId,
+          subjectId: input.subjectId,
+          score: input.score,
+          tags: input.tags,
+          text: input.text ?? null,
+        },
+      });
+      // REV-03: if the other party already reviewed this booking, publish both now.
+      const counterpart = await tx.review.findFirst({
+        where: { bookingId: input.bookingId, authorId: { not: input.authorId } },
+      });
+      if (counterpart) {
+        await tx.review.updateMany({
+          where: { bookingId: input.bookingId, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+        return { id: review.id, published: true };
+      }
+      return { id: review.id, published: false };
+    });
+  }
+
+  async getSubjectRating(subjectId: string): Promise<RatingSummary | null> {
+    // REV-04: only PUBLISHED reviews count; REV-05: cancelled bookings never produced
+    // a review (the API gates creation on ServiceCompleted), so none appear here.
+    const reviews = await prisma.review.findMany({
+      where: { subjectId, publishedAt: { not: null } },
+      select: { score: true },
+    });
+    return aggregateRating(reviews.map((r) => r.score));
   }
 
   private toRecord(o: OfferWithShift): OfferRecord {

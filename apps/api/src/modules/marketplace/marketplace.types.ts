@@ -6,6 +6,7 @@ import type {
   CaseState,
   VerificationState,
   ShiftUrgency,
+  RatingSummary,
 } from "@probook/domain";
 
 /** The offer view the flow works with (joins Shift fields for compensation/urgency/start). */
@@ -50,6 +51,22 @@ export interface OfferEligibility {
   professionalVerified: boolean;
 }
 
+// ----- Reviews (REV-01..05) -----
+export interface ReviewInput {
+  bookingId: string;
+  authorId: string;
+  subjectId: string;
+  score: number; // 1..5
+  tags: string[];
+  text?: string;
+}
+
+export interface ReviewResult {
+  id: string;
+  /** True once both parties have submitted and the pair was published (REV-03). */
+  published: boolean;
+}
+
 export interface BookingRecord {
   id: string;
   offerId: string;
@@ -72,6 +89,7 @@ export interface CreateOfferInput {
 export interface ConfirmBookingInput {
   offerId: string;
   shiftId: string;
+  clinicWorkspaceId: string;
   professionalId: string;
   allocation: {
     compensation: number; // integer satang
@@ -92,6 +110,7 @@ export interface BookingDetail {
   id: string;
   offerId: string;
   shiftId: string;
+  clinicWorkspaceId: string;
   professionalId: string;
   state: BookingState;
   compensation: number; // integer satang
@@ -187,6 +206,16 @@ export interface MarketplaceRepository {
    * and updating the allocation/payment-order states. Idempotent by the event keys.
    */
   cancelBooking(input: CancelInput): Promise<CancelResult>;
+
+  // --- Reviews (REV-01..05) ---
+  /**
+   * Create a review (one per party per booking, REV-02). If the counterpart party has
+   * already reviewed, both are published now (REV-03). Throws on a duplicate by the
+   * same author.
+   */
+  createReview(input: ReviewInput): Promise<ReviewResult>;
+  /** Aggregate rating from a subject's PUBLISHED reviews, or null below 3 (REV-04). */
+  getSubjectRating(subjectId: string): Promise<RatingSummary | null>;
 }
 
 /** DI token for the repository. */

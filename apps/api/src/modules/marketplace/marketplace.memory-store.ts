@@ -16,9 +16,20 @@ import type {
   RegisterProfessionalInput,
   EntityRef,
   OfferEligibility,
+  ReviewInput,
+  ReviewResult,
 } from "./marketplace.types.js";
-import { advanceVerification } from "@probook/domain";
-import type { OfferState, VerificationState } from "@probook/domain";
+import { advanceVerification, aggregateRating } from "@probook/domain";
+import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
+
+interface MemReview {
+  id: string;
+  bookingId: string;
+  authorId: string;
+  subjectId: string;
+  score: number;
+  published: boolean;
+}
 
 /**
  * Zero-dependency in-memory implementation. Used when DATABASE_URL is unset so the
@@ -31,6 +42,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly supportCases = new Map<string, ReviewCase>(); // keyed by `${bookingId}:${kind}`
   private readonly clinics = new Map<string, VerificationState>();
   private readonly professionals = new Map<string, VerificationState>();
+  private readonly reviews: MemReview[] = [];
 
   async registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }> {
     void input;
@@ -114,6 +126,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       id: randomUUID(),
       offerId: input.offerId,
       shiftId: input.shiftId,
+      clinicWorkspaceId: input.clinicWorkspaceId,
       professionalId: input.professionalId,
       state: "Confirmed",
       compensation: input.allocation.compensation,
@@ -165,6 +178,44 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const c: ReviewCase = { id: randomUUID(), state: "Open", bookingId };
     this.supportCases.set(`${bookingId}:${kind}`, c);
     return c;
+  }
+
+  async createReview(input: ReviewInput): Promise<ReviewResult> {
+    // REV-02: one review per party per booking (Prisma enforces this via a unique index).
+    if (
+      this.reviews.some(
+        (r) => r.bookingId === input.bookingId && r.authorId === input.authorId,
+      )
+    ) {
+      throw new Error("duplicate review");
+    }
+    const review: MemReview = {
+      id: randomUUID(),
+      bookingId: input.bookingId,
+      authorId: input.authorId,
+      subjectId: input.subjectId,
+      score: input.score,
+      published: false,
+    };
+    this.reviews.push(review);
+    // REV-03: if the other party already reviewed, publish both.
+    const counterpart = this.reviews.find(
+      (r) => r.bookingId === input.bookingId && r.authorId !== input.authorId,
+    );
+    if (counterpart) {
+      for (const r of this.reviews) {
+        if (r.bookingId === input.bookingId) r.published = true;
+      }
+      return { id: review.id, published: true };
+    }
+    return { id: review.id, published: false };
+  }
+
+  async getSubjectRating(subjectId: string): Promise<RatingSummary | null> {
+    const scores = this.reviews
+      .filter((r) => r.subjectId === subjectId && r.published)
+      .map((r) => r.score);
+    return aggregateRating(scores);
   }
 
   async cancelBooking(input: CancelInput): Promise<CancelResult> {

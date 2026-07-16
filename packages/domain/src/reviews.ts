@@ -1,0 +1,32 @@
+/**
+ * Review rules (REV-01..05). Pure helpers; the API/store enforce the gates
+ * (only completed paid bookings create review rights, one per party, etc.).
+ */
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/** REV-03: an unpublished review auto-publishes 7 days after creation. */
+export const REVIEW_PUBLISH_AFTER = 7 * DAY;
+
+/** REV-04: aggregate rating and rating-based sorting begin after three published reviews. */
+export const MIN_PUBLISHED_REVIEWS_FOR_RATING = 3;
+
+export interface RatingSummary {
+  count: number;
+  average: number;
+}
+
+/**
+ * REV-04: aggregate rating for a subject from its PUBLISHED review scores. Returns
+ * null until the cold-start threshold (3) is reached — no rating is shown before then.
+ */
+export function aggregateRating(publishedScores: readonly number[]): RatingSummary | null {
+  if (publishedScores.length < MIN_PUBLISHED_REVIEWS_FOR_RATING) return null;
+  const sum = publishedScores.reduce((a, b) => a + b, 0);
+  return { count: publishedScores.length, average: sum / publishedScores.length };
+}
+
+/** REV-03: the instant an unpublished review created at `createdAt` auto-publishes. */
+export function reviewPublishDueAt(createdAt: number): number {
+  return createdAt + REVIEW_PUBLISH_AFTER;
+}

@@ -20,7 +20,7 @@ Legend: ✅ implemented in scaffold · 🟡 stubbed / partial · ⬜ not started
 | PAY-01..11 | Prefunding, checkout split, immutable events, conservation, idempotency, reconciliation | `domain: money`, `api: PaymentsService`, `db: PaymentOrder/FinancialAllocation/FinancialEvent`, `worker: reconciliation` | `06-*`, `11-*` | ✅ |
 | CMP-01..05 | Completion, 24h auto-accept, 48h clinic fallback | `domain: policies (autoAcceptDueAt)`, `api: complete/accept-completion`, `worker: autoAcceptSweep` | `09-*` | 🟡 (01/02/03 live; 04/05 pending) |
 | CAN-01..05 | Cancellation compensation & support routing | `domain: cancellationOutcome`, `api: POST /bookings/:id/cancel` (Payout+Refund events, conservation), `store: cancelBooking` | `10-*` | ✅ |
-| REV-01..05 | Review rights, cold-start, related-party exclusion | `db: Review` | `12-*` | 🟡 |
+| REV-01..05 | Review rights, pairing/publish, cold-start rating | `domain: aggregateRating (REV-04)`, `api: POST /bookings/:id/reviews` (gated on ServiceCompleted REV-01/05, one-per-party REV-02), publish-on-both + `worker: reviewPublishSweep` (7d REV-03), `GET /professionals/:id/rating` (≥3 REV-04) | `12-*` | 🟡 (01/02/03/04 live; 05 related-party not modeled) |
 | SUP-01..02 / ADM / RSK | Generic cases, internal tools, risk | `db: SupportCase/RiskIncident`, `apps/ops` | `14-*` | 🟡 |
 | §6.4 | Integrity: one booking/shift, no dup payout, immutable audit | `domain: state-machines`, `db: unique constraints, AuditRecord` | `05-*`, `11-*`, `14-*` | ✅ |
 | LOC-01..02 / ACC-01 | Thai, satang, UTC/Bangkok, accessibility | `domain: money`, `web: lang="th"`, `.env TZ` | — | 🟡 |

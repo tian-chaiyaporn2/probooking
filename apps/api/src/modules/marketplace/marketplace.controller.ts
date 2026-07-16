@@ -210,6 +210,7 @@ export class MarketplaceController {
       const { booking, paymentOrderId } = await this.repo.confirmBooking({
         offerId: offer.id,
         shiftId: offer.shiftId,
+        clinicWorkspaceId: offer.clinicWorkspaceId,
         professionalId: offer.professionalId,
         allocation: {
           compensation: checkout.compensation,
@@ -236,12 +237,10 @@ export class MarketplaceController {
     if (booking.state === "AwaitingCompletion" || booking.state === "ServiceCompleted") {
       return { id, state: booking.state };
     }
-    // CMP-01: professional marks completion. Validate Confirmed -> InProgress -> AwaitingCompletion.
-    try {
-      const inProgress = advanceBooking(booking.state, "InProgress");
-      advanceBooking(inProgress, "AwaitingCompletion");
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
+    // CMP-01: professional marks completion. Only an active booking (Confirmed or
+    // InProgress) can be completed — not a Cancelled/Archived one.
+    if (booking.state !== "Confirmed" && booking.state !== "InProgress") {
+      throw new BadRequestException(`booking is ${booking.state}; cannot mark completion`);
     }
     const updated = await this.repo.markCompletion(id);
     return { id, state: updated?.state ?? "AwaitingCompletion" };
@@ -399,6 +398,49 @@ export class MarketplaceController {
       }
       throw e;
     }
+  }
+
+  @Post("bookings/:id/reviews")
+  async createReview(
+    @Param("id") id: string,
+    @Body() dto: { by: "clinic" | "professional"; score: number; tags?: string[]; text?: string },
+  ) {
+    const booking = await this.requireBooking(id);
+    // REV-01/05: only a completed paid booking creates review rights (cancelled or
+    // unfinished bookings never reach ServiceCompleted, so they earn no reputation).
+    if (booking.state !== "ServiceCompleted") {
+      throw new BadRequestException(
+        `booking is ${booking.state}; reviews require a completed booking`,
+      );
+    }
+    if (!Number.isInteger(dto.score) || dto.score < 1 || dto.score > 5) {
+      throw new BadRequestException("score must be an integer 1..5");
+    }
+    // Author reviews the other party (clinic -> professional, or professional -> clinic).
+    const authorId = dto.by === "clinic" ? booking.clinicWorkspaceId : booking.professionalId;
+    const subjectId = dto.by === "clinic" ? booking.professionalId : booking.clinicWorkspaceId;
+    try {
+      const r = await this.repo.createReview({
+        bookingId: id,
+        authorId,
+        subjectId,
+        score: dto.score,
+        tags: dto.tags ?? [],
+        ...(dto.text !== undefined ? { text: dto.text } : {}),
+      });
+      return { id: r.id, published: r.published };
+    } catch {
+      throw new BadRequestException("this party has already reviewed this booking");
+    }
+  }
+
+  @Get("professionals/:id/rating")
+  async getRating(@Param("id") id: string) {
+    const rating = await this.repo.getSubjectRating(id);
+    if (!rating) {
+      return { subjectId: id, hasRating: false, note: "not enough published reviews (need 3)" };
+    }
+    return { subjectId: id, hasRating: true, ...rating };
   }
 
   @Get("offers/:id")
