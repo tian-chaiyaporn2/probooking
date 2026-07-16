@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
 } from "@nestjs/common";
 import {
   advanceOffer,
@@ -27,7 +28,12 @@ import { OffersService } from "../offers/offers.service.js";
 import { BookingsService } from "../bookings/bookings.service.js";
 import { PaymentsService } from "../payments/payments.service.js";
 import { NotificationsService } from "./notifications.service.js";
-import { MARKETPLACE_REPOSITORY, type MarketplaceRepository } from "./marketplace.types.js";
+import {
+  MARKETPLACE_REPOSITORY,
+  type MarketplaceRepository,
+  type ShiftFilters,
+  type ProfessionalFilters,
+} from "./marketplace.types.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -166,9 +172,55 @@ export class MarketplaceController {
   }
 
   @Get("shifts")
-  async listShifts() {
-    // URG-01 / SRC-03: open shifts, urgent first then soonest (priority placement).
-    return { shifts: await this.repo.listOpenShifts() };
+  async listShifts(
+    @Query("category") category?: string,
+    @Query("urgency") urgency?: string,
+    @Query("minCompensation") minCompensation?: string,
+    @Query("maxCompensation") maxCompensation?: string,
+  ) {
+    // SRC-02/03: filtered, priority-ordered open shifts (urgent first, then soonest).
+    const filters: ShiftFilters = {};
+    if (category) filters.category = category;
+    if (urgency === "urgent" || urgency === "standard") filters.urgency = urgency;
+    if (minCompensation) filters.minCompensation = Number(minCompensation);
+    if (maxCompensation) filters.maxCompensation = Number(maxCompensation);
+    const shifts = await this.repo.listOpenShifts(filters);
+    // SRC-04: empty results offer posting / matching assistance.
+    return shifts.length === 0
+      ? { shifts, hint: "No open shifts match — post a shift or ask Operations for matching assistance." }
+      : { shifts };
+  }
+
+  // ----- Availability & professional search (AVL, SRC) -----
+  @Post("professionals/:id/availability")
+  async addAvailability(
+    @Param("id") professionalId: string,
+    @Body() dto: { startsInHours?: number; durationHours?: number; openToRequests?: boolean },
+  ) {
+    // AVL-01: one-off Available blocks. Kept relative (hours from now) for convenience.
+    const now = Date.now();
+    const startsAt = now + (dto.startsInHours ?? 24) * HOUR_MS;
+    const endsAt = startsAt + (dto.durationHours ?? 8) * HOUR_MS;
+    return this.repo.addAvailability(professionalId, startsAt, endsAt, dto.openToRequests ?? false);
+  }
+
+  @Get("professionals/:id/availability")
+  async listAvailability(@Param("id") professionalId: string) {
+    // AVL-02: only listed blocks count as available.
+    return { availability: await this.repo.listAvailability(professionalId) };
+  }
+
+  @Get("professionals")
+  async searchProfessionals(
+    @Query("profession") profession?: string,
+    @Query("specialty") specialty?: string,
+  ) {
+    // SRC-01: clinics filter professionals (profession/specialty here; rating included).
+    const filters: ProfessionalFilters = {};
+    if (profession) filters.profession = profession;
+    if (specialty) filters.specialty = specialty;
+    const professionals = await this.repo.searchProfessionals(filters);
+    return { professionals };
   }
 
   @Post("shifts/:id/apply")
@@ -290,8 +342,13 @@ export class MarketplaceController {
       return { booking: existing, checkout: this.payments.checkout(satang(offer.compensation)) };
     }
 
-    // §6.3: read the real verification facts for this offer's clinic + professional.
+    // §6.3: read the real verification facts + schedule overlap for this offer.
     const eligibility = await this.repo.getOfferEligibility(id);
+    const overlap = await this.repo.hasScheduleOverlap(
+      offer.professionalId,
+      offer.shiftStart,
+      offer.shiftStart + 4 * HOUR_MS, // shift length (AVL-03)
+    );
     const ctx: ConfirmationContext = {
       clinicActiveVerified: eligibility?.clinicVerified ?? false,
       professionalActiveVerified: eligibility?.professionalVerified ?? false,
@@ -303,7 +360,7 @@ export class MarketplaceController {
       shiftCategorySupported: true,
       hasSuspension: false,
       hasBlockingHold: false,
-      hasScheduleOverlap: false,
+      hasScheduleOverlap: overlap,
       offerExpired: Date.now() > offer.expiresAt, // §6.3: late payment after expiry never books
       durablePrefundingSucceeded: body?.prefundingSucceeded ?? true,
     };

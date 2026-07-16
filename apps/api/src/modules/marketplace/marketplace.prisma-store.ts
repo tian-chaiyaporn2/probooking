@@ -35,6 +35,10 @@ import type {
   OpenShift,
   CaseSummary,
   PendingVerification,
+  AvailabilityBlock,
+  ShiftFilters,
+  ProfessionalFilters,
+  ProfessionalSearchResult,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -232,7 +236,68 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     return offer ? this.toRecord(offer as OfferWithShift) : null;
   }
 
-  async listOpenShifts(): Promise<OpenShift[]> {
+  async addAvailability(
+    professionalId: string,
+    startsAt: number,
+    endsAt: number,
+    openToRequests: boolean,
+  ): Promise<AvailabilityBlock> {
+    const a = await prisma.availability.create({
+      data: { professionalId, startsAt: new Date(startsAt), endsAt: new Date(endsAt), openToRequests },
+    });
+    return { id: a.id, startsAt: a.startsAt.getTime(), endsAt: a.endsAt.getTime(), openToRequests: a.openToRequests };
+  }
+
+  async listAvailability(professionalId: string): Promise<AvailabilityBlock[]> {
+    const list = await prisma.availability.findMany({
+      where: { professionalId },
+      orderBy: { startsAt: "asc" },
+    });
+    return list.map((a) => ({
+      id: a.id,
+      startsAt: a.startsAt.getTime(),
+      endsAt: a.endsAt.getTime(),
+      openToRequests: a.openToRequests,
+    }));
+  }
+
+  async hasScheduleOverlap(professionalId: string, startsAt: number, endsAt: number): Promise<boolean> {
+    // Overlap when an active booking's shift spans into [startsAt, endsAt).
+    const count = await prisma.booking.count({
+      where: {
+        professionalId,
+        state: { in: ["Confirmed", "InProgress", "AwaitingCompletion"] },
+        shift: { startsAt: { lt: new Date(endsAt) }, endsAt: { gt: new Date(startsAt) } },
+      },
+    });
+    return count > 0;
+  }
+
+  async searchProfessionals(filters: ProfessionalFilters): Promise<ProfessionalSearchResult[]> {
+    const pros = await prisma.professionalProfile.findMany({
+      where: {
+        verification: "Verified",
+        ...(filters.profession ? { profession: filters.profession } : {}),
+        ...(filters.specialty ? { specialty: filters.specialty } : {}),
+      },
+      select: { id: true, displayName: true, profession: true, specialty: true },
+      take: 50,
+    });
+    const results: ProfessionalSearchResult[] = [];
+    for (const p of pros) {
+      const rating = await this.getSubjectRating(p.id);
+      results.push({
+        id: p.id,
+        displayName: p.displayName,
+        profession: p.profession,
+        specialty: p.specialty,
+        rating: rating ? rating.average : null,
+      });
+    }
+    return results;
+  }
+
+  async listOpenShifts(filters?: ShiftFilters): Promise<OpenShift[]> {
     // Open = Published, unbooked, and with no active offer yet — priority-ordered:
     // urgent first (enum sorts "urgent" > "standard"), then soonest (SRC-03 deterministic).
     const shifts = await prisma.shift.findMany({
@@ -240,6 +305,16 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         state: "Published",
         booking: null,
         offers: { none: { state: { in: ["PendingResponse", "AwaitingPayment"] } } },
+        ...(filters?.urgency ? { urgency: filters.urgency } : {}),
+        ...(filters?.category ? { category: { contains: filters.category, mode: "insensitive" as const } } : {}),
+        ...(filters?.minCompensation !== undefined || filters?.maxCompensation !== undefined
+          ? {
+              compensation: {
+                ...(filters?.minCompensation !== undefined ? { gte: filters.minCompensation } : {}),
+                ...(filters?.maxCompensation !== undefined ? { lte: filters.maxCompensation } : {}),
+              },
+            }
+          : {}),
       },
       select: { id: true, category: true, compensation: true, urgency: true, startsAt: true },
       orderBy: [{ urgency: "desc" }, { startsAt: "asc" }],

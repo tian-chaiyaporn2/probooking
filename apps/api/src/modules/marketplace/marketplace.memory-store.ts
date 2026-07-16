@@ -25,6 +25,10 @@ import type {
   OpenShift,
   CaseSummary,
   PendingVerification,
+  AvailabilityBlock,
+  ShiftFilters,
+  ProfessionalFilters,
+  ProfessionalSearchResult,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -70,6 +74,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly reviews: MemReview[] = [];
   private readonly shifts = new Map<string, MemShift>();
   private readonly candidates: MemCandidate[] = [];
+  private readonly availabilityBlocks: (AvailabilityBlock & { professionalId: string })[] = [];
 
   async registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }> {
     void input;
@@ -200,14 +205,61 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return this.offers.get(id) ?? null;
   }
 
-  async listOpenShifts(): Promise<OpenShift[]> {
+  async addAvailability(
+    professionalId: string,
+    startsAt: number,
+    endsAt: number,
+    openToRequests: boolean,
+  ): Promise<AvailabilityBlock> {
+    const block = { id: randomUUID(), professionalId, startsAt, endsAt, openToRequests };
+    this.availabilityBlocks.push(block);
+    return { id: block.id, startsAt, endsAt, openToRequests };
+  }
+
+  async listAvailability(professionalId: string): Promise<AvailabilityBlock[]> {
+    return this.availabilityBlocks
+      .filter((b) => b.professionalId === professionalId)
+      .sort((a, b) => a.startsAt - b.startsAt)
+      .map((b) => ({ id: b.id, startsAt: b.startsAt, endsAt: b.endsAt, openToRequests: b.openToRequests }));
+  }
+
+  async hasScheduleOverlap(professionalId: string, startsAt: number, endsAt: number): Promise<boolean> {
+    const SHIFT_LEN = 4 * 60 * 60 * 1000;
+    for (const b of this.bookings.values()) {
+      if (b.professionalId !== professionalId) continue;
+      if (b.state !== "Confirmed" && b.state !== "InProgress" && b.state !== "AwaitingCompletion") continue;
+      const shift = this.shifts.get(b.shiftId);
+      if (!shift) continue;
+      if (shift.startsAt < endsAt && shift.startsAt + SHIFT_LEN > startsAt) return true;
+    }
+    return false;
+  }
+
+  async searchProfessionals(filters: ProfessionalFilters): Promise<ProfessionalSearchResult[]> {
+    // In-memory keeps only verification state per professional; details are minimal.
+    void filters;
+    const out: ProfessionalSearchResult[] = [];
+    for (const [id, v] of this.professionals) {
+      if (v === "Verified") {
+        out.push({ id, displayName: "", profession: filters.profession ?? "", specialty: null, rating: null });
+      }
+    }
+    return out;
+  }
+
+  async listOpenShifts(filters?: ShiftFilters): Promise<OpenShift[]> {
     const isOpen = (s: MemShift) => {
       if (s.state !== "Published") return false;
       const hasActive = [...this.offers.values()].some(
         (o) => o.shiftId === s.id && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
       );
       const booked = [...this.bookings.values()].some((b) => b.shiftId === s.id);
-      return !hasActive && !booked;
+      if (hasActive || booked) return false;
+      if (filters?.urgency && s.urgency !== filters.urgency) return false;
+      if (filters?.category && !s.category.toLowerCase().includes(filters.category.toLowerCase())) return false;
+      if (filters?.minCompensation !== undefined && s.compensation < filters.minCompensation) return false;
+      if (filters?.maxCompensation !== undefined && s.compensation > filters.maxCompensation) return false;
+      return true;
     };
     return [...this.shifts.values()]
       .filter(isOpen)

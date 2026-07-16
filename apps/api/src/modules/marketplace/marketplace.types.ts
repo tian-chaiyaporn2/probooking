@@ -24,6 +24,34 @@ export interface OfferRecord {
   fundingDueAt: number | null;
 }
 
+// ----- Availability & search (AVL-01..03, SRC-01..04) -----
+export interface AvailabilityBlock {
+  id: string;
+  startsAt: number; // epoch ms UTC
+  endsAt: number;
+  openToRequests: boolean;
+}
+
+export interface ShiftFilters {
+  category?: string; // case-insensitive contains
+  urgency?: ShiftUrgency;
+  minCompensation?: number; // satang
+  maxCompensation?: number;
+}
+
+export interface ProfessionalFilters {
+  profession?: string;
+  specialty?: string;
+}
+
+export interface ProfessionalSearchResult {
+  id: string;
+  displayName: string;
+  profession: string;
+  specialty: string | null;
+  rating: number | null; // aggregate, or null below the cold-start threshold (REV-04)
+}
+
 /** An open (biddable) shift for the priority-ordered listing (URG-01, SRC-03). */
 export interface OpenShift {
   shiftId: string;
@@ -244,7 +272,14 @@ export interface MarketplaceRepository {
   createOfferForShift(input: CreateOfferForShiftInput): Promise<OfferRecord>;
   getOffer(id: string): Promise<OfferRecord | null>;
   /** Open shifts (Published, no active offer, unbooked), urgent first then soonest (URG-01/SRC-03). */
-  listOpenShifts(): Promise<OpenShift[]>;
+  listOpenShifts(filters?: ShiftFilters): Promise<OpenShift[]>;
+
+  // --- Availability & professional search (AVL, SRC) ---
+  addAvailability(professionalId: string, startsAt: number, endsAt: number, openToRequests: boolean): Promise<AvailabilityBlock>;
+  listAvailability(professionalId: string): Promise<AvailabilityBlock[]>;
+  /** AVL-03/§6.3: does the professional have a confirmed booking overlapping [startsAt, endsAt]? */
+  hasScheduleOverlap(professionalId: string, startsAt: number, endsAt: number): Promise<boolean>;
+  searchProfessionals(filters: ProfessionalFilters): Promise<ProfessionalSearchResult[]>;
   /** Transition an offer's state (and optionally set fundingDueAt). Returns the updated record. */
   setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null>;
   /**
