@@ -14,6 +14,7 @@ import {
   advancePayout,
   cancellationOutcome,
   payableFromFraction,
+  isUrgentEligible,
   satang,
   type ConfirmationContext,
   type Role,
@@ -156,6 +157,10 @@ export class MarketplaceController {
     const now = Date.now();
     const shiftStart = now + (dto.shiftStartInHours ?? 48) * HOUR_MS;
     const urgency: ShiftUrgency = dto.urgency ?? "standard";
+    // URG-01: only a shift within 72h may be marked Urgent.
+    if (urgency === "urgent" && !isUrgentEligible(shiftStart, now)) {
+      throw new BadRequestException("urgent requires the shift to start within 72h (URG-01)");
+    }
     const expiresAt = this.offers.computeExpiry(now, shiftStart, urgency);
 
     let offer;
@@ -176,6 +181,10 @@ export class MarketplaceController {
 
     // NOT-01: notify the professional of the offer (SMS covers offers near expiry).
     await this.notifications.sms(dto.professionalId, "offer_sent", { type: "Offer", id: offer.id });
+    // URG-01: urgent shifts get an extra assisted-outreach alert.
+    if (urgency === "urgent") {
+      await this.notifications.sms(dto.professionalId, "urgent_alert", { type: "Offer", id: offer.id });
+    }
 
     return {
       id: offer.id,
@@ -183,6 +192,12 @@ export class MarketplaceController {
       expiresAt: offer.expiresAt,
       checkout: this.payments.checkout(satang(dto.compensation)),
     };
+  }
+
+  @Get("shifts")
+  async listShifts() {
+    // URG-01 / SRC-03: open shifts, urgent first then soonest (priority placement).
+    return { shifts: await this.repo.listOpenShifts() };
   }
 
   @Post("offers/:id/accept")

@@ -24,6 +24,16 @@ export interface OfferRecord {
   fundingDueAt: number | null;
 }
 
+/** An open (biddable) shift for the priority-ordered listing (URG-01, SRC-03). */
+export interface OpenShift {
+  shiftId: string;
+  category: string;
+  compensation: number; // integer satang
+  startsAt: number; // epoch ms UTC
+  urgency: ShiftUrgency;
+  urgent: boolean;
+}
+
 // ----- Onboarding & verification (ORG-01, PRO-01, VER-01..02) -----
 export interface RegisterClinicInput {
   branchName: string;
@@ -187,6 +197,8 @@ export interface MarketplaceRepository {
 
   createOffer(input: CreateOfferInput): Promise<OfferRecord>;
   getOffer(id: string): Promise<OfferRecord | null>;
+  /** Open shifts, priority-ordered: urgent first, then soonest start (URG-01, SRC-03). */
+  listOpenShifts(): Promise<OpenShift[]>;
   /** Transition an offer's state (and optionally set fundingDueAt). Returns the updated record. */
   setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null>;
   /**

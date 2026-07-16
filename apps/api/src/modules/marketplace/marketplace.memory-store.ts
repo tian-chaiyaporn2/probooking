@@ -19,6 +19,7 @@ import type {
   ReviewInput,
   ReviewResult,
   NotificationInput,
+  OpenShift,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -111,6 +112,22 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
 
   async getOffer(id: string): Promise<OfferRecord | null> {
     return this.offers.get(id) ?? null;
+  }
+
+  async listOpenShifts(): Promise<OpenShift[]> {
+    return [...this.offers.values()]
+      .filter((o) => o.state === "PendingResponse")
+      .sort((a, b) =>
+        a.urgency === b.urgency ? a.shiftStart - b.shiftStart : a.urgency === "urgent" ? -1 : 1,
+      )
+      .map((o) => ({
+        shiftId: o.shiftId,
+        category: "general",
+        compensation: o.compensation,
+        startsAt: o.shiftStart,
+        urgency: o.urgency,
+        urgent: o.urgency === "urgent",
+      }));
   }
 
   async setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null> {

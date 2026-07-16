@@ -4,6 +4,8 @@ import {
   effectiveOfferExpiry,
   autoAcceptDueAt,
   completionReviewDueAt,
+  isUrgentEligible,
+  URGENT_WINDOW,
   AUTO_ACCEPT_AFTER,
   CLINIC_COMPLETION_REVIEW_AFTER,
   OFFER_TIMERS,
@@ -77,5 +79,15 @@ describe("auto-accept due time (CMP-03)", () => {
 describe("clinic completion review due time (CMP-04)", () => {
   it("is 48h after the scheduled shift end", () => {
     expect(completionReviewDueAt(10_000)).toBe(10_000 + CLINIC_COMPLETION_REVIEW_AFTER);
+  });
+});
+
+describe("urgent eligibility (URG-01)", () => {
+  it("is eligible when the shift starts within 72h", () => {
+    expect(isUrgentEligible(URGENT_WINDOW - 1, 0)).toBe(true);
+  });
+  it("is not eligible beyond 72h or in the past", () => {
+    expect(isUrgentEligible(URGENT_WINDOW + 1, 0)).toBe(false);
+    expect(isUrgentEligible(-1, 0)).toBe(false);
   });
 });

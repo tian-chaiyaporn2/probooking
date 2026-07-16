@@ -19,6 +19,12 @@ export const OFFER_TIMERS = {
 /** A shift within this window of start may receive the Urgent badge (URG-01). */
 export const URGENT_WINDOW = 72 * HOUR;
 
+/** URG-01: a shift may be marked Urgent only if it starts within the 72h window. */
+export function isUrgentEligible(shiftStart: number, now: number): boolean {
+  const delta = shiftStart - now;
+  return delta > 0 && delta <= URGENT_WINDOW;
+}
+
 /** NOT-01 booking reminders: sent 24h and 3h before the shift start. */
 export const REMINDER_24H_BEFORE = 24 * HOUR;
 export const REMINDER_3H_BEFORE = 3 * HOUR;

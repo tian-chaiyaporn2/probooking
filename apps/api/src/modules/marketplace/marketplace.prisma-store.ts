@@ -29,6 +29,7 @@ import type {
   ReviewInput,
   ReviewResult,
   NotificationInput,
+  OpenShift,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -167,6 +168,24 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async getOffer(id: string): Promise<OfferRecord | null> {
     const offer = await prisma.offer.findUnique({ where: { id }, include: { shift: true } });
     return offer ? this.toRecord(offer as OfferWithShift) : null;
+  }
+
+  async listOpenShifts(): Promise<OpenShift[]> {
+    // Published shifts still awaiting a response, priority-ordered: urgent first
+    // (enum sorts "urgent" > "standard"), then soonest start (SRC-03 deterministic).
+    const shifts = await prisma.shift.findMany({
+      where: { state: "Published", offers: { some: { state: "PendingResponse" } } },
+      select: { id: true, category: true, compensation: true, urgency: true, startsAt: true },
+      orderBy: [{ urgency: "desc" }, { startsAt: "asc" }],
+    });
+    return shifts.map((s) => ({
+      shiftId: s.id,
+      category: s.category,
+      compensation: s.compensation,
+      startsAt: s.startsAt.getTime(),
+      urgency: s.urgency as ShiftUrgency,
+      urgent: s.urgency === "urgent",
+    }));
   }
 
   async setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null> {
