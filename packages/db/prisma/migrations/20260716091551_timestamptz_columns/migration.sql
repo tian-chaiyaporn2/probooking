@@ -1,0 +1,71 @@
+-- Convert timestamp -> timestamptz. Prisma wrote these values as UTC but stored them
+-- naive, so interpret AS UTC (not the Asia/Bangkok session tz) to preserve the instant.
+
+-- AlterTable
+ALTER TABLE "Application" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "AttendanceEvent" ALTER COLUMN "occurredAt" SET DATA TYPE TIMESTAMPTZ(3) USING "occurredAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "AuditRecord" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Availability" ALTER COLUMN "startsAt" SET DATA TYPE TIMESTAMPTZ(3) USING "startsAt" AT TIME ZONE 'UTC',
+ALTER COLUMN "endsAt" SET DATA TYPE TIMESTAMPTZ(3) USING "endsAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Booking" ALTER COLUMN "confirmedAt" SET DATA TYPE TIMESTAMPTZ(3) USING "confirmedAt" AT TIME ZONE 'UTC',
+ALTER COLUMN "autoAcceptAt" SET DATA TYPE TIMESTAMPTZ(3) USING "autoAcceptAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "ClinicWorkspace" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Credential" ALTER COLUMN "validUntil" SET DATA TYPE TIMESTAMPTZ(3) USING "validUntil" AT TIME ZONE 'UTC',
+ALTER COLUMN "lastCheckedAt" SET DATA TYPE TIMESTAMPTZ(3) USING "lastCheckedAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "FinancialEvent" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "InsuranceEvidence" ALTER COLUMN "validUntil" SET DATA TYPE TIMESTAMPTZ(3) USING "validUntil" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Invitation" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Membership" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Message" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Offer" ALTER COLUMN "sentAt" SET DATA TYPE TIMESTAMPTZ(3) USING "sentAt" AT TIME ZONE 'UTC',
+ALTER COLUMN "expiresAt" SET DATA TYPE TIMESTAMPTZ(3) USING "expiresAt" AT TIME ZONE 'UTC',
+ALTER COLUMN "fundingDueAt" SET DATA TYPE TIMESTAMPTZ(3) USING "fundingDueAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "PaymentOrder" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "ProfessionalProfile" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Review" ALTER COLUMN "publishedAt" SET DATA TYPE TIMESTAMPTZ(3) USING "publishedAt" AT TIME ZONE 'UTC',
+ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "RiskIncident" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "Shift" ALTER COLUMN "startsAt" SET DATA TYPE TIMESTAMPTZ(3) USING "startsAt" AT TIME ZONE 'UTC',
+ALTER COLUMN "endsAt" SET DATA TYPE TIMESTAMPTZ(3) USING "endsAt" AT TIME ZONE 'UTC',
+ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "SupportCase" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC',
+ALTER COLUMN "updatedAt" SET DATA TYPE TIMESTAMPTZ(3) USING "updatedAt" AT TIME ZONE 'UTC';
+
+-- AlterTable
+ALTER TABLE "User" ALTER COLUMN "createdAt" SET DATA TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC';

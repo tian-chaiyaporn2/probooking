@@ -139,7 +139,7 @@ model User {
   phone        String       @unique // Thai mobile OTP is primary login (AUTH-01)
   email        String?      @unique
   mfaEnabled   Boolean      @default(false)
-  createdAt    DateTime     @default(now())
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
   memberships  Membership[]
   professional ProfessionalProfile?
   auditRecords AuditRecord[]
@@ -153,7 +153,7 @@ model ClinicWorkspace {
   address      String
   billingData  Json?
   verification VerificationState @default(Draft)
-  createdAt    DateTime          @default(now())
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
   memberships  Membership[]
   shifts       Shift[]
 }
@@ -165,7 +165,7 @@ model Membership {
   workspace   ClinicWorkspace @relation(fields: [workspaceId], references: [id])
   workspaceId String
   role        Role
-  createdAt   DateTime        @default(now())
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
 
   @@unique([userId, workspaceId])
 }
@@ -185,7 +185,7 @@ model ProfessionalProfile {
   applications  Application[]
   offers        Offer[]
   bookings      Booking[]
-  createdAt     DateTime           @default(now())
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
 }
 
 // ----- Trust -----
@@ -195,8 +195,8 @@ model Credential {
   professionalId String
   kind           String // licence | specialty_evidence | identity
   state          VerificationState   @default(Submitted)
-  validUntil     DateTime? // must remain valid through shift end (VER-04)
-  lastCheckedAt  DateTime?
+  validUntil     DateTime? @db.Timestamptz(3) // must remain valid through shift end (VER-04)
+  lastCheckedAt  DateTime? @db.Timestamptz(3)
   docUri         String?
 }
 
@@ -206,7 +206,7 @@ model InsuranceEvidence {
   professionalId String
   // Verified | UnderReview | Expired | NotProvided | Unverified (VER-05)
   state          VerificationState   @default(Submitted)
-  validUntil     DateTime?
+  validUntil     DateTime? @db.Timestamptz(3)
   docUri         String?
 }
 
@@ -224,8 +224,8 @@ model Availability {
   id             String              @id @default(cuid())
   professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
   professionalId String
-  startsAt       DateTime // UTC
-  endsAt         DateTime
+  startsAt       DateTime @db.Timestamptz(3) // UTC
+  endsAt         DateTime @db.Timestamptz(3)
   openToRequests Boolean             @default(false) // AVL-01
 
   @@index([professionalId, startsAt])
@@ -239,11 +239,11 @@ model Shift {
   urgency       ShiftUrgency    @default(standard)
   category      String
   scope         String
-  startsAt      DateTime // UTC; one position, fixed schedule (SHF-01)
-  endsAt        DateTime
+  startsAt      DateTime @db.Timestamptz(3) // UTC; one position, fixed schedule (SHF-01)
+  endsAt        DateTime @db.Timestamptz(3)
   compensation  Int // scheduled compensation, satang (SHF-01)
   termsLocked   Boolean         @default(false) // SHF-04
-  createdAt     DateTime        @default(now())
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
   applications  Application[]
   invitations   Invitation[]
   offers        Offer[]
@@ -259,7 +259,7 @@ model Application {
   professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
   professionalId String
   state          ApplicationState    @default(Submitted)
-  createdAt      DateTime            @default(now())
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
 
   @@unique([shiftId, professionalId])
 }
@@ -270,7 +270,7 @@ model Invitation {
   shiftId        String
   professionalId String
   state          InvitationState @default(Sent)
-  createdAt      DateTime        @default(now())
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
 }
 
 model Offer {
@@ -282,9 +282,9 @@ model Offer {
   state          OfferState          @default(PendingResponse)
   // Immutable snapshot of all terms & policies at send time (OFF-02, BKG-03).
   termsSnapshot  Json
-  sentAt         DateTime   @default(now())
-  expiresAt      DateTime // effective expiry (OFF-03)
-  fundingDueAt   DateTime? // set on acceptance (OFF-03: 30 min)
+  sentAt         DateTime   @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime @db.Timestamptz(3) // effective expiry (OFF-03)
+  fundingDueAt   DateTime? @db.Timestamptz(3) // set on acceptance (OFF-03: 30 min)
   booking        Booking?
 
   // One active offer per shift (OFF-02): enforce a single non-terminal offer in
@@ -305,10 +305,10 @@ model Booking {
   termsSnapshot  Json
   feeSnapshot    Int // service fee, satang
   taxSnapshot    Int          @default(0)
-  confirmedAt    DateTime     @default(now())
+  confirmedAt    DateTime     @default(now()) @db.Timestamptz(3)
   // Set when the professional submits completion; the auto-accept sweep fires at
   // this instant unless the clinic accepts or the booking is held first (CMP-03).
-  autoAcceptAt   DateTime?
+  autoAcceptAt   DateTime? @db.Timestamptz(3)
   paymentOrder   PaymentOrder?
   messages       Message[]
   attendance     AttendanceEvent[]
@@ -322,7 +322,7 @@ model Message {
   senderId  String
   // Plain text only; no attachments / real-time infra (MSG-01).
   body      String
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([bookingId, createdAt])
 }
@@ -336,8 +336,8 @@ model Review {
   score      Int // overall score (REV-02)
   tags       String[]
   text       String?
-  publishedAt DateTime? // publishes when both submit or after 7 days (REV-03)
-  createdAt  DateTime @default(now())
+  publishedAt DateTime? @db.Timestamptz(3) // publishes when both submit or after 7 days (REV-03)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
   @@unique([bookingId, authorId]) // one review per party (REV-02)
 }
@@ -349,7 +349,7 @@ model AttendanceEvent {
   bookingId String
   kind      String // Arrived | Completed (CMP-01) — no GPS/QR
   actorId   String
-  occurredAt DateTime @default(now())
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
 }
 
 model SupportCase {
@@ -360,8 +360,8 @@ model SupportCase {
   state     CaseState @default(Open)
   refType   String? // e.g. "Booking", "Offer"
   refId     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
 }
 
 model RiskIncident {
@@ -370,7 +370,7 @@ model RiskIncident {
   refType   String?
   refId     String?
   notes     String?
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 }
 
 // ----- Finance (immutable events; §6.4, PAY-05) -----
@@ -383,7 +383,7 @@ model PaymentOrder {
   captured      Int               @default(0) // satang captured
   allocation    FinancialAllocation?
   events        FinancialEvent[]
-  createdAt     DateTime          @default(now())
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
 }
 
 model FinancialAllocation {
@@ -407,7 +407,7 @@ model FinancialEvent {
   providerRef    String?
   // Idempotency key ties provider callbacks/commands to a single effect (PAY-04).
   idempotencyKey String             @unique
-  createdAt      DateTime           @default(now())
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
 
   @@index([paymentOrderId, createdAt])
 }
@@ -423,7 +423,7 @@ model AuditRecord {
   targetId   String
   before     Json?
   after      Json?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([targetType, targetId])
 }
