@@ -105,6 +105,19 @@ export interface ReviewResult {
   published: boolean;
 }
 
+// ----- Booking messages (MSG-01/02) -----
+export interface MessageRecord {
+  id: string;
+  senderId: string;
+  body: string;
+  createdAt: number; // epoch ms UTC
+}
+
+export interface BookingContact {
+  clinicPhone: string | null;
+  professionalPhone: string | null;
+}
+
 // ----- Operations dashboard (ADM-01) -----
 export interface CaseSummary {
   id: string;
@@ -321,6 +334,12 @@ export interface MarketplaceRepository {
   createReview(input: ReviewInput): Promise<ReviewResult>;
   /** Aggregate rating from a subject's PUBLISHED reviews, or null below 3 (REV-04). */
   getSubjectRating(subjectId: string): Promise<RatingSummary | null>;
+
+  // --- Booking messages (MSG-01/02) ---
+  postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord>;
+  listMessages(bookingId: string): Promise<MessageRecord[]>;
+  /** Party contact details — revealed after confirmation (MSG-02). */
+  getBookingContact(bookingId: string): Promise<BookingContact | null>;
 
   // --- Notifications (NOT-01) ---
   recordNotification(input: NotificationInput): Promise<void>;

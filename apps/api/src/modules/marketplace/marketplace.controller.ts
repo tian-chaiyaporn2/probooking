@@ -143,6 +143,31 @@ export class MarketplaceController {
     return { id, held: false };
   }
 
+  // ----- Booking messages (MSG-01/02) -----
+  @Post("bookings/:id/messages")
+  async postMessage(@Param("id") id: string, @Body() dto: { senderId: string; body: string }) {
+    await this.requireBooking(id);
+    // MSG-01: plain text only, no attachments.
+    const body = (dto.body ?? "").trim();
+    if (!body) throw new BadRequestException("message body required");
+    if (body.length > 2000) throw new BadRequestException("message too long");
+    return this.repo.postMessage(id, dto.senderId, body);
+  }
+
+  @Get("bookings/:id/messages")
+  async listMessages(@Param("id") id: string) {
+    await this.requireBooking(id);
+    return { messages: await this.repo.listMessages(id) };
+  }
+
+  @Get("bookings/:id/contact")
+  async bookingContact(@Param("id") id: string) {
+    // MSG-02: contact details appear after confirmation (a booking exists = confirmed).
+    await this.requireBooking(id);
+    const contact = await this.repo.getBookingContact(id);
+    return contact ?? { clinicPhone: null, professionalPhone: null };
+  }
+
   @Post("shifts")
   async postShift(@Body() dto: PostShiftDto) {
     const role: Role = dto.actorRole ?? "clinic_owner";

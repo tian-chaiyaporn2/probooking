@@ -29,6 +29,8 @@ import type {
   ShiftFilters,
   ProfessionalFilters,
   ProfessionalSearchResult,
+  MessageRecord,
+  BookingContact,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -382,6 +384,27 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       .filter((r) => r.subjectId === subjectId && r.published)
       .map((r) => r.score);
     return aggregateRating(scores);
+  }
+
+  private readonly messages: (MessageRecord & { bookingId: string })[] = [];
+
+  async postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord> {
+    const m = { id: randomUUID(), bookingId, senderId, body, createdAt: Date.now() };
+    this.messages.push(m);
+    return { id: m.id, senderId, body, createdAt: m.createdAt };
+  }
+
+  async listMessages(bookingId: string): Promise<MessageRecord[]> {
+    return this.messages
+      .filter((m) => m.bookingId === bookingId)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((m) => ({ id: m.id, senderId: m.senderId, body: m.body, createdAt: m.createdAt }));
+  }
+
+  async getBookingContact(bookingId: string): Promise<BookingContact | null> {
+    // In-memory keeps no phone directory; contact resolution is a DB-store concern.
+    if (!this.bookings.has(bookingId)) return null;
+    return { clinicPhone: null, professionalPhone: null };
   }
 
   async recordNotification(input: NotificationInput): Promise<void> {

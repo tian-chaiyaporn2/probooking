@@ -39,6 +39,8 @@ import type {
   ShiftFilters,
   ProfessionalFilters,
   ProfessionalSearchResult,
+  MessageRecord,
+  BookingContact,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -642,6 +644,40 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       ...clinics.map((c) => ({ kind: "clinic" as const, id: c.id, name: c.branchName })),
       ...pros.map((p) => ({ kind: "professional" as const, id: p.id, name: p.displayName })),
     ];
+  }
+
+  async postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord> {
+    const m = await prisma.message.create({ data: { bookingId, senderId, body } });
+    return { id: m.id, senderId: m.senderId, body: m.body, createdAt: m.createdAt.getTime() };
+  }
+
+  async listMessages(bookingId: string): Promise<MessageRecord[]> {
+    const list = await prisma.message.findMany({
+      where: { bookingId },
+      orderBy: { createdAt: "asc" },
+    });
+    return list.map((m) => ({ id: m.id, senderId: m.senderId, body: m.body, createdAt: m.createdAt.getTime() }));
+  }
+
+  async getBookingContact(bookingId: string): Promise<BookingContact | null> {
+    const b = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        professional: { include: { user: true } },
+        shift: {
+          include: {
+            workspace: {
+              include: { memberships: { where: { role: "clinic_owner" }, include: { user: true }, take: 1 } },
+            },
+          },
+        },
+      },
+    });
+    if (!b) return null;
+    return {
+      clinicPhone: b.shift.workspace.memberships[0]?.user.phone ?? null,
+      professionalPhone: b.professional.user.phone,
+    };
   }
 
   async recordNotification(input: NotificationInput): Promise<void> {
