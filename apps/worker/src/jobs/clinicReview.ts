@@ -28,9 +28,11 @@ export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSw
   });
   if (candidates.length === 0) return { due: 0, flagged: 0, failed: 0 };
 
-  // Exclude bookings that already have a completion-review case.
+  // Exclude bookings that already have a completion-review case. Scope the lookup to
+  // this pass's candidates so the scan stays bounded as historical cases accumulate.
+  const candidateIds = candidates.map((c) => c.id);
   const cased = await prisma.supportCase.findMany({
-    where: { refType: "Booking", kind: REVIEW_KIND },
+    where: { refType: "Booking", kind: REVIEW_KIND, refId: { in: candidateIds } },
     select: { refId: true },
   });
   const casedIds = new Set(cased.map((c) => c.refId));

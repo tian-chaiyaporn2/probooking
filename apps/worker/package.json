@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Background jobs: expiries, reminders, auto-accept, reconciliation (§7.2).",
+  "description": "Background sweeps: auto-accept, clinic-review, review-publish, reminders (§7.2).",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
@@ -14,9 +14,7 @@
   "dependencies": {
     "@probook/db": "workspace:*",
     "@probook/domain": "workspace:*",
-    "bullmq": "^5.13.2",
-    "dotenv": "^16.4.5",
-    "ioredis": "^5.4.1"
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/node": "^20.16.10",
