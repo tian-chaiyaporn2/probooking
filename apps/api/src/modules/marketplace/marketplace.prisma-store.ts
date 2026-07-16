@@ -43,6 +43,7 @@ import type {
   BookingContact,
   InsuranceStatus,
   Reconciliation,
+  VerifiedProfile,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -665,6 +666,34 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       select: { score: true },
     });
     return aggregateRating(reviews.map((r) => r.score));
+  }
+
+  async getProfessionalProfile(id: string): Promise<VerifiedProfile | null> {
+    const p = await prisma.professionalProfile.findUnique({
+      where: { id },
+      include: { credentials: true, insurance: true },
+    });
+    if (!p) return null;
+    const licence = p.credentials.find((c) => c.kind === "licence");
+    // Latest insurance evidence by validity (VER-05).
+    const insurance = [...p.insurance].sort(
+      (a, b) => (b.validUntil?.getTime() ?? 0) - (a.validUntil?.getTime() ?? 0),
+    )[0];
+    const rating = await this.getSubjectRating(id);
+    return {
+      id: p.id,
+      selfDeclared: { displayName: p.displayName, profession: p.profession, specialty: p.specialty },
+      verified: {
+        identityVerified: p.verification === "Verified",
+        licence: licence
+          ? { state: licence.state, validUntil: licence.validUntil?.getTime() ?? null }
+          : null,
+        insurance: insurance
+          ? { state: insurance.state, validUntil: insurance.validUntil?.getTime() ?? null }
+          : null,
+        rating: rating ? { count: rating.count, average: rating.average } : null,
+      },
+    };
   }
 
   async listOpenCases(): Promise<CaseSummary[]> {

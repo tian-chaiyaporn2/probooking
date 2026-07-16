@@ -145,6 +145,21 @@ export const createReview = (
 export const getRating = (professionalId: string) =>
   get<Rating>(`/professionals/${professionalId}/rating`);
 
+// ----- Verified profile (VER-03) -----
+export interface VerifiedProfile {
+  id: string;
+  selfDeclared: { displayName: string; profession: string; specialty: string | null };
+  verified: {
+    identityVerified: boolean;
+    licence: { state: string; validUntil: number | null } | null;
+    insurance: { state: string; validUntil: number | null } | null;
+    rating: { count: number; average: number } | null;
+  };
+}
+
+export const getProfile = (professionalId: string) =>
+  get<VerifiedProfile>(`/professionals/${professionalId}/profile`);
+
 // ----- Operations dashboard -----
 export interface CaseSummary {
   id: string;

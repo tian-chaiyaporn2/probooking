@@ -52,6 +52,27 @@ export interface ProfessionalSearchResult {
   rating: number | null; // aggregate, or null below the cold-start threshold (REV-04)
 }
 
+/**
+ * VER-03: a professional's public profile, split into what the professional
+ * self-declares (unverified claims) versus what the platform has verified. A
+ * viewer must be able to tell the two apart — a self-declared specialty is not
+ * an endorsement.
+ */
+export interface VerifiedProfile {
+  id: string;
+  selfDeclared: {
+    displayName: string;
+    profession: string;
+    specialty: string | null;
+  };
+  verified: {
+    identityVerified: boolean; // profile reached Verified (VER-02)
+    licence: { state: string; validUntil: number | null } | null; // VER-04 credential
+    insurance: { state: string; validUntil: number | null } | null; // VER-05 evidence
+    rating: { count: number; average: number } | null; // null below cold-start (REV-04)
+  };
+}
+
 /** An open (biddable) shift for the priority-ordered listing (URG-01, SRC-03). */
 export interface OpenShift {
   shiftId: string;
@@ -371,6 +392,9 @@ export interface MarketplaceRepository {
   createReview(input: ReviewInput): Promise<ReviewResult>;
   /** Aggregate rating from a subject's PUBLISHED reviews, or null below 3 (REV-04). */
   getSubjectRating(subjectId: string): Promise<RatingSummary | null>;
+
+  /** VER-03: self-declared vs platform-verified profile facts. */
+  getProfessionalProfile(id: string): Promise<VerifiedProfile | null>;
 
   // --- Booking messages (MSG-01/02) ---
   postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord>;

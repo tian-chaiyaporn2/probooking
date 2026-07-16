@@ -93,6 +93,31 @@ test("a suspended professional cannot be confirmed (VER-04 gate)", async ({ page
   expect(await confirm.text()).toContain("suspended");
 });
 
+test("verified profile separates self-declared claims from verified facts (VER-03)", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: Awaited<ReturnType<typeof page.request.get>>) => (await r.json()) as any;
+  const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
+  const auth = { authorization: `Bearer ${ops.token}` };
+
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Profile", profession: "dentist", phone: `+66pf${uniq}`, payoutRef: "x-1" },
+  }));
+
+  // Before verification: self-declared claims present, nothing verified.
+  const before = await j(await page.request.get(`${api}/professionals/${pro.id}/profile`));
+  expect(before.selfDeclared.displayName).toBe("Dr Profile");
+  expect(before.selfDeclared.profession).toBe("dentist");
+  expect(before.verified.identityVerified).toBe(false);
+
+  // After Ops verifies, identity flips to verified but self-declared is unchanged.
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: auth });
+  const after = await j(await page.request.get(`${api}/professionals/${pro.id}/profile`));
+  expect(after.verified.identityVerified).toBe(true);
+  expect(after.verified.licence.state).toBe("Verified");
+  expect(after.selfDeclared.profession).toBe("dentist");
+});
+
 test("completion pays out, then both parties review", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();

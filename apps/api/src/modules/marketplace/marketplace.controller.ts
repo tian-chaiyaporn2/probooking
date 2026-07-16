@@ -735,6 +735,14 @@ export class MarketplaceController {
     return { subjectId: id, hasRating: true, ...rating };
   }
 
+  @Get("professionals/:id/profile")
+  async getProfile(@Param("id") id: string) {
+    // VER-03: return the profile split into self-declared claims vs verified facts.
+    const profile = await this.repo.getProfessionalProfile(id);
+    if (!profile) throw new NotFoundException("professional not found");
+    return profile;
+  }
+
   @Get("offers/:id")
   async getOffer(@Param("id") id: string) {
     const offer = await this.requireOffer(id);

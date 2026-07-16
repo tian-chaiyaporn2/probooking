@@ -33,6 +33,7 @@ import type {
   BookingContact,
   InsuranceStatus,
   Reconciliation,
+  VerifiedProfile,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -432,6 +433,32 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       .filter((r) => r.subjectId === subjectId && r.published)
       .map((r) => r.score);
     return aggregateRating(scores);
+  }
+
+  async getProfessionalProfile(id: string): Promise<VerifiedProfile | null> {
+    const verification = this.professionals.get(id);
+    if (verification === undefined) return null;
+    const profile = this.professionalProfiles.get(id);
+    const suspended = this.suspendedCredentials.has(id);
+    const rating = await this.getSubjectRating(id);
+    const ins = this.insurance.get(id);
+    // The in-memory store keeps no explicit licence row: derive its state from
+    // verification + suspension (no expiry is tracked, so validUntil is null).
+    const licenceState = suspended ? "Suspended" : verification === "Verified" ? "Verified" : "Submitted";
+    return {
+      id,
+      selfDeclared: {
+        displayName: profile?.displayName ?? "",
+        profession: profile?.profession ?? "",
+        specialty: null,
+      },
+      verified: {
+        identityVerified: verification === "Verified",
+        licence: { state: licenceState, validUntil: null },
+        insurance: ins ? { state: ins.state, validUntil: ins.validUntil } : null,
+        rating: rating ? { count: rating.count, average: rating.average } : null,
+      },
+    };
   }
 
   private readonly messages: (MessageRecord & { bookingId: string })[] = [];
