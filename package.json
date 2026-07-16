@@ -1,0 +1,30 @@
+{
+  "name": "probook",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ProBooking — two-sided medical talent marketplace for temporary clinic shifts (Thailand). Monorepo.",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:bdd": "NODE_OPTIONS='--import tsx/esm' cucumber-js --import features/support/world.ts --import 'features/step-definitions/*.ts' --tags 'not @wip'",
+    "test:bdd:all": "NODE_OPTIONS='--import tsx/esm' cucumber-js --import features/support/world.ts --import 'features/step-definitions/*.ts'",
+    "db:generate": "pnpm --filter @probook/db generate",
+    "db:migrate": "pnpm --filter @probook/db migrate",
+    "db:studio": "pnpm --filter @probook/db studio",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^11.0.1",
+    "@probook/domain": "workspace:*",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}

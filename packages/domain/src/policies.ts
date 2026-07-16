@@ -1,0 +1,101 @@
+/**
+ * Time-based and money policies (PRD §5.4 offers, §5.7 completion/cancellation).
+ * All durations in milliseconds. Times are UTC (LOC-02); "before shift start" is
+ * evaluated against the shift's scheduled start in UTC.
+ */
+
+import { satang, type Satang } from "./money.js";
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+
+/** Offer & funding timers (OFF-03). All expire by shift start regardless. */
+export const OFFER_TIMERS = {
+  standardExpiry: 12 * HOUR,
+  urgentExpiry: 2 * HOUR,
+  fundingWindow: 30 * MINUTE, // after acceptance (OFF-03)
+} as const;
+
+/** A shift within this window of start may receive the Urgent badge (URG-01). */
+export const URGENT_WINDOW = 72 * HOUR;
+
+/** Auto-accept of professional-submitted completion (CMP-03): once, after 24h. */
+export const AUTO_ACCEPT_AFTER = 24 * HOUR;
+
+/** Clinic inactivity after which Operations reviews completion (CMP-04). */
+export const CLINIC_COMPLETION_REVIEW_AFTER = 48 * HOUR;
+
+export type ShiftUrgency = "standard" | "urgent";
+
+export function offerExpiryFor(urgency: ShiftUrgency): number {
+  return urgency === "urgent" ? OFFER_TIMERS.urgentExpiry : OFFER_TIMERS.standardExpiry;
+}
+
+/**
+ * Effective offer expiry: the earlier of the timer-based expiry and shift start
+ * (OFF-03 "All expire by shift start"). Timestamps are epoch ms (UTC).
+ */
+export function effectiveOfferExpiry(
+  sentAt: number,
+  shiftStart: number,
+  urgency: ShiftUrgency,
+): number {
+  return Math.min(sentAt + offerExpiryFor(urgency), shiftStart);
+}
+
+/**
+ * Cancellation compensation policy (CAN-01..CAN-05).
+ * Returns the professional's payable fraction (0..1) of scheduled compensation,
+ * or the sentinel "support" when the outcome requires a support case.
+ */
+export type CancelActor = "clinic" | "professional";
+export type CancelReason =
+  | "ordinary"
+  | "clinic_unavailable_after_arrival" // CAN-03
+  | "force_majeure" // CAN-05
+  | "safety" // CAN-05
+  | "credential" // CAN-05
+  | "platform_or_provider_failure" // CAN-05
+  | "partial_work"; // CAN-05
+
+export type CancelOutcome = { fraction: number } | { support: true };
+
+export function cancellationOutcome(input: {
+  actor: CancelActor;
+  reason: CancelReason;
+  hoursBeforeStart: number; // hours between cancellation and scheduled start
+  arrived: boolean;
+}): CancelOutcome {
+  const { actor, reason, hoursBeforeStart, arrived } = input;
+
+  // CAN-05: these always route to support regardless of actor/timing.
+  if (
+    reason === "force_majeure" ||
+    reason === "safety" ||
+    reason === "credential" ||
+    reason === "platform_or_provider_failure" ||
+    reason === "partial_work"
+  ) {
+    return { support: true };
+  }
+
+  if (actor === "professional") {
+    // CAN-04: professional cancellation / no-show before work -> 0%.
+    return { fraction: 0 };
+  }
+
+  // actor === "clinic"
+  if (reason === "clinic_unavailable_after_arrival" || (arrived && hoursBeforeStart <= 0)) {
+    // CAN-03: substantiated clinic unavailability after arrival -> default 100%, subject to support.
+    return { fraction: 1 };
+  }
+  if (hoursBeforeStart >= 24) {
+    return { fraction: 0 }; // CAN-01
+  }
+  return { fraction: 0.5 }; // CAN-02: under 24h before valid arrival -> 50%
+}
+
+/** Payable amount given scheduled compensation and a numeric fraction. */
+export function payableFromFraction(compensation: Satang, fraction: number): Satang {
+  return satang(Math.round(compensation * fraction));
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@probook/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NestJS backend. Exposes controlled APIs; internal low-code Ops/Finance tools call these (ADM-02).",
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "prettier --check src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.4",
+    "@nestjs/core": "^10.4.4",
+    "@nestjs/platform-express": "^10.4.4",
+    "@probook/db": "workspace:*",
+    "@probook/domain": "workspace:*",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.5",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.16.10",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  }
+}

@@ -1,0 +1,422 @@
+// ProBooking data model — derived from PRD v1.5 §7.1 (core data groups) and §6.2 (states).
+// Money is Int satang (LOC-02). All timestamps are UTC; display in Asia/Bangkok.
+// This is a Phase 0/1 starting schema — extend per requirements, keep financial
+// events immutable (§6.4) and never edit balances directly (PAY-06).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----- Enums (mirror @probook/domain states) -----
+enum Role {
+  clinic_owner
+  clinic_staff
+  professional
+  operations
+  finance
+  administrator
+}
+
+enum VerificationState {
+  Draft
+  Submitted
+  UnderReview
+  NeedsInformation
+  Verified
+  Rejected
+  Suspended
+  Expired
+  Closed
+}
+
+enum ShiftState {
+  Draft
+  Published
+  Paused
+  Closed
+  Cancelled
+  Archived
+}
+
+enum ShiftUrgency {
+  standard
+  urgent
+}
+
+enum ApplicationState {
+  Submitted
+  Shortlisted
+  OfferSent
+  Booked
+  Withdrawn
+  Declined
+  NotSelected
+  Expired
+}
+
+enum InvitationState {
+  Sent
+  Viewed
+  Interested
+  Declined
+  Withdrawn
+  Expired
+}
+
+enum OfferState {
+  PendingResponse
+  AwaitingPayment
+  Converted
+  Declined
+  Withdrawn
+  Expired
+  PaymentFailed
+}
+
+enum BookingState {
+  Confirmed
+  InProgress
+  AwaitingCompletion
+  ServiceCompleted
+  Cancelled
+  Archived
+}
+
+enum PaymentOrderState {
+  Created
+  Pending
+  PaymentProtected
+  Failed
+  Expired
+  Refunding
+  Refunded
+  Exception
+}
+
+enum PayoutState {
+  NotEligible
+  Processing
+  Paid
+  Failed
+  Held
+  Reversed
+}
+
+enum RefundState {
+  None
+  Pending
+  PartiallyRefunded
+  Refunded
+  Failed
+  Exception
+}
+
+enum CaseState {
+  Open
+  AwaitingUser
+  UnderReview
+  Resolved
+  Reopened
+}
+
+enum FinancialEventType {
+  Collection
+  Refund
+  Payout
+  Reversal
+  Adjustment
+  ProviderCost
+}
+
+// ----- Identity & access -----
+model User {
+  id           String       @id @default(cuid())
+  phone        String       @unique // Thai mobile OTP is primary login (AUTH-01)
+  email        String?      @unique
+  mfaEnabled   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
+  professional ProfessionalProfile?
+  auditRecords AuditRecord[]
+}
+
+model ClinicWorkspace {
+  id           String            @id @default(cuid())
+  // One Phase 1 workspace == one physical clinic branch (§3 rule).
+  branchName   String
+  licenceNo    String
+  address      String
+  billingData  Json?
+  verification VerificationState @default(Draft)
+  createdAt    DateTime          @default(now())
+  memberships  Membership[]
+  shifts       Shift[]
+}
+
+model Membership {
+  id          String          @id @default(cuid())
+  user        User            @relation(fields: [userId], references: [id])
+  userId      String
+  workspace   ClinicWorkspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  role        Role
+  createdAt   DateTime        @default(now())
+
+  @@unique([userId, workspaceId])
+}
+
+model ProfessionalProfile {
+  id            String             @id @default(cuid())
+  user          User               @relation(fields: [userId], references: [id])
+  userId        String             @unique
+  displayName   String
+  profession    String // physician | dentist (Phase 1)
+  specialty     String?
+  verification  VerificationState  @default(Draft)
+  credentials   Credential[]
+  insurance     InsuranceEvidence[]
+  payoutAccount PayoutAccount?
+  availability  Availability[]
+  applications  Application[]
+  createdAt     DateTime           @default(now())
+}
+
+// ----- Trust -----
+model Credential {
+  id             String              @id @default(cuid())
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  professionalId String
+  kind           String // licence | specialty_evidence | identity
+  state          VerificationState   @default(Submitted)
+  validUntil     DateTime? // must remain valid through shift end (VER-04)
+  lastCheckedAt  DateTime?
+  docUri         String?
+}
+
+model InsuranceEvidence {
+  id             String              @id @default(cuid())
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  professionalId String
+  // Verified | UnderReview | Expired | NotProvided | Unverified (VER-05)
+  state          VerificationState   @default(Submitted)
+  validUntil     DateTime?
+  docUri         String?
+}
+
+model PayoutAccount {
+  id             String              @id @default(cuid())
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  professionalId String              @unique
+  // Must match the verified professional (VER-07). Store masked; secrets out of DB.
+  bankRefMasked  String
+  verified       Boolean             @default(false)
+}
+
+// ----- Marketplace -----
+model Availability {
+  id             String              @id @default(cuid())
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  professionalId String
+  startsAt       DateTime // UTC
+  endsAt         DateTime
+  openToRequests Boolean             @default(false) // AVL-01
+
+  @@index([professionalId, startsAt])
+}
+
+model Shift {
+  id            String          @id @default(cuid())
+  workspace     ClinicWorkspace @relation(fields: [workspaceId], references: [id])
+  workspaceId   String
+  state         ShiftState      @default(Draft)
+  urgency       ShiftUrgency    @default(standard)
+  category      String
+  scope         String
+  startsAt      DateTime // UTC; one position, fixed schedule (SHF-01)
+  endsAt        DateTime
+  compensation  Int // scheduled compensation, satang (SHF-01)
+  termsLocked   Boolean         @default(false) // SHF-04
+  createdAt     DateTime        @default(now())
+  applications  Application[]
+  invitations   Invitation[]
+  offers        Offer[]
+  booking       Booking?
+
+  @@index([state, startsAt])
+}
+
+model Application {
+  id             String              @id @default(cuid())
+  shift          Shift               @relation(fields: [shiftId], references: [id])
+  shiftId        String
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  professionalId String
+  state          ApplicationState    @default(Submitted)
+  createdAt      DateTime            @default(now())
+
+  @@unique([shiftId, professionalId])
+}
+
+model Invitation {
+  id             String          @id @default(cuid())
+  shift          Shift           @relation(fields: [shiftId], references: [id])
+  shiftId        String
+  professionalId String
+  state          InvitationState @default(Sent)
+  createdAt      DateTime        @default(now())
+}
+
+model Offer {
+  id             String     @id @default(cuid())
+  shift          Shift      @relation(fields: [shiftId], references: [id])
+  shiftId        String
+  professionalId String
+  state          OfferState @default(PendingResponse)
+  // Immutable snapshot of all terms & policies at send time (OFF-02, BKG-03).
+  termsSnapshot  Json
+  sentAt         DateTime   @default(now())
+  expiresAt      DateTime // effective expiry (OFF-03)
+  fundingDueAt   DateTime? // set on acceptance (OFF-03: 30 min)
+  booking        Booking?
+
+  // One active offer per shift (OFF-02): enforce a single non-terminal offer in
+  // the service layer + a partial unique index (add via migration).
+  @@index([shiftId, state])
+}
+
+model Booking {
+  id             String       @id @default(cuid())
+  shift          Shift        @relation(fields: [shiftId], references: [id])
+  shiftId        String       @unique // one position -> at most one confirmed booking (§6.4)
+  offer          Offer        @relation(fields: [offerId], references: [id])
+  offerId        String       @unique
+  professionalId String
+  state          BookingState @default(Confirmed)
+  // Immutable snapshots at confirmation (BKG-03).
+  termsSnapshot  Json
+  feeSnapshot    Int // service fee, satang
+  taxSnapshot    Int          @default(0)
+  confirmedAt    DateTime     @default(now())
+  paymentOrder   PaymentOrder?
+  messages       Message[]
+  attendance     AttendanceEvent[]
+  review         Review[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  bookingId String
+  senderId  String
+  // Plain text only; no attachments / real-time infra (MSG-01).
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([bookingId, createdAt])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  bookingId  String
+  authorId   String
+  subjectId  String
+  score      Int // overall score (REV-02)
+  tags       String[]
+  text       String?
+  publishedAt DateTime? // publishes when both submit or after 7 days (REV-03)
+  createdAt  DateTime @default(now())
+
+  @@unique([bookingId, authorId]) // one review per party (REV-02)
+}
+
+// ----- Operations -----
+model AttendanceEvent {
+  id        String   @id @default(cuid())
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  bookingId String
+  kind      String // Arrived | Completed (CMP-01) — no GPS/QR
+  actorId   String
+  occurredAt DateTime @default(now())
+}
+
+model SupportCase {
+  id        String    @id @default(cuid())
+  // One generic case model covers all issue types (SUP-01).
+  subject   String
+  kind      String // verification | booking | attendance | payment | safety | insurance | review
+  state     CaseState @default(Open)
+  refType   String? // e.g. "Booking", "Offer"
+  refId     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model RiskIncident {
+  id        String   @id @default(cuid())
+  kind      String // identity_mismatch | fake_credential | related_party | payment_anomaly | ...
+  refType   String?
+  refId     String?
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+// ----- Finance (immutable events; §6.4, PAY-05) -----
+model PaymentOrder {
+  id            String            @id @default(cuid())
+  booking       Booking?          @relation(fields: [bookingId], references: [id])
+  bookingId     String?           @unique // a Payment Order can exist with no booking (PAY-03)
+  state         PaymentOrderState @default(Created)
+  providerRef   String? // provider reference (PAY-04)
+  captured      Int               @default(0) // satang captured
+  allocation    FinancialAllocation?
+  events        FinancialEvent[]
+  createdAt     DateTime          @default(now())
+}
+
+model FinancialAllocation {
+  id             String       @id @default(cuid())
+  paymentOrder   PaymentOrder @relation(fields: [paymentOrderId], references: [id])
+  paymentOrderId String       @unique
+  // Immutable allocation per booking (PAY-05). All satang. Must conserve (PAY-07).
+  compensation   Int
+  serviceFee     Int
+  tax            Int          @default(0)
+  payoutState    PayoutState  @default(NotEligible)
+  refundState    RefundState  @default(None)
+}
+
+model FinancialEvent {
+  id             String             @id @default(cuid())
+  paymentOrder   PaymentOrder       @relation(fields: [paymentOrderId], references: [id])
+  paymentOrderId String
+  type           FinancialEventType
+  amount         Int // satang; sign per type
+  providerRef    String?
+  // Idempotency key ties provider callbacks/commands to a single effect (PAY-04).
+  idempotencyKey String             @unique
+  createdAt      DateTime           @default(now())
+
+  @@index([paymentOrderId, createdAt])
+}
+
+// ----- Audit (every privileged change; §6.4) -----
+model AuditRecord {
+  id         String   @id @default(cuid())
+  actor      User?    @relation(fields: [actorId], references: [id])
+  actorId    String?
+  action     String
+  authority  String? // recorded authority for binding clinic actions (§3)
+  targetType String
+  targetId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([targetType, targetId])
+}
