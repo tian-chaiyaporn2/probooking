@@ -63,9 +63,22 @@ node apps/api/dist/main.js                 # API on :4000  (GET /health)
 pnpm --filter @probook/web dev             # web on :3000  (/ and /flow)
 ```
 
-The API and web boot **without Postgres/Redis** — the Phase 0 booking flow uses an
-in-memory store (`apps/api/.../marketplace`) so the vertical slice runs immediately.
-Wire Prisma/Redis via `.env` as you go.
+**Persistence is dual-mode.** With no `DATABASE_URL`, the booking flow uses an
+in-memory store, so the API and web boot with **zero services**. Set `DATABASE_URL`
+and it switches to **Prisma/Postgres** automatically — the API logs which store it
+selected at boot (`Using Prisma/Postgres store` / `Using in-memory store`).
+
+#### Database (optional — enables persistence)
+
+```bash
+createdb probook_dev                                            # or CREATE DATABASE via psql
+echo 'DATABASE_URL=postgresql://USER@localhost:5432/probook_dev?schema=public' >> .env
+pnpm db:migrate                                                 # apply schema (creates tables)
+```
+
+With that set, `POST /offers → accept → confirm` persists real `Shift`, `Offer`, and
+`Booking` rows; the `Booking` unique constraints on `shiftId`/`offerId` enforce §6.4
+(one booking per shift) at the database level.
 
 ### Test
 

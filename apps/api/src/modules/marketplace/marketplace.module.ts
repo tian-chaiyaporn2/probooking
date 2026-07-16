@@ -1,13 +1,33 @@
-import { Module } from "@nestjs/common";
+import { Module, Logger } from "@nestjs/common";
 import { OffersModule } from "../offers/offers.module.js";
 import { BookingsModule } from "../bookings/bookings.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
 import { MarketplaceController } from "./marketplace.controller.js";
-import { MarketplaceStore } from "./marketplace.store.js";
+import { MARKETPLACE_REPOSITORY, type MarketplaceRepository } from "./marketplace.types.js";
+
+/**
+ * Selects the persistence backend at boot: Prisma/Postgres when DATABASE_URL is set,
+ * otherwise the in-memory store. Dynamic imports keep Prisma (and its client
+ * construction) out of the process entirely in the in-memory case.
+ */
+const marketplaceRepositoryProvider = {
+  provide: MARKETPLACE_REPOSITORY,
+  useFactory: async (): Promise<MarketplaceRepository> => {
+    const logger = new Logger("Marketplace");
+    if (process.env.DATABASE_URL) {
+      const { PrismaMarketplaceStore } = await import("./marketplace.prisma-store.js");
+      logger.log("Using Prisma/Postgres store");
+      return new PrismaMarketplaceStore();
+    }
+    const { InMemoryMarketplaceStore } = await import("./marketplace.memory-store.js");
+    logger.log("Using in-memory store (no DATABASE_URL)");
+    return new InMemoryMarketplaceStore();
+  },
+};
 
 @Module({
   imports: [OffersModule, BookingsModule, PaymentsModule],
   controllers: [MarketplaceController],
-  providers: [MarketplaceStore],
+  providers: [marketplaceRepositoryProvider],
 })
 export class MarketplaceModule {}

@@ -60,13 +60,21 @@ A pure **domain** package holds all business rules and is depended on by everyth
 
 The first end-to-end path is live: **create offer → accept (soft hold) → confirm**.
 - API: `apps/api/src/modules/marketplace` — controlled endpoints composing
-  `OffersService`, `BookingsService`, `PaymentsService`, backed by an in-memory store
-  (swap for `@probook/db` repositories when persistence lands).
+  `OffersService`, `BookingsService`, `PaymentsService`, behind a `MarketplaceRepository`
+  port with two implementations selected at boot by `DATABASE_URL`:
+  - `PrismaMarketplaceStore` — real Postgres via `@probook/db` (persists `Shift`,
+    `Offer`, `Booking`; the `Booking` unique constraints enforce §6.4 in the DB).
+  - `InMemoryMarketplaceStore` — zero-service fallback for dev/e2e.
 - Web: `apps/web/src/app/flow` drives it and renders the checkout (12% fee).
 - E2E: `e2e/` (Playwright) boots both servers and asserts the Confirmed booking.
 
 Every rule in the flow (authority OFF-01, soft hold OFF-04, eligibility §6.3, fee
 PAY-02) is enforced by `@probook/domain`, not by the controller.
+
+**Env-load ordering:** `@probook/db` constructs its `PrismaClient` (reading
+`DATABASE_URL`) at import time, and ESM hoists imports — so `apps/api/src/main.ts`
+imports `./env.js` (dotenv) *first*, and the Prisma store is loaded via dynamic
+`import()` only when `DATABASE_URL` is present.
 
 ## Explicitly out of scope (PRD §7.2)
 
