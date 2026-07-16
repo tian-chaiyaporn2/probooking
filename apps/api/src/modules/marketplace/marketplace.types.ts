@@ -1,4 +1,4 @@
-import type { OfferState, BookingState, ShiftUrgency } from "@probook/domain";
+import type { OfferState, BookingState, PayoutState, ShiftUrgency } from "@probook/domain";
 
 /** The offer view the flow works with (joins Shift fields for compensation/urgency/start). */
 export interface OfferRecord {
@@ -50,6 +50,33 @@ export interface ConfirmBookingResult {
   paymentOrderId: string;
 }
 
+/** Full booking view including money state, for the completion/payout phase. */
+export interface BookingDetail {
+  id: string;
+  offerId: string;
+  shiftId: string;
+  professionalId: string;
+  state: BookingState;
+  compensation: number; // integer satang
+  serviceFee: number;
+  tax: number;
+  captured: number;
+  payoutState: PayoutState;
+  paymentOrderId: string | null;
+}
+
+export interface PayoutInput {
+  bookingId: string;
+  payoutAmount: number; // integer satang (the professional's compensation)
+  idempotencyKey: string; // dedupes the payout event (PAY-04)
+}
+
+export interface PayoutResult {
+  bookingState: BookingState;
+  payoutState: PayoutState;
+  payoutAmount: number;
+}
+
 /**
  * Persistence port for the booking flow. Two implementations exist:
  *  - InMemoryMarketplaceStore  (no DATABASE_URL — zero-service dev/e2e)
@@ -62,12 +89,22 @@ export interface MarketplaceRepository {
   /** Transition an offer's state (and optionally set fundingDueAt). Returns the updated record. */
   setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null>;
   /**
-   * Atomically (BKG-02) create the Booking and its Payment Protected money records
-   * (PaymentOrder + FinancialAllocation + a Collection FinancialEvent). Returns the
-   * booking and the payment order id.
+   * Atomically (BKG-02) transition the offer to Converted AND create the Booking and
+   * its Payment Protected money records (PaymentOrder + FinancialAllocation + a
+   * Collection FinancialEvent) in one transaction. Returns booking + payment order id.
    */
   confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult>;
   getBookingByOffer(offerId: string): Promise<BookingRecord | null>;
+
+  // --- Completion & payout ---
+  getBooking(id: string): Promise<BookingDetail | null>;
+  /** Professional submits completion (CMP-01): advances the booking to AwaitingCompletion. */
+  markCompletion(id: string): Promise<BookingDetail | null>;
+  /**
+   * Accept completion and initiate payout (CMP-02/03, PAY-09), atomically: booking ->
+   * ServiceCompleted, allocation payout state -> Paid, and an immutable Payout event.
+   */
+  recordPayout(input: PayoutInput): Promise<PayoutResult>;
 }
 
 /** DI token for the repository. */

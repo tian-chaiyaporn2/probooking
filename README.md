@@ -84,6 +84,11 @@ then `Shift`, `Offer`, and — atomically on confirm — `Booking` + `PaymentOrd
 event's idempotency key makes confirm safe to retry (PAY-04). Captured funds are
 checked against the allocation on confirm (PAY-07 conservation).
 
+Then `POST /bookings/:id/complete → /accept-completion` records the completion
+(`AttendanceEvent`), moves the booking to `ServiceCompleted`, and initiates payout
+(CMP-01/02, PAY-09) — a `Payout` `FinancialEvent` and `payoutState=Paid` — re-checking
+PAY-07 conservation as the protected funds are released (captured = payout + fee + tax).
+
 ### Test
 
 ```bash

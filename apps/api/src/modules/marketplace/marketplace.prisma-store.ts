@@ -1,12 +1,15 @@
 import { prisma } from "@probook/db";
-import type { OfferState, ShiftUrgency } from "@probook/domain";
+import type { OfferState, BookingState, PayoutState, ShiftUrgency } from "@probook/domain";
 import type {
   MarketplaceRepository,
   OfferRecord,
   BookingRecord,
+  BookingDetail,
   CreateOfferInput,
   ConfirmBookingInput,
   ConfirmBookingResult,
+  PayoutInput,
+  PayoutResult,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -88,8 +91,10 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult> {
-    // Atomic (BKG-02): booking + Payment Protected money records commit together.
+    // Atomic (BKG-02): offer -> Converted + booking + Payment Protected money records
+    // all commit together, or none do.
     return prisma.$transaction(async (tx) => {
+      await tx.offer.update({ where: { id: input.offerId }, data: { state: "Converted" } });
       const booking = await tx.booking.create({
         data: {
           offerId: input.offerId,
@@ -149,6 +154,71 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
           state: booking.state as BookingRecord["state"],
         }
       : null;
+  }
+
+  async getBooking(id: string): Promise<BookingDetail | null> {
+    const b = await prisma.booking.findUnique({
+      where: { id },
+      include: { paymentOrder: { include: { allocation: true } } },
+    });
+    if (!b) return null;
+    const alloc = b.paymentOrder?.allocation ?? null;
+    return {
+      id: b.id,
+      offerId: b.offerId,
+      shiftId: b.shiftId,
+      professionalId: b.professionalId,
+      state: b.state as BookingState,
+      compensation: alloc?.compensation ?? 0,
+      serviceFee: alloc?.serviceFee ?? b.feeSnapshot,
+      tax: alloc?.tax ?? b.taxSnapshot,
+      captured: b.paymentOrder?.captured ?? 0,
+      payoutState: (alloc?.payoutState ?? "NotEligible") as PayoutState,
+      paymentOrderId: b.paymentOrder?.id ?? null,
+    };
+  }
+
+  async markCompletion(id: string): Promise<BookingDetail | null> {
+    const existing = await prisma.booking.findUnique({ where: { id } });
+    if (!existing) return null;
+    // CMP-01: professional marks completion; booking -> AwaitingCompletion.
+    await prisma.booking.update({ where: { id }, data: { state: "AwaitingCompletion" } });
+    await prisma.attendanceEvent.create({
+      data: { bookingId: id, kind: "Completed", actorId: existing.professionalId },
+    });
+    return this.getBooking(id);
+  }
+
+  async recordPayout(input: PayoutInput): Promise<PayoutResult> {
+    // Atomic: booking -> ServiceCompleted, allocation payout -> Paid, Payout event.
+    return prisma.$transaction(async (tx) => {
+      const po = await tx.paymentOrder.findUnique({
+        where: { bookingId: input.bookingId },
+        include: { allocation: true },
+      });
+      if (!po?.allocation) {
+        throw new Error("no payment allocation for booking");
+      }
+      await tx.booking.update({ where: { id: input.bookingId }, data: { state: "ServiceCompleted" } });
+      await tx.financialAllocation.update({
+        where: { paymentOrderId: po.id },
+        data: { payoutState: "Paid" },
+      });
+      // Immutable payout event, idempotent by key (PAY-04/05, PAY-09).
+      await tx.financialEvent.create({
+        data: {
+          paymentOrderId: po.id,
+          type: "Payout",
+          amount: input.payoutAmount,
+          idempotencyKey: input.idempotencyKey,
+        },
+      });
+      return {
+        bookingState: "ServiceCompleted" as const,
+        payoutState: "Paid" as const,
+        payoutAmount: input.payoutAmount,
+      };
+    });
   }
 
   /**

@@ -52,6 +52,19 @@ export const acceptOffer = (id: string) => post<Accepted>(`/offers/${id}/accept`
 export const confirmOffer = (id: string, prefundingSucceeded = true) =>
   post<Confirmed>(`/offers/${id}/confirm`, { prefundingSucceeded });
 
+export interface Payout {
+  id: string;
+  bookingState: string;
+  payoutState: string;
+  payoutAmount: number;
+}
+
+export const completeBooking = (bookingId: string) =>
+  post<{ id: string; state: string }>(`/bookings/${bookingId}/complete`);
+
+export const acceptCompletion = (bookingId: string) =>
+  post<Payout>(`/bookings/${bookingId}/accept-completion`);
+
 /** Format integer satang as THB, e.g. 1_120_000 -> "฿11,200.00". */
 export const formatThb = (s: number) =>
   `฿${(s / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

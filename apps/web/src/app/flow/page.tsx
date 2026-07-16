@@ -5,8 +5,11 @@ import {
   createOffer,
   acceptOffer,
   confirmOffer,
+  completeBooking,
+  acceptCompletion,
   formatThb,
   type Checkout,
+  type Payout,
 } from "../../lib/api";
 
 type Step = { label: string; detail: string };
@@ -20,14 +23,17 @@ export default function FlowPage() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [payout, setPayout] = useState<Payout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [payingOut, setPayingOut] = useState(false);
 
   async function run() {
     setRunning(true);
     setSteps([]);
     setCheckout(null);
     setBookingId(null);
+    setPayout(null);
     setError(null);
     const log = (label: string, detail: string) =>
       setSteps((s) => [...s, { label, detail }]);
@@ -53,11 +59,27 @@ export default function FlowPage() {
     }
   }
 
+  async function runPayout() {
+    if (!bookingId) return;
+    setPayingOut(true);
+    setError(null);
+    try {
+      await completeBooking(bookingId); // professional marks completion
+      const result = await acceptCompletion(bookingId); // accept + initiate payout
+      setPayout(result);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPayingOut(false);
+    }
+  }
+
   return (
     <main style={{ maxWidth: 640, margin: "3rem auto", padding: "0 1.5rem", fontFamily: "system-ui" }}>
       <h1>ProBooking — booking flow</h1>
       <p style={{ color: "#555" }}>
-        Create a binding offer, accept it (soft hold), then confirm the booking.
+        Create a binding offer, accept it (soft hold), confirm the booking, then
+        complete it and pay out the professional.
       </p>
 
       <button
@@ -107,6 +129,34 @@ export default function FlowPage() {
               </tbody>
             </table>
           )}
+
+          <div style={{ marginTop: "1rem" }}>
+            {!payout ? (
+              <button
+                data-testid="run-payout"
+                onClick={runPayout}
+                disabled={payingOut}
+                style={{
+                  padding: "0.5rem 1rem",
+                  borderRadius: 8,
+                  border: "1px solid #06b",
+                  background: payingOut ? "#eee" : "#06b",
+                  color: payingOut ? "#666" : "#fff",
+                  cursor: payingOut ? "default" : "pointer",
+                }}
+              >
+                {payingOut ? "Paying out…" : "Complete & pay out"}
+              </button>
+            ) : (
+              <div data-testid="payout">
+                <span data-testid="payout-status" style={{ fontWeight: 600, color: "#0a5" }}>
+                  Paid out
+                </span>{" "}
+                — <span data-testid="payout-amount">{formatThb(payout.payoutAmount)}</span> to the
+                professional (booking {payout.bookingState})
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -58,7 +58,8 @@ A pure **domain** package holds all business rules and is depended on by everyth
 
 ## Vertical slice (Phase 0)
 
-The first end-to-end path is live: **create offer → accept (soft hold) → confirm**.
+The first end-to-end path is live: **create offer → accept (soft hold) → confirm →
+complete → pay out**.
 - API: `apps/api/src/modules/marketplace` — controlled endpoints composing
   `OffersService`, `BookingsService`, `PaymentsService`, behind a `MarketplaceRepository`
   port with two implementations selected at boot by `DATABASE_URL`:
@@ -68,7 +69,10 @@ The first end-to-end path is live: **create offer → accept (soft hold) → con
     `Booking` + `PaymentOrder` (Payment Protected) + `FinancialAllocation` + a
     `Collection` `FinancialEvent`. `Booking`'s unique constraints enforce §6.4 and the
     event's idempotency key enforces PAY-04; the controller asserts PAY-07 conservation
-    (captured == compensation + fee + tax) before writing.
+    (captured == compensation + fee + tax) before writing. Completion (`markCompletion`
+    → `recordPayout`) then moves the booking to `ServiceCompleted`, sets the allocation
+    `payoutState=Paid`, and writes a `Payout` `FinancialEvent` in a transaction —
+    re-asserting PAY-07 (captured == payout + fee + tax) as protected funds release.
   - `InMemoryMarketplaceStore` — zero-service fallback for dev/e2e.
 - Web: `apps/web/src/app/flow` drives it and renders the checkout (12% fee).
 - E2E: `e2e/` (Playwright) boots both servers and asserts the Confirmed booking.

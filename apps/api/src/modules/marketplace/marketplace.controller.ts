@@ -10,6 +10,8 @@ import {
 } from "@nestjs/common";
 import {
   advanceOffer,
+  advanceBooking,
+  advancePayout,
   satang,
   type ConfirmationContext,
   type Role,
@@ -146,7 +148,7 @@ export class MarketplaceController {
       adjustments: satang(0),
     });
 
-    await this.repo.setOfferState(id, "Converted");
+    // Offer -> Converted happens inside confirmBooking's transaction (BKG-02 atomic).
     const { booking, paymentOrderId } = await this.repo.confirmBooking({
       offerId: offer.id,
       shiftId: offer.shiftId,
@@ -163,6 +165,66 @@ export class MarketplaceController {
     return { booking, checkout, paymentOrderId };
   }
 
+  @Post("bookings/:id/complete")
+  async complete(@Param("id") id: string) {
+    const booking = await this.requireBooking(id);
+    // Idempotent: completion already submitted (or beyond).
+    if (booking.state === "AwaitingCompletion" || booking.state === "ServiceCompleted") {
+      return { id, state: booking.state };
+    }
+    // CMP-01: professional marks completion. Validate Confirmed -> InProgress -> AwaitingCompletion.
+    try {
+      const inProgress = advanceBooking(booking.state, "InProgress");
+      advanceBooking(inProgress, "AwaitingCompletion");
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+    const updated = await this.repo.markCompletion(id);
+    return { id, state: updated?.state ?? "AwaitingCompletion" };
+  }
+
+  @Post("bookings/:id/accept-completion")
+  async acceptCompletion(@Param("id") id: string) {
+    const booking = await this.requireBooking(id);
+    // Idempotent: already completed & paid out.
+    if (booking.state === "ServiceCompleted") {
+      return {
+        id,
+        bookingState: booking.state,
+        payoutState: booking.payoutState,
+        payoutAmount: booking.compensation,
+      };
+    }
+    // CMP-02/03 + PAY-09: accept completion and initiate payout. Validate lifecycles.
+    try {
+      advanceBooking(booking.state, "ServiceCompleted"); // requires AwaitingCompletion
+      const processing = advancePayout(booking.payoutState, "Processing");
+      advancePayout(processing, "Paid");
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+
+    // PAY-07 conservation AFTER payout: protected is released to payout, so
+    // captured == payout(compensation) + fee + tax.
+    this.payments.assertConserved({
+      captured: satang(booking.captured),
+      protectedRemainder: satang(0),
+      payout: satang(booking.compensation),
+      fee: satang(booking.serviceFee),
+      tax: satang(booking.tax),
+      refunds: satang(0),
+      providerCosts: satang(0),
+      adjustments: satang(0),
+    });
+
+    const result = await this.repo.recordPayout({
+      bookingId: id,
+      payoutAmount: booking.compensation,
+      idempotencyKey: `payout:${id}`,
+    });
+    return { id, ...result };
+  }
+
   @Get("offers/:id")
   async getOffer(@Param("id") id: string) {
     const offer = await this.requireOffer(id);
@@ -173,5 +235,11 @@ export class MarketplaceController {
     const offer = await this.repo.getOffer(id);
     if (!offer) throw new NotFoundException("offer not found");
     return offer;
+  }
+
+  private async requireBooking(id: string) {
+    const booking = await this.repo.getBooking(id);
+    if (!booking) throw new NotFoundException("booking not found");
+    return booking;
   }
 }

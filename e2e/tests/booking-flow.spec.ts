@@ -29,3 +29,14 @@ test("booking flow confirms a booking with the correct checkout total", async ({
   await expect(steps.nth(1)).toContainText("accepted");
   await expect(steps.nth(2)).toContainText("Booking confirmed");
 });
+
+test("completion pays out the professional's compensation", async ({ page }) => {
+  await page.goto("/flow");
+  await page.getByTestId("run-flow").click();
+  await expect(page.getByTestId("booking-status")).toHaveText("Booking Confirmed");
+
+  await page.getByTestId("run-payout").click();
+  await expect(page.getByTestId("payout-status")).toHaveText("Paid out");
+  // Professional receives the 10,000 THB compensation (fee stays with the platform).
+  await expect(page.getByTestId("payout-amount")).toHaveText("฿10,000.00");
+});

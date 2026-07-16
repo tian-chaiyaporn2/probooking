@@ -36,7 +36,10 @@ when `DATABASE_URL` is set — an ensured identity graph (`ClinicWorkspace`/`Use
 `Booking` + `PaymentOrder` + `FinancialAllocation` + a `Collection` `FinancialEvent`
 (PAY-01/03/05). Confirm asserts **PAY-07 conservation** and is idempotent via the
 event key (**PAY-04**); `Booking` unique constraints enforce **§6.4** in the DB. An
-in-memory store is the fallback.
+in-memory store is the fallback. **Completion → payout** (CMP-01/02, PAY-09) is also
+live: `complete` records an `AttendanceEvent` and moves the booking to
+`AwaitingCompletion`; `accept-completion` transitions it to `ServiceCompleted`, sets
+`payoutState=Paid`, and writes an idempotent `Payout` event, re-asserting PAY-07.
 Covered by: `packages/domain/test/*`, `features/04`, `features/05`, `e2e/tests/booking-flow.spec.ts`
 (the e2e runs against Postgres when `.env` provides `DATABASE_URL`).
 
