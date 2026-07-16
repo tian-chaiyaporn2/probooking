@@ -173,6 +173,62 @@ test("reporting: history, receipt, metrics, and finance CSV export (REP-01..03)"
   expect(csv).toContain("Payout");
 });
 
+test("privacy & security: audit trail, OTP rate limit, patient-data guard (§7.3)", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: Awaited<ReturnType<typeof page.request.get>>) => (await r.json()) as any;
+  const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
+  const adm = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "administrator" } }));
+  const opsAuth = { authorization: `Bearer ${ops.token}` };
+  const admAuth = { authorization: `Bearer ${adm.token}` };
+
+  // A privileged verify must appear in the immutable audit trail.
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Sec", profession: "physician", phone: `+66se${uniq}`, payoutRef: "x-1" },
+  }));
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
+
+  // Audit is administrator-only.
+  expect((await page.request.get(`${api}/ops/audit`, { headers: opsAuth })).status()).toBe(403);
+  const trail = await j(await page.request.get(`${api}/ops/audit`, { headers: admAuth }));
+  const entry = trail.audit.find((a: any) => a.action === "verify_professional" && a.targetId === pro.id);
+  expect(entry).toBeTruthy();
+  expect(entry.role).toBe("operations");
+
+  // OTP requests are rate limited per phone (second within the window is 429).
+  const phone = `+66rl${uniq}`;
+  expect((await page.request.post(`${api}/auth/otp/request`, { data: { phone } })).status()).toBe(201);
+  expect((await page.request.post(`${api}/auth/otp/request`, { data: { phone } })).status()).toBe(429);
+
+  // Patient identifiers are rejected in messages. Build a confirmed booking first.
+  const clinic = await j(await page.request.post(`${api}/clinics`, {
+    data: { branchName: `Sec ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66sf${uniq}` },
+  }));
+  await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
+  const shift = await j(await page.request.post(`${api}/shifts`, {
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+  }));
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: pro.id } });
+  const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
+    data: { professionalId: pro.id },
+  }));
+  await page.request.post(`${api}/offers/${offer.id}/accept`);
+  const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`, {
+    data: { prefundingSucceeded: true },
+  }));
+  const bookingId = confirmed.booking.id;
+  expect(
+    (await page.request.post(`${api}/bookings/${bookingId}/messages`, {
+      data: { senderId: clinic.id, body: "See you Tuesday" },
+    })).status(),
+  ).toBe(201);
+  expect(
+    (await page.request.post(`${api}/bookings/${bookingId}/messages`, {
+      data: { senderId: clinic.id, body: "patient 1234567890123 details attached" },
+    })).status(),
+  ).toBe(400);
+});
+
 test("completion pays out, then both parties review", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();

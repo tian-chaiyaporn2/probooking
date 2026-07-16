@@ -1,5 +1,6 @@
 import {
   CanActivate,
+  createParamDecorator,
   ExecutionContext,
   ForbiddenException,
   Injectable,
@@ -13,6 +14,11 @@ import { verifyToken, type TokenPayload } from "./token.util.js";
 export const ROLES_KEY = "roles";
 /** Restrict a handler to the given platform roles (§3). Empty = any authenticated user. */
 export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
+
+/** Injects the authenticated token payload (set by AuthGuard) into a handler param. */
+export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): TokenPayload | undefined => {
+  return ctx.switchToHttp().getRequest<Request & { user?: TokenPayload }>().user;
+});
 
 @Injectable()
 export class AuthGuard implements CanActivate {

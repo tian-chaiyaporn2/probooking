@@ -1,5 +1,13 @@
-import { BadRequestException, Body, Controller, Post, UnauthorizedException } from "@nestjs/common";
-import { OtpService } from "./otp.service.js";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpException,
+  HttpStatus,
+  Post,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { OtpService, OtpRateLimitError } from "./otp.service.js";
 import { signToken } from "./token.util.js";
 
 // Phase-0/1 staff mapping: phones that resolve to an internal platform role on login.
@@ -19,9 +27,19 @@ export class AuthController {
   @Post("otp/request")
   request(@Body() dto: { phone: string }) {
     if (!dto.phone) throw new BadRequestException("phone required");
-    const code = this.otp.request(dto.phone);
-    // devCode is returned only for the mock provider — remove when real SMS is wired.
-    return { sent: true, devCode: code };
+    try {
+      const code = this.otp.request(dto.phone);
+      // devCode is returned only for the mock provider — remove when real SMS is wired.
+      return { sent: true, devCode: code };
+    } catch (e) {
+      if (e instanceof OtpRateLimitError) {
+        throw new HttpException(
+          { statusCode: 429, message: e.message, retryAfterMs: e.retryAfterMs },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      throw e;
+    }
   }
 
   @Post("otp/verify")

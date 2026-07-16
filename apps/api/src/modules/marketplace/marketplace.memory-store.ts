@@ -37,6 +37,8 @@ import type {
   BookingHistoryRow,
   FinanceExportRow,
   MarketplaceMetrics,
+  AuditEntry,
+  AuditRow,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -551,6 +553,18 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       });
     }
     return rows;
+  }
+
+  private readonly audit: AuditRow[] = [];
+  private auditSeq = 0;
+
+  async recordAudit(entry: AuditEntry): Promise<void> {
+    // Append-only in memory (index preserves order without a wall clock).
+    this.audit.push({ id: `audit-${++this.auditSeq}`, at: this.auditSeq, ...entry });
+  }
+
+  async listAudit(limit = 100): Promise<AuditRow[]> {
+    return this.audit.slice(-limit).reverse();
   }
 
   async getMetrics(): Promise<MarketplaceMetrics> {

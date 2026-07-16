@@ -119,6 +119,21 @@ export interface InsuranceStatus {
   validUntil: number | null; // epoch ms UTC
 }
 
+// ----- Audit trail (§6.4, §7.3, ADM-01) -----
+export interface AuditEntry {
+  actor: string; // token subject (staff phone / dev role) — masked for display
+  role: string;
+  action: string; // e.g. "verify_professional", "suspend_credential"
+  targetType: string;
+  targetId: string;
+  details?: Record<string, unknown>;
+}
+
+export interface AuditRow extends AuditEntry {
+  id: string;
+  at: number; // epoch ms UTC
+}
+
 // ----- Reporting & exports (REP-01..03) -----
 /** REP-01: one row of a party's booking + financial history. */
 export interface BookingHistoryRow {
@@ -447,6 +462,12 @@ export interface MarketplaceRepository {
 
   /** REP-03: core marketplace + operations metrics. */
   getMetrics(): Promise<MarketplaceMetrics>;
+
+  /** §7.3/§6.4: append an immutable audit record for a privileged action. */
+  recordAudit(entry: AuditEntry): Promise<void>;
+
+  /** §7.3: recent audit records, most recent first (actor masked by the caller). */
+  listAudit(limit?: number): Promise<AuditRow[]>;
 
   // --- Booking messages (MSG-01/02) ---
   postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord>;

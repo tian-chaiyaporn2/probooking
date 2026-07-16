@@ -47,6 +47,8 @@ import type {
   BookingHistoryRow,
   FinanceExportRow,
   MarketplaceMetrics,
+  AuditEntry,
+  AuditRow,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -764,6 +766,40 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         reconciliationExceptions: recon.summary.exceptions,
       },
     };
+  }
+
+  async recordAudit(entry: AuditEntry): Promise<void> {
+    // Immutable append (§6.4). The actor is internal staff not modelled as a User
+    // row, so actorId stays null and the actor/role/details live in `after`.
+    await prisma.auditRecord.create({
+      data: {
+        action: entry.action,
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        after: { actor: entry.actor, role: entry.role, ...(entry.details ?? {}) },
+      },
+    });
+  }
+
+  async listAudit(limit = 100): Promise<AuditRow[]> {
+    const records = await prisma.auditRecord.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    return records.map((r) => {
+      const after = (r.after ?? {}) as Record<string, unknown>;
+      const { actor, role, ...details } = after;
+      return {
+        id: r.id,
+        actor: typeof actor === "string" ? actor : "",
+        role: typeof role === "string" ? role : "",
+        action: r.action,
+        targetType: r.targetType,
+        targetId: r.targetId,
+        details,
+        at: r.createdAt.getTime(),
+      };
+    });
   }
 
   async getProfessionalProfile(id: string): Promise<VerifiedProfile | null> {

@@ -11,7 +11,9 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { AuthGuard, Roles } from "../auth/auth.guard.js";
+import { AuthGuard, Roles, CurrentUser } from "../auth/auth.guard.js";
+import type { TokenPayload } from "../auth/token.util.js";
+import { maskActor, containsProhibitedPatientData } from "./privacy.util.js";
 import {
   advanceOffer,
   advanceBooking,
@@ -102,18 +104,20 @@ export class MarketplaceController {
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Post("ops/clinics/:id/verify")
-  async verifyClinic(@Param("id") id: string) {
+  async verifyClinic(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const r = await this.repo.verifyClinic(id);
     if (!r) throw new NotFoundException("clinic not found");
+    await this.audit(user, "verify_clinic", "clinic", id);
     return r;
   }
 
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Post("ops/professionals/:id/verify")
-  async verifyProfessional(@Param("id") id: string) {
+  async verifyProfessional(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const r = await this.repo.verifyProfessional(id);
     if (!r) throw new NotFoundException("professional not found");
+    await this.audit(user, "verify_professional", "professional", id);
     return r;
   }
 
@@ -136,26 +140,28 @@ export class MarketplaceController {
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Post("ops/professionals/:id/verify-insurance")
-  async verifyInsurance(@Param("id") professionalId: string) {
+  async verifyInsurance(@Param("id") professionalId: string, @CurrentUser() user?: TokenPayload) {
     const r = await this.repo.verifyInsurance(professionalId);
     if (!r) throw new NotFoundException("no insurance evidence submitted");
+    await this.audit(user, "verify_insurance", "professional", professionalId);
     return r;
   }
 
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Post("ops/professionals/:id/suspend-credential")
-  async suspendCredential(@Param("id") id: string) {
+  async suspendCredential(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     // VER-04: a licence lapses / is suspended by Operations.
     const ok = await this.repo.suspendCredential(id);
     if (!ok) throw new NotFoundException("professional or licence credential not found");
+    await this.audit(user, "suspend_credential", "professional", id);
     return { professionalId: id, credential: "Suspended" };
   }
 
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Post("bookings/:id/hold-credential")
-  async holdCredential(@Param("id") id: string) {
+  async holdCredential(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const booking = await this.requireBooking(id);
     // VER-06 applies after confirmation and before completion is accepted.
     if (
@@ -175,16 +181,18 @@ export class MarketplaceController {
     // NOT-01: a critical hold notifies both parties.
     await this.notifications.sms(booking.professionalId, "critical_hold", { type: "Booking", id });
     await this.notifications.sms(booking.clinicWorkspaceId, "critical_hold", { type: "Booking", id });
+    await this.audit(user, "hold_credential", "booking", id);
     return { id, held: true, created: true };
   }
 
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Post("bookings/:id/resolve-hold")
-  async resolveHold(@Param("id") id: string) {
+  async resolveHold(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const booking = await this.requireBooking(id);
     if (!booking.heldAt) return { id, held: false };
     await this.repo.resolveHold(id);
+    await this.audit(user, "resolve_hold", "booking", id);
     return { id, held: false };
   }
 
@@ -196,6 +204,10 @@ export class MarketplaceController {
     const body = (dto.body ?? "").trim();
     if (!body) throw new BadRequestException("message body required");
     if (body.length > 2000) throw new BadRequestException("message too long");
+    // §7.3: patient data is prohibited in messages — warn and reject on obvious IDs.
+    if (containsProhibitedPatientData(body)) {
+      throw new BadRequestException("message appears to contain patient/personal identifiers; remove them (§7.3)");
+    }
     return this.repo.postMessage(id, dto.senderId, body);
   }
 
@@ -401,6 +413,16 @@ export class MarketplaceController {
   @Get("ops/metrics")
   async metrics() {
     return this.repo.getMetrics();
+  }
+
+  // §7.3: immutable audit trail of privileged actions. Actor is masked for display
+  // (least privilege). Administrator-only — it exposes who did what.
+  @UseGuards(AuthGuard)
+  @Roles("administrator")
+  @Get("ops/audit")
+  async auditTrail() {
+    const rows = await this.repo.listAudit();
+    return { audit: rows.map((r) => ({ ...r, actor: maskActor(r.actor) })) };
   }
 
   // ----- Finance (PAY-11 reconciliation) -----
@@ -772,6 +794,10 @@ export class MarketplaceController {
     if (!Number.isInteger(dto.score) || dto.score < 1 || dto.score > 5) {
       throw new BadRequestException("score must be an integer 1..5");
     }
+    // §7.3: patient data is prohibited in reviews.
+    if (dto.text && containsProhibitedPatientData(dto.text)) {
+      throw new BadRequestException("review appears to contain patient/personal identifiers; remove them (§7.3)");
+    }
     // Author reviews the other party (clinic -> professional, or professional -> clinic).
     const authorId = dto.by === "clinic" ? booking.clinicWorkspaceId : booking.professionalId;
     const subjectId = dto.by === "clinic" ? booking.professionalId : booking.clinicWorkspaceId;
@@ -841,6 +867,24 @@ export class MarketplaceController {
   async getOffer(@Param("id") id: string) {
     const offer = await this.requireOffer(id);
     return { offer, booking: await this.repo.getBookingByOffer(id) };
+  }
+
+  /** §7.3/§6.4: record a privileged action against the immutable audit trail. */
+  private async audit(
+    user: TokenPayload | undefined,
+    action: string,
+    targetType: string,
+    targetId: string,
+    details?: Record<string, unknown>,
+  ) {
+    await this.repo.recordAudit({
+      actor: user?.sub ?? "unknown",
+      role: user?.role ?? "unknown",
+      action,
+      targetType,
+      targetId,
+      ...(details ? { details } : {}),
+    });
   }
 
   private async requireOffer(id: string) {
