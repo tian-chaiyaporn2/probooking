@@ -141,6 +141,24 @@ export interface PendingVerification {
 
 export const getOpsCases = () => get<{ cases: CaseSummary[] }>("/ops/cases");
 export const getOpsPending = () => get<{ pending: PendingVerification[] }>("/ops/pending");
+
+// ----- Finance -----
+export interface ReconciliationRow {
+  paymentOrderId: string;
+  bookingId: string | null;
+  captured: number;
+  payouts: number;
+  refunds: number;
+  undistributed: number;
+  conserved: boolean;
+}
+
+export interface Reconciliation {
+  rows: ReconciliationRow[];
+  summary: { count: number; captured: number; payouts: number; refunds: number; exceptions: number };
+}
+
+export const getReconciliation = () => get<Reconciliation>("/finance/reconciliation");
 export const resolveHold = (bookingId: string) =>
   post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`);
 

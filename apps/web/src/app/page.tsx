@@ -27,6 +27,11 @@ export default function Home() {
           → Operations dashboard
         </a>
       </p>
+      <p>
+        <a href="/finance" data-testid="finance-link">
+          → Finance reconciliation
+        </a>
+      </p>
     </main>
   );
 }

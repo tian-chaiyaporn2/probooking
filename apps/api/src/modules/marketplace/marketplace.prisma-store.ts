@@ -42,6 +42,7 @@ import type {
   MessageRecord,
   BookingContact,
   InsuranceStatus,
+  Reconciliation,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -671,6 +672,39 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       refId: c.refId,
       subject: c.subject,
     }));
+  }
+
+  async reconcile(): Promise<Reconciliation> {
+    // PAY-11: reconcile each payment order's events against captured funds. Conserved
+    // when funds out (payouts + refunds) do not exceed captured (PAY-08).
+    const orders = await prisma.paymentOrder.findMany({
+      include: { events: { select: { type: true, amount: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    const rows = orders.map((o) => {
+      const payouts = o.events.filter((e) => e.type === "Payout").reduce((s, e) => s + e.amount, 0);
+      const refunds = o.events.filter((e) => e.type === "Refund").reduce((s, e) => s + e.amount, 0);
+      return {
+        paymentOrderId: o.id,
+        bookingId: o.bookingId,
+        captured: o.captured,
+        payouts,
+        refunds,
+        undistributed: o.captured - payouts - refunds,
+        conserved: payouts + refunds <= o.captured,
+      };
+    });
+    return {
+      rows,
+      summary: {
+        count: rows.length,
+        captured: rows.reduce((s, r) => s + r.captured, 0),
+        payouts: rows.reduce((s, r) => s + r.payouts, 0),
+        refunds: rows.reduce((s, r) => s + r.refunds, 0),
+        exceptions: rows.filter((r) => !r.conserved).length,
+      },
+    };
   }
 
   async listPendingVerifications(): Promise<PendingVerification[]> {

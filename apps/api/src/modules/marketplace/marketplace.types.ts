@@ -140,6 +140,28 @@ export interface PendingVerification {
   name: string;
 }
 
+// ----- Finance (PAY-11 reconciliation view) -----
+export interface ReconciliationRow {
+  paymentOrderId: string;
+  bookingId: string | null;
+  captured: number; // satang
+  payouts: number;
+  refunds: number;
+  undistributed: number; // captured - payouts - refunds (fee retained + still-protected)
+  conserved: boolean; // PAY-08: payouts + refunds <= captured
+}
+
+export interface Reconciliation {
+  rows: ReconciliationRow[];
+  summary: {
+    count: number;
+    captured: number;
+    payouts: number;
+    refunds: number;
+    exceptions: number; // rows that fail conservation
+  };
+}
+
 // ----- Notifications (NOT-01) -----
 export type NotificationChannel = "email" | "sms";
 
@@ -368,6 +390,9 @@ export interface MarketplaceRepository {
   // --- Operations dashboard (ADM-01) ---
   listOpenCases(): Promise<CaseSummary[]>;
   listPendingVerifications(): Promise<PendingVerification[]>;
+
+  // --- Finance (PAY-11) ---
+  reconcile(): Promise<Reconciliation>;
 }
 
 /** DI token for the repository. */

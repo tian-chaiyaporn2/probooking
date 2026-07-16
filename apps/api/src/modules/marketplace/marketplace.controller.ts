@@ -365,6 +365,12 @@ export class MarketplaceController {
     return { pending: await this.repo.listPendingVerifications() };
   }
 
+  // ----- Finance (PAY-11 reconciliation) -----
+  @Get("finance/reconciliation")
+  async reconciliation() {
+    return this.repo.reconcile();
+  }
+
   @Post("offers/:id/accept")
   async accept(@Param("id") id: string) {
     const offer = await this.requireOffer(id);

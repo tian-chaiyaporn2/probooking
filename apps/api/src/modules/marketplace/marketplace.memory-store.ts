@@ -32,6 +32,7 @@ import type {
   MessageRecord,
   BookingContact,
   InsuranceStatus,
+  Reconciliation,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -458,6 +459,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       });
     }
     return out;
+  }
+
+  async reconcile(): Promise<Reconciliation> {
+    // In-memory keeps no financial-event ledger; reconciliation is a DB-store concern.
+    return { rows: [], summary: { count: 0, captured: 0, payouts: 0, refunds: 0, exceptions: 0 } };
   }
 
   async listPendingVerifications(): Promise<PendingVerification[]> {

@@ -34,6 +34,13 @@ test("booking flow confirms a booking with the correct checkout total", async ({
   await expect(steps.nth(6)).toContainText("Booking confirmed");
 });
 
+test("finance reconciliation shows zero exceptions", async ({ page }) => {
+  await page.goto("/finance");
+  await expect(page.getByTestId("fin-summary")).toBeVisible();
+  // Every payment order conserves by construction, so no reconciliation exceptions.
+  await expect(page.getByTestId("fin-exceptions")).toHaveText("0");
+});
+
 test("ops dashboard verifies a pending clinic", async ({ page }) => {
   const uniq = `${Date.now()}`;
   // Register a clinic (lands in Submitted) directly against the API.
