@@ -2,11 +2,12 @@
   "name": "@probook/api",
   "version": "0.0.0",
   "private": true,
-  "description": "NestJS backend. Exposes controlled APIs; internal low-code Ops/Finance tools call these (ADM-02).",
+  "type": "module",
+  "description": "NestJS backend (ESM, tsc-built for decorator metadata). Exposes controlled APIs; internal low-code Ops/Finance tools call these (ADM-02).",
   "scripts": {
-    "dev": "nest start --watch",
-    "build": "nest build",
-    "start": "node dist/main.js",
+    "dev": "tsc --watch --preserveWatchOutput & node --watch --enable-source-maps dist/main.js",
+    "build": "tsc",
+    "start": "node --enable-source-maps dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "prettier --check src",
     "test": "vitest run"

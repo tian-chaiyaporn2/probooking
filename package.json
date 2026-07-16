@@ -10,11 +10,14 @@
   },
   "scripts": {
     "build": "pnpm -r build",
+    "build:api": "pnpm --filter @probook/domain build && pnpm --filter @probook/db build && pnpm --filter @probook/api build",
     "dev": "pnpm -r --parallel dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "test:bdd": "NODE_OPTIONS='--import tsx/esm' cucumber-js --import features/support/world.ts --import 'features/step-definitions/*.ts' --tags 'not @wip'",
     "test:bdd:all": "NODE_OPTIONS='--import tsx/esm' cucumber-js --import features/support/world.ts --import 'features/step-definitions/*.ts'",
+    "e2e": "pnpm build:api && playwright test",
+    "e2e:install": "playwright install chromium",
     "db:generate": "pnpm --filter @probook/db generate",
     "db:migrate": "pnpm --filter @probook/db migrate",
     "db:studio": "pnpm --filter @probook/db studio",
@@ -22,6 +25,7 @@
   },
   "devDependencies": {
     "@cucumber/cucumber": "^11.0.1",
+    "@playwright/test": "^1.47.2",
     "@probook/domain": "workspace:*",
     "prettier": "^3.3.3",
     "tsx": "^4.19.1",

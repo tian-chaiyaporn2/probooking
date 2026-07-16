@@ -25,6 +25,14 @@ Legend: ✅ implemented in scaffold · 🟡 stubbed / partial · ⬜ not started
 | §6.4 | Integrity: one booking/shift, no dup payout, immutable audit | `domain: state-machines`, `db: unique constraints, AuditRecord` | `05-*`, `11-*`, `14-*` | ✅ |
 | LOC-01..02 / ACC-01 | Thai, satang, UTC/Bangkok, accessibility | `domain: money`, `web: lang="th"`, `.env TZ` | — | 🟡 |
 
+## Vertical slice (live)
+
+The **create offer → accept → confirm** path runs end to end (API + web + Playwright
+e2e), enforcing OFF-01 (authority), OFF-03 (timers), OFF-04 (soft hold), §6.3
+(confirmation eligibility), §6.4 (one booking per offer, idempotent confirm), and
+PAY-02 (12% checkout). Persistence is an in-memory store pending `@probook/db` wiring.
+Covered by: `packages/domain/test/*`, `features/04`, `features/05`, `e2e/tests/booking-flow.spec.ts`.
+
 ## Phase gates (Rollout Plan)
 
 - **Phase 0 exit** (§9.1): 30 completed paid bookings, 80% intended-path, 10 customer-

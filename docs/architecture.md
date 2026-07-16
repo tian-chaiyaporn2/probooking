@@ -51,6 +51,22 @@ A pure **domain** package holds all business rules and is depended on by everyth
   state.
 - **Integrations are ports** so "Payment Protected" is a mock in dev and a regulated
   partner in prod without touching domain logic.
+- **Shared packages are built artifacts, API is ESM built by `tsc`.** `@probook/domain`
+  and `@probook/db` compile to `dist` and are consumed via node resolution (no source
+  `paths` alias). The API is ESM compiled by `tsc`, which emits the decorator metadata
+  Nest DI needs (unlike `tsx`/esbuild). See **ADR 0002**.
+
+## Vertical slice (Phase 0)
+
+The first end-to-end path is live: **create offer → accept (soft hold) → confirm**.
+- API: `apps/api/src/modules/marketplace` — controlled endpoints composing
+  `OffersService`, `BookingsService`, `PaymentsService`, backed by an in-memory store
+  (swap for `@probook/db` repositories when persistence lands).
+- Web: `apps/web/src/app/flow` drives it and renders the checkout (12% fee).
+- E2E: `e2e/` (Playwright) boots both servers and asserts the Confirmed booking.
+
+Every rule in the flow (authority OFF-01, soft hold OFF-04, eligibility §6.3, fee
+PAY-02) is enforced by `@probook/domain`, not by the controller.
 
 ## Explicitly out of scope (PRD §7.2)
 

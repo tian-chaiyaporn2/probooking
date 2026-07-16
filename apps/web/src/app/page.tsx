@@ -17,6 +17,11 @@ export default function Home() {
       <p style={{ color: "#888", fontSize: "0.9rem" }}>
         Phase 0 — Concierge Validation. Bangkok and surrounding provinces.
       </p>
+      <p>
+        <a href="/flow" data-testid="flow-link">
+          → Try the booking flow demo
+        </a>
+      </p>
     </main>
   );
 }

@@ -23,8 +23,13 @@ probook/
 │  ├─ domain/    pure rules: money (satang), roles, states, policies, machines
 │  └─ db/        Prisma schema + client + migrations (PostgreSQL)
 ├─ features/     BDD (.feature) — the 14 acceptance areas from PRD §9.4
+├─ e2e/          Playwright end-to-end tests (browser drives the live flow)
 └─ docs/         PRD, Rollout Plan, architecture, ADRs, traceability
 ```
+
+The Phase 0 booking flow (create offer → accept → confirm) lives in
+`apps/api/src/modules/marketplace` (API) and `apps/web/src/app/flow` (web), both
+composing `@probook/domain`.
 
 Why this shape: PRD §7.2 asks for a responsive web app, a modular backend + relational
 DB, background jobs, and low-code internal tools calling controlled APIs — and explicitly
@@ -41,19 +46,41 @@ See [`docs/adr/0001-stack.md`](docs/adr/0001-stack.md).
 ```bash
 nvm use
 pnpm install
-cp .env.example .env            # fill DATABASE_URL, REDIS_URL, provider keys
+cp .env.example .env            # fill DATABASE_URL, REDIS_URL, provider keys (optional in dev)
 
 pnpm db:generate                # generate Prisma client
-pnpm db:migrate                 # create the dev database schema
-pnpm --filter @probook/domain test   # run domain unit tests (no services needed)
-
-pnpm dev                        # run web + api + worker together
-pnpm test:bdd                   # run the BDD acceptance suite
+pnpm build                      # build shared packages (domain, db) + apps — see ADR 0002
 ```
 
-The domain package has **no I/O** and its tests run with zero external services — start
-there. `web`, `api`, and `worker` boot without Postgres/Redis (integrations are mocked)
-so the scaffold is runnable immediately; wire real services via `.env` as you go.
+Shared packages are consumed as **built artifacts** (not source), so build before
+running apps — `pnpm build` (topo order) or `pnpm build:api` (domain → db → api).
+
+### Run
+
+```bash
+pnpm build:api                             # domain → db → api
+node apps/api/dist/main.js                 # API on :4000  (GET /health)
+pnpm --filter @probook/web dev             # web on :3000  (/ and /flow)
+```
+
+The API and web boot **without Postgres/Redis** — the Phase 0 booking flow uses an
+in-memory store (`apps/api/.../marketplace`) so the vertical slice runs immediately.
+Wire Prisma/Redis via `.env` as you go.
+
+### Test
+
+```bash
+pnpm --filter @probook/domain test   # domain unit tests (no services needed)
+pnpm test:bdd                        # BDD acceptance suite (implemented scenarios)
+pnpm -r typecheck                    # typecheck every package
+
+pnpm e2e:install                     # one-time: install Chromium
+pnpm e2e                             # Playwright: builds API, boots API + web, drives the flow
+```
+
+`pnpm e2e` starts both servers itself (see `playwright.config.ts`) and exercises
+create-offer → accept → confirm in a real browser, asserting the Confirmed booking
+and the 12% checkout total.
 
 ## Money, time, locale (non-negotiable)
 
@@ -74,4 +101,7 @@ so the scaffold is runnable immediately; wire real services via `.env` as you go
 | State machines (§6.2) | `packages/domain/src/state-machines/` |
 | Data model (§7.1) | `packages/db/prisma/schema.prisma` |
 | Acceptance spec (§9.4) | `features/` |
+| Booking flow (API + web) | `apps/api/.../marketplace`, `apps/web/src/app/flow` |
+| End-to-end tests | `e2e/`, `playwright.config.ts` |
+| Module/build strategy | `docs/adr/0002-module-and-build-strategy.md` |
 | Requirement → code map | `docs/requirements-traceability.md` |

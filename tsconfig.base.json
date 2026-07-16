@@ -14,11 +14,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "sourceMap": true,
-    "baseUrl": ".",
-    "paths": {
-      "@probook/domain": ["packages/domain/src/index.ts"],
-      "@probook/db": ["packages/db/src/index.ts"]
-    }
+    "sourceMap": true
   }
 }
