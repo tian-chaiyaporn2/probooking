@@ -132,15 +132,35 @@ export class MarketplaceController {
     }
 
     const checkout = this.payments.checkout(satang(offer.compensation));
+
+    // PAY-07 conservation at confirmation: captured (total) equals the professional's
+    // protected compensation + platform fee + tax; nothing is paid out or refunded yet.
+    this.payments.assertConserved({
+      captured: checkout.total,
+      protectedRemainder: checkout.compensation,
+      payout: satang(0),
+      fee: checkout.serviceFee,
+      tax: checkout.tax,
+      refunds: satang(0),
+      providerCosts: satang(0),
+      adjustments: satang(0),
+    });
+
     await this.repo.setOfferState(id, "Converted");
-    const booking = await this.repo.createBooking({
+    const { booking, paymentOrderId } = await this.repo.confirmBooking({
       offerId: offer.id,
       shiftId: offer.shiftId,
       professionalId: offer.professionalId,
-      feeSnapshot: checkout.serviceFee,
+      allocation: {
+        compensation: checkout.compensation,
+        serviceFee: checkout.serviceFee,
+        tax: checkout.tax,
+      },
+      captured: checkout.total,
+      idempotencyKey: `collection:${offer.id}`,
     });
 
-    return { booking, checkout };
+    return { booking, checkout, paymentOrderId };
   }
 
   @Get("offers/:id")

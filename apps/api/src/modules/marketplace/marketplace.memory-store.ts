@@ -4,7 +4,8 @@ import type {
   OfferRecord,
   BookingRecord,
   CreateOfferInput,
-  CreateBookingInput,
+  ConfirmBookingInput,
+  ConfirmBookingResult,
 } from "./marketplace.types.js";
 import type { OfferState } from "@probook/domain";
 
@@ -46,7 +47,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return offer;
   }
 
-  async createBooking(input: CreateBookingInput): Promise<BookingRecord> {
+  async confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult> {
     const booking: BookingRecord = {
       id: randomUUID(),
       offerId: input.offerId,
@@ -56,7 +57,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     };
     this.bookings.set(booking.id, booking);
     this.bookingByOffer.set(input.offerId, booking.id);
-    return booking;
+    // No money persistence in the in-memory store; return a synthetic payment order id.
+    return { booking, paymentOrderId: randomUUID() };
   }
 
   async getBookingByOffer(offerId: string): Promise<BookingRecord | null> {

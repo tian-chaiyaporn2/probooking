@@ -31,8 +31,12 @@ The **create offer → accept → confirm** path runs end to end (API + web + Pl
 e2e), enforcing OFF-01 (authority), OFF-03 (timers), OFF-04 (soft hold), §6.3
 (confirmation eligibility), §6.4 (one booking per offer, idempotent confirm), and
 PAY-02 (12% checkout). Persistence is **Prisma/Postgres** (`PrismaMarketplaceStore`)
-when `DATABASE_URL` is set — `Shift`/`Offer`/`Booking` rows, with the `Booking` unique
-constraints enforcing §6.4 in the DB — and an in-memory store otherwise.
+when `DATABASE_URL` is set — an ensured identity graph (`ClinicWorkspace`/`User`/
+`Membership`/`ProfessionalProfile`), then `Shift`/`Offer`, and atomically on confirm
+`Booking` + `PaymentOrder` + `FinancialAllocation` + a `Collection` `FinancialEvent`
+(PAY-01/03/05). Confirm asserts **PAY-07 conservation** and is idempotent via the
+event key (**PAY-04**); `Booking` unique constraints enforce **§6.4** in the DB. An
+in-memory store is the fallback.
 Covered by: `packages/domain/test/*`, `features/04`, `features/05`, `e2e/tests/booking-flow.spec.ts`
 (the e2e runs against Postgres when `.env` provides `DATABASE_URL`).
 

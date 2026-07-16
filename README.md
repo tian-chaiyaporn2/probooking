@@ -76,9 +76,13 @@ echo 'DATABASE_URL=postgresql://USER@localhost:5432/probook_dev?schema=public' >
 pnpm db:migrate                                                 # apply schema (creates tables)
 ```
 
-With that set, `POST /offers → accept → confirm` persists real `Shift`, `Offer`, and
-`Booking` rows; the `Booking` unique constraints on `shiftId`/`offerId` enforce §6.4
-(one booking per shift) at the database level.
+With that set, `POST /offers → accept → confirm` persists the real graph — an ensured
+`ClinicWorkspace` (+ owner `User`/`Membership`) and `ProfessionalProfile` (+ `User`),
+then `Shift`, `Offer`, and — atomically on confirm — `Booking` + `PaymentOrder`
+(Payment Protected) + `FinancialAllocation` + a `Collection` `FinancialEvent`. The
+`Booking` unique constraints enforce §6.4 (one booking per shift) and the collection
+event's idempotency key makes confirm safe to retry (PAY-04). Captured funds are
+checked against the allocation on confirm (PAY-07 conservation).
 
 ### Test
 

@@ -32,11 +32,22 @@ export interface CreateOfferInput {
   expiresAt: number;
 }
 
-export interface CreateBookingInput {
+export interface ConfirmBookingInput {
   offerId: string;
   shiftId: string;
   professionalId: string;
-  feeSnapshot: number; // integer satang
+  allocation: {
+    compensation: number; // integer satang
+    serviceFee: number;
+    tax: number;
+  };
+  captured: number; // integer satang (total collected)
+  idempotencyKey: string; // dedupes the collection event (PAY-04)
+}
+
+export interface ConfirmBookingResult {
+  booking: BookingRecord;
+  paymentOrderId: string;
 }
 
 /**
@@ -50,7 +61,12 @@ export interface MarketplaceRepository {
   getOffer(id: string): Promise<OfferRecord | null>;
   /** Transition an offer's state (and optionally set fundingDueAt). Returns the updated record. */
   setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null>;
-  createBooking(input: CreateBookingInput): Promise<BookingRecord>;
+  /**
+   * Atomically (BKG-02) create the Booking and its Payment Protected money records
+   * (PaymentOrder + FinancialAllocation + a Collection FinancialEvent). Returns the
+   * booking and the payment order id.
+   */
+  confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult>;
   getBookingByOffer(offerId: string): Promise<BookingRecord | null>;
 }
 

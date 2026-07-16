@@ -62,8 +62,13 @@ The first end-to-end path is live: **create offer → accept (soft hold) → con
 - API: `apps/api/src/modules/marketplace` — controlled endpoints composing
   `OffersService`, `BookingsService`, `PaymentsService`, behind a `MarketplaceRepository`
   port with two implementations selected at boot by `DATABASE_URL`:
-  - `PrismaMarketplaceStore` — real Postgres via `@probook/db` (persists `Shift`,
-    `Offer`, `Booking`; the `Booking` unique constraints enforce §6.4 in the DB).
+  - `PrismaMarketplaceStore` — real Postgres via `@probook/db`. Ensures the identity
+    graph (`ClinicWorkspace` + owner `User`/`Membership`, `ProfessionalProfile` + `User`),
+    then persists `Shift`, `Offer`, and — in one transaction on confirm (BKG-02) —
+    `Booking` + `PaymentOrder` (Payment Protected) + `FinancialAllocation` + a
+    `Collection` `FinancialEvent`. `Booking`'s unique constraints enforce §6.4 and the
+    event's idempotency key enforces PAY-04; the controller asserts PAY-07 conservation
+    (captured == compensation + fee + tax) before writing.
   - `InMemoryMarketplaceStore` — zero-service fallback for dev/e2e.
 - Web: `apps/web/src/app/flow` drives it and renders the checkout (12% fee).
 - E2E: `e2e/` (Playwright) boots both servers and asserts the Confirmed booking.

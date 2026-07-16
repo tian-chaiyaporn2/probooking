@@ -183,6 +183,8 @@ model ProfessionalProfile {
   payoutAccount PayoutAccount?
   availability  Availability[]
   applications  Application[]
+  offers        Offer[]
+  bookings      Booking[]
   createdAt     DateTime           @default(now())
 }
 
@@ -272,11 +274,12 @@ model Invitation {
 }
 
 model Offer {
-  id             String     @id @default(cuid())
-  shift          Shift      @relation(fields: [shiftId], references: [id])
+  id             String              @id @default(cuid())
+  shift          Shift               @relation(fields: [shiftId], references: [id])
   shiftId        String
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
   professionalId String
-  state          OfferState @default(PendingResponse)
+  state          OfferState          @default(PendingResponse)
   // Immutable snapshot of all terms & policies at send time (OFF-02, BKG-03).
   termsSnapshot  Json
   sentAt         DateTime   @default(now())
@@ -295,6 +298,7 @@ model Booking {
   shiftId        String       @unique // one position -> at most one confirmed booking (§6.4)
   offer          Offer        @relation(fields: [offerId], references: [id])
   offerId        String       @unique
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
   professionalId String
   state          BookingState @default(Confirmed)
   // Immutable snapshots at confirmation (BKG-03).
