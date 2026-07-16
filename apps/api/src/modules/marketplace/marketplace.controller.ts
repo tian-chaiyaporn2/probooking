@@ -45,10 +45,15 @@ import {
 
 const HOUR_MS = 60 * 60 * 1000;
 
-/** Quote a CSV cell if it contains a comma, quote, or newline (RFC 4180). */
+/**
+ * Render a CSV cell: RFC-4180 quoting plus formula-injection defence — a cell that
+ * begins with = + - @ (or a control char) is prefixed with a single quote so a
+ * spreadsheet treats it as text, not an executable formula.
+ */
 const csvCell = (v: string | number): string => {
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
 interface PostShiftDto {
@@ -871,16 +876,25 @@ export class MarketplaceController {
   }
 
   // ----- Reporting (REP-01): party booking + financial history and receipts -----
+  // Guarded behind an internal role: these expose compensation/fee/tax/payout amounts
+  // by enumerable id. Party-facing self-service (a clinic seeing only its own history)
+  // needs external-user identity and is deferred to Phase 2 — for now it is Ops/Finance.
+  @UseGuards(AuthGuard)
+  @Roles("operations", "finance", "administrator")
   @Get("professionals/:id/bookings")
   async professionalBookings(@Param("id") id: string) {
     return { bookings: await this.repo.listPartyBookings("professional", id) };
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "finance", "administrator")
   @Get("clinics/:id/bookings")
   async clinicBookings(@Param("id") id: string) {
     return { bookings: await this.repo.listPartyBookings("clinic", id) };
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "finance", "administrator")
   @Get("bookings/:id/receipt")
   async receipt(@Param("id") id: string) {
     // REP-01: the booking's checkout breakdown + payout statement. A booking exists

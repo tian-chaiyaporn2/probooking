@@ -151,10 +151,13 @@ test("reporting: history, receipt, metrics, and finance CSV export (REP-01..03)"
   await page.request.post(`${api}/bookings/${bookingId}/complete`);
   await page.request.post(`${api}/bookings/${bookingId}/accept-completion`);
 
-  // REP-01: history + receipt reflect the ฿11,200 checkout and the ฿10,000 payout.
-  const history = await j(await page.request.get(`${api}/professionals/${pro.id}/bookings`));
+  // REP-01: history + receipt are internal-guarded (they expose money by id); unauth 401.
+  expect((await page.request.get(`${api}/bookings/${bookingId}/receipt`)).status()).toBe(401);
+  const history = await j(
+    await page.request.get(`${api}/professionals/${pro.id}/bookings`, { headers: finAuth }),
+  );
   expect(history.bookings.some((b: any) => b.bookingId === bookingId && b.total === 1_120_000)).toBe(true);
-  const receipt = await j(await page.request.get(`${api}/bookings/${bookingId}/receipt`));
+  const receipt = await j(await page.request.get(`${api}/bookings/${bookingId}/receipt`, { headers: finAuth }));
   expect(receipt.checkout.total).toBe(1_120_000);
   expect(receipt.payout).toEqual({ state: "Paid", amount: 1_000_000 });
 
