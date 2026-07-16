@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { HealthModule } from "./modules/health/health.module.js";
 import { MarketplaceModule } from "./modules/marketplace/marketplace.module.js";
+import { AuthModule } from "./modules/auth/auth.module.js";
 
 /**
  * Bounded contexts (PRD §7.1 data groups). MarketplaceModule composes offers,
@@ -9,6 +10,6 @@ import { MarketplaceModule } from "./modules/marketplace/marketplace.module.js";
  * messaging (MSG), completion (CMP), reviews (REV), cases (SUP), admin/ops (ADM).
  */
 @Module({
-  imports: [HealthModule, MarketplaceModule],
+  imports: [HealthModule, AuthModule, MarketplaceModule],
 })
 export class AppModule {}

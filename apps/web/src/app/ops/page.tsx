@@ -7,9 +7,17 @@ import {
   verifyClinic,
   verifyProfessional,
   resolveHold,
+  getDevToken,
+  setAuthToken,
   type CaseSummary,
   type PendingVerification,
 } from "../../lib/api";
+
+/** Ensure the dashboard holds an operations token before any guarded call. */
+async function ensureOpsToken() {
+  const { token } = await getDevToken("operations");
+  setAuthToken(token);
+}
 
 /**
  * Operations dashboard (ADM-01). Internal tool that calls controlled API actions:
@@ -25,6 +33,7 @@ export default function OpsPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
+      await ensureOpsToken();
       setPending((await getOpsPending()).pending);
       setCases((await getOpsCases()).cases);
     } catch (e) {

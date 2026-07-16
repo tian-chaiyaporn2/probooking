@@ -8,7 +8,9 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
+import { AuthGuard, Roles } from "../auth/auth.guard.js";
 import {
   advanceOffer,
   advanceBooking,
@@ -90,6 +92,8 @@ export class MarketplaceController {
     }
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Post("ops/clinics/:id/verify")
   async verifyClinic(@Param("id") id: string) {
     const r = await this.repo.verifyClinic(id);
@@ -97,6 +101,8 @@ export class MarketplaceController {
     return r;
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Post("ops/professionals/:id/verify")
   async verifyProfessional(@Param("id") id: string) {
     const r = await this.repo.verifyProfessional(id);
@@ -120,6 +126,8 @@ export class MarketplaceController {
     return this.repo.getInsuranceStatus(professionalId);
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Post("ops/professionals/:id/verify-insurance")
   async verifyInsurance(@Param("id") professionalId: string) {
     const r = await this.repo.verifyInsurance(professionalId);
@@ -127,6 +135,8 @@ export class MarketplaceController {
     return r;
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Post("ops/professionals/:id/suspend-credential")
   async suspendCredential(@Param("id") id: string) {
     // VER-04: a licence lapses / is suspended by Operations.
@@ -135,6 +145,8 @@ export class MarketplaceController {
     return { professionalId: id, credential: "Suspended" };
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Post("bookings/:id/hold-credential")
   async holdCredential(@Param("id") id: string) {
     const booking = await this.requireBooking(id);
@@ -159,6 +171,8 @@ export class MarketplaceController {
     return { id, held: true, created: true };
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Post("bookings/:id/resolve-hold")
   async resolveHold(@Param("id") id: string) {
     const booking = await this.requireBooking(id);
@@ -355,17 +369,23 @@ export class MarketplaceController {
   }
 
   // ----- Operations dashboard (ADM-01) -----
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Get("ops/cases")
   async listCases() {
     return { cases: await this.repo.listOpenCases() };
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Get("ops/pending")
   async listPending() {
     return { pending: await this.repo.listPendingVerifications() };
   }
 
   // ----- Finance (PAY-11 reconciliation) -----
+  @UseGuards(AuthGuard)
+  @Roles("finance", "administrator")
   @Get("finance/reconciliation")
   async reconciliation() {
     return this.repo.reconcile();

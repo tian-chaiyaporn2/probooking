@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getReconciliation, formatThb, type Reconciliation } from "../../lib/api";
+import {
+  getReconciliation,
+  getDevToken,
+  setAuthToken,
+  formatThb,
+  type Reconciliation,
+} from "../../lib/api";
 
 /**
  * Finance dashboard (ADM-01, PAY-11). Reconciles each payment order's events against
@@ -15,6 +21,8 @@ export default function FinancePage() {
   const load = useCallback(async () => {
     setError(null);
     try {
+      const { token } = await getDevToken("finance");
+      setAuthToken(token);
       setData(await getReconciliation());
     } catch (e) {
       setError((e as Error).message);

@@ -2,8 +2,22 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
+// Bearer token for internal (ops/finance) calls. Set once a dashboard has fetched
+// a dev token; the public booking flow leaves it null.
+let authToken: string | null = null;
+export const setAuthToken = (token: string | null) => {
+  authToken = token;
+};
+
+function authHeaders(base: Record<string, string> = {}): Record<string, string> {
+  return authToken ? { ...base, authorization: `Bearer ${authToken}` } : base;
+}
+
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method: "POST", headers: { "content-type": "application/json" } };
+  const init: RequestInit = {
+    method: "POST",
+    headers: authHeaders({ "content-type": "application/json" }),
+  };
   if (body !== undefined) {
     init.body = JSON.stringify(body);
   }
@@ -16,13 +30,20 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+  const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${res.status}: ${text}`);
   }
   return res.json() as Promise<T>;
 }
+
+/**
+ * Dev-only: obtain an internal role token so the ops/finance dashboards can call
+ * guarded endpoints. Replaced by the real OTP + access-list login in production.
+ */
+export const getDevToken = (role: "operations" | "finance" | "administrator") =>
+  post<{ token: string; role: string }>("/auth/dev/token", { role });
 
 export interface Checkout {
   compensation: number;

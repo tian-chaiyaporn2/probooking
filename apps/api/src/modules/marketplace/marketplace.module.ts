@@ -2,6 +2,7 @@ import { Module, Logger } from "@nestjs/common";
 import { OffersModule } from "../offers/offers.module.js";
 import { BookingsModule } from "../bookings/bookings.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
+import { AuthModule } from "../auth/auth.module.js";
 import { MarketplaceController } from "./marketplace.controller.js";
 import { NotificationsService } from "./notifications.service.js";
 import { MARKETPLACE_REPOSITORY, type MarketplaceRepository } from "./marketplace.types.js";
@@ -27,7 +28,7 @@ const marketplaceRepositoryProvider = {
 };
 
 @Module({
-  imports: [OffersModule, BookingsModule, PaymentsModule],
+  imports: [OffersModule, BookingsModule, PaymentsModule, AuthModule],
   controllers: [MarketplaceController],
   providers: [marketplaceRepositoryProvider, NotificationsService],
 })
