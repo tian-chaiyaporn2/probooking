@@ -5,6 +5,7 @@ export * from "./states.js";
 export * from "./policies.js";
 export * from "./reviews.js";
 export * from "./eligibility.js";
+export * from "./privacy.js";
 export * from "./state-machines/transition.js";
 export * from "./state-machines/shift.js";
 export * from "./state-machines/offer.js";

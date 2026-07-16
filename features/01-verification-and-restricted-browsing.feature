@@ -1,4 +1,3 @@
-@wip
 Feature: Verification and restricted browsing
   Ref: PRD §9.4(1), AUTH-04, VER-01..03
   Unverified users may browse restricted public content but cannot transact.

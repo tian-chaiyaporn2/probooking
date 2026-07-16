@@ -1,4 +1,3 @@
-@wip
 Feature: Credential or insurance failure after confirmation
   Ref: PRD §9.4(13), VER-04..06
   A required credential or insurance failure after confirmation places the booking

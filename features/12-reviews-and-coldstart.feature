@@ -1,4 +1,3 @@
-@wip
 Feature: Reviews, cold-start safeguards, and related-party exclusion
   Ref: PRD §9.4(12), REV-01..05
   Only completed paid production bookings create review rights. Aggregate rating and

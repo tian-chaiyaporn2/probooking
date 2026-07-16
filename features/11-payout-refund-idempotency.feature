@@ -1,4 +1,3 @@
-@wip
 Feature: Payout/refund idempotency and different-person approval
   Ref: PRD §9.4(11), PAY-08..10, §3, §6.4
   No duplicate payout or refund. High-value or unusual money actions require a

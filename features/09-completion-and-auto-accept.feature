@@ -1,4 +1,3 @@
-@wip
 Feature: Completion, auto-accept, clinic fallback, and Operations queue
   Ref: PRD §9.4(9), CMP-01..05
   Professional may mark Arrived/Completed without GPS or QR. Auto-accept occurs once

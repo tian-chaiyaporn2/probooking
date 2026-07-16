@@ -1,4 +1,3 @@
-@wip
 Feature: Search, empty results, applications, and invitations
   Ref: PRD §9.4(3), SRC-01..04, APP-01
   Empty results offer shift posting and matching assistance. Applications and

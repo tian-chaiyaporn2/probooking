@@ -1,4 +1,3 @@
-@wip
 Feature: Messaging and patient-data rules
   Ref: PRD §9.4(8), MSG-01..02, §7.3
   Plain-text thread only; contact details appear after confirmation. Patient data

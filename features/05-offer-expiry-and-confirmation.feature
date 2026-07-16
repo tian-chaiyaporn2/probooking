@@ -12,7 +12,6 @@ Feature: Offer expiry, soft hold, payment, and atomic confirmation
     Given a user with role "professional"
     Then converting the offer before payment is rejected
 
-  @wip
   Scenario: Late payment after offer expiry never creates a booking
     Given an offer that has expired
     When durable prefunding arrives after expiry

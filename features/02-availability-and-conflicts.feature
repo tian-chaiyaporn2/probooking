@@ -1,4 +1,3 @@
-@wip
 Feature: Availability, Open to requests, and conflict prevention
   Ref: PRD §9.4(2), AVL-01..03
   No listed block means not shown as available. Confirmed bookings and accepted-offer

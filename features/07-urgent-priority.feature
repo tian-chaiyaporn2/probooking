@@ -1,4 +1,3 @@
-@wip
 Feature: Urgent priority without guarantee
   Ref: PRD §9.4(7), URG-01
   Shifts within 72 hours may receive an Urgent badge, priority placement, alerts,

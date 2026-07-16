@@ -48,6 +48,16 @@ their `autoAcceptAt` deadline still in `AwaitingCompletion` and triggers
 Covered by: `packages/domain/test/*`, `features/04`, `features/05`, `e2e/tests/booking-flow.spec.ts`
 (the e2e runs against Postgres when `.env` provides `DATABASE_URL`).
 
+## BDD coverage (§9.4)
+
+All **14** §9.4 acceptance areas now have executable Gherkin with step definitions —
+no `@wip` scenarios remain (`pnpm test:bdd` → **35 scenarios / 95 steps** green). The
+suite drives the **pure domain** in-process (money conservation, state machines,
+cancellation, eligibility, urgency, rating, auto-accept/review windows, patient-data
+predicate); scenarios whose logic lives in the store/API (profile split, empty-search
+assist, hold overlays, audit immutability) assert the rule against representative
+models. Files: `features/01`…`14`, `features/step-definitions/*.steps.ts`.
+
 ## Phase gates (Rollout Plan)
 
 - **Phase 0 exit** (§9.1): 30 completed paid bookings, 80% intended-path, 10 customer-

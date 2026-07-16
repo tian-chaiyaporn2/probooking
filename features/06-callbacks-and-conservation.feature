@@ -1,4 +1,3 @@
-@wip
 Feature: Late/duplicate callbacks and financial conservation
   Ref: PRD §9.4(6), PAY-04..08
   Provider callbacks and money commands are authenticated and idempotent. Captured

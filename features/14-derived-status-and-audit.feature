@@ -1,4 +1,3 @@
-@wip
 Feature: Derived customer status and immutable audit history
   Ref: PRD §9.4(14), §6.2, §6.4
   Customer labels are derived from owning records. Holds and cases are overlays that

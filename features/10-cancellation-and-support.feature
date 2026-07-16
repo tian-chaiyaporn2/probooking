@@ -1,4 +1,3 @@
-@wip
 Feature: Cancellation, no-show, partial work, and support outcomes
   Ref: PRD §9.4(10), CAN-01..05
   Cancellation compensation depends on actor, timing, and reason. Force majeure,
