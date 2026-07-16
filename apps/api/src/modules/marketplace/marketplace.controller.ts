@@ -96,6 +96,46 @@ export class MarketplaceController {
     return r;
   }
 
+  @Post("ops/professionals/:id/suspend-credential")
+  async suspendCredential(@Param("id") id: string) {
+    // VER-04: a licence lapses / is suspended by Operations.
+    const ok = await this.repo.suspendCredential(id);
+    if (!ok) throw new NotFoundException("professional or licence credential not found");
+    return { professionalId: id, credential: "Suspended" };
+  }
+
+  @Post("bookings/:id/hold-credential")
+  async holdCredential(@Param("id") id: string) {
+    const booking = await this.requireBooking(id);
+    // VER-06 applies after confirmation and before completion is accepted.
+    if (
+      booking.state !== "Confirmed" &&
+      booking.state !== "InProgress" &&
+      booking.state !== "AwaitingCompletion"
+    ) {
+      throw new BadRequestException(`booking is ${booking.state}; not eligible for a credential hold`);
+    }
+    if (booking.heldAt) return { id, held: true, created: false }; // idempotent
+    await this.repo.holdBooking(id, "credential_or_insurance_invalid");
+    await this.repo.createSupportCase(
+      id,
+      "credential_hold",
+      "Credential/insurance failed after confirmation (VER-06)",
+    );
+    // NOT-01: a critical hold notifies both parties.
+    await this.notifications.sms(booking.professionalId, "critical_hold", { type: "Booking", id });
+    await this.notifications.sms(booking.clinicWorkspaceId, "critical_hold", { type: "Booking", id });
+    return { id, held: true, created: true };
+  }
+
+  @Post("bookings/:id/resolve-hold")
+  async resolveHold(@Param("id") id: string) {
+    const booking = await this.requireBooking(id);
+    if (!booking.heldAt) return { id, held: false };
+    await this.repo.resolveHold(id);
+    return { id, held: false };
+  }
+
   @Post("offers")
   async createOffer(@Body() dto: CreateOfferDto) {
     const role: Role = dto.actorRole ?? "clinic_owner";
@@ -268,6 +308,10 @@ export class MarketplaceController {
         payoutState: booking.payoutState,
         payoutAmount: booking.compensation,
       };
+    }
+    // VER-06: a held booking cannot be completed/paid out until Operations resolves.
+    if (booking.heldAt) {
+      throw new BadRequestException("booking is on hold; resolve the hold first (VER-06)");
     }
     // CMP-02/03 + PAY-09: accept completion and initiate payout. Validate lifecycles.
     try {

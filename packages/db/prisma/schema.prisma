@@ -309,6 +309,10 @@ model Booking {
   // Set when the professional submits completion; the auto-accept sweep fires at
   // this instant unless the clinic accepts or the booking is held first (CMP-03).
   autoAcceptAt   DateTime? @db.Timestamptz(3)
+  // VER-06 overlay: a required credential/insurance failure after confirmation puts
+  // the booking on Hold for Operations. Does not change base state (§6.2 overlay).
+  heldAt         DateTime? @db.Timestamptz(3)
+  heldReason     String?
   paymentOrder   PaymentOrder?
   messages       Message[]
   attendance     AttendanceEvent[]

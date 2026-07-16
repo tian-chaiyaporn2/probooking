@@ -43,6 +43,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly supportCases = new Map<string, ReviewCase>(); // keyed by `${bookingId}:${kind}`
   private readonly clinics = new Map<string, VerificationState>();
   private readonly professionals = new Map<string, VerificationState>();
+  private readonly suspendedCredentials = new Set<string>();
   private readonly reviews: MemReview[] = [];
 
   async registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }> {
@@ -136,6 +137,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       captured: input.captured,
       payoutState: "NotEligible",
       paymentOrderId: randomUUID(),
+      heldAt: null,
     };
     this.bookings.set(detail.id, detail);
     this.bookingByOffer.set(input.offerId, detail.id);
@@ -222,6 +224,27 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async recordNotification(input: NotificationInput): Promise<void> {
     // In-memory: notifications aren't persisted for inspection; the mock port logs them.
     void input;
+  }
+
+  async suspendCredential(professionalId: string): Promise<boolean> {
+    if (!this.professionals.has(professionalId)) return false;
+    this.suspendedCredentials.add(professionalId);
+    return true;
+  }
+
+  async holdBooking(bookingId: string, reason: string): Promise<BookingDetail | null> {
+    void reason; // reason is persisted in the DB store; BookingDetail exposes only heldAt
+    const detail = this.bookings.get(bookingId);
+    if (!detail) return null;
+    if (detail.heldAt === null) detail.heldAt = Date.now();
+    return detail;
+  }
+
+  async resolveHold(bookingId: string): Promise<BookingDetail | null> {
+    const detail = this.bookings.get(bookingId);
+    if (!detail) return null;
+    detail.heldAt = null;
+    return detail;
   }
 
   async cancelBooking(input: CancelInput): Promise<CancelResult> {

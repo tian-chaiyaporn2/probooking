@@ -267,7 +267,41 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       captured: b.paymentOrder?.captured ?? 0,
       payoutState: (alloc?.payoutState ?? "NotEligible") as PayoutState,
       paymentOrderId: b.paymentOrder?.id ?? null,
+      heldAt: b.heldAt ? b.heldAt.getTime() : null,
     };
+  }
+
+  async suspendCredential(professionalId: string): Promise<boolean> {
+    const cred = await prisma.credential.findFirst({
+      where: { professionalId, kind: "licence" },
+    });
+    if (!cred) return false;
+    if (cred.state === "Suspended") return true; // idempotent
+    const next = advanceVerification(cred.state as VerificationState, "Suspended");
+    await prisma.credential.update({ where: { id: cred.id }, data: { state: next } });
+    return true;
+  }
+
+  async holdBooking(bookingId: string, reason: string): Promise<BookingDetail | null> {
+    const b = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!b) return null;
+    if (!b.heldAt) {
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { heldAt: new Date(), heldReason: reason },
+      });
+    }
+    return this.getBooking(bookingId);
+  }
+
+  async resolveHold(bookingId: string): Promise<BookingDetail | null> {
+    const b = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!b) return null;
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { heldAt: null, heldReason: null },
+    });
+    return this.getBooking(bookingId);
   }
 
   async markCompletion(id: string): Promise<BookingDetail | null> {

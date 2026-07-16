@@ -26,6 +26,7 @@ export async function autoAcceptSweep(now: number): Promise<SweepResult> {
     where: {
       state: "AwaitingCompletion",
       autoAcceptAt: { not: null, lte: new Date(now) },
+      heldAt: null, // VER-06: never auto-accept a held booking
     },
     select: { id: true },
   });

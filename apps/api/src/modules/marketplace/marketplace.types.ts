@@ -130,6 +130,7 @@ export interface BookingDetail {
   captured: number;
   payoutState: PayoutState;
   paymentOrderId: string | null;
+  heldAt: number | null; // VER-06 hold overlay (epoch ms UTC), or null
 }
 
 export interface PayoutInput {
@@ -230,6 +231,14 @@ export interface MarketplaceRepository {
 
   // --- Notifications (NOT-01) ---
   recordNotification(input: NotificationInput): Promise<void>;
+
+  // --- Credential hold (VER-04/06) ---
+  /** Operations suspends a professional's licence credential (idempotent). Returns false if none. */
+  suspendCredential(professionalId: string): Promise<boolean>;
+  /** Place a booking on Hold (overlay), idempotent. Returns the updated booking. */
+  holdBooking(bookingId: string, reason: string): Promise<BookingDetail | null>;
+  /** Clear a booking's Hold after Operations review. */
+  resolveHold(bookingId: string): Promise<BookingDetail | null>;
 }
 
 /** DI token for the repository. */

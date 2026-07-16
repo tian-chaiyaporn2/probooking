@@ -83,6 +83,14 @@ gates on both parties being verified (§6.3) — the demo identity fixtures are 
 Every rule in the flow (authority OFF-01, soft hold OFF-04, eligibility §6.3, fee
 PAY-02) is enforced by `@probook/domain`, not by the controller.
 
+**Credential holds (VER-04/06).** A required licence that lapses after confirmation
+must freeze the booking for Operations. Operations suspends the credential
+(`/ops/professionals/:id/suspend-credential`), and a worker sweep finds affected
+active bookings and places a **Hold** — an overlay (`Booking.heldAt`, base state
+unchanged, §6.2) — opening a case and notifying both parties. A held booking can't be
+paid out (`accept-completion` 400) and is skipped by the auto-accept sweep, until
+Operations clears it (`/resolve-hold`).
+
 **Notifications (NOT-01).** A `NotificationsService` wraps mock email/SMS ports
 (§7.2) and records each send to a `Notification` row for audit. The controller emits
 on critical events (offer sent, payment required, confirmation, payout, cancellation);
