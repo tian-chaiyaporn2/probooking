@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "sweep:once": "tsx src/index.ts --once",
     "typecheck": "tsc --noEmit",
     "lint": "prettier --check src"
   },
@@ -14,6 +15,7 @@
     "@probook/db": "workspace:*",
     "@probook/domain": "workspace:*",
     "bullmq": "^5.13.2",
+    "dotenv": "^16.4.5",
     "ioredis": "^5.4.1"
   },
   "devDependencies": {

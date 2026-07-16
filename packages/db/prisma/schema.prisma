@@ -306,6 +306,9 @@ model Booking {
   feeSnapshot    Int // service fee, satang
   taxSnapshot    Int          @default(0)
   confirmedAt    DateTime     @default(now())
+  // Set when the professional submits completion; the auto-accept sweep fires at
+  // this instant unless the clinic accepts or the booking is held first (CMP-03).
+  autoAcceptAt   DateTime?
   paymentOrder   PaymentOrder?
   messages       Message[]
   attendance     AttendanceEvent[]

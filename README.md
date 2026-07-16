@@ -61,7 +61,14 @@ running apps — `pnpm build` (topo order) or `pnpm build:api` (domain → db �
 pnpm build:api                             # domain → db → api
 node apps/api/dist/main.js                 # API on :4000  (GET /health)
 pnpm --filter @probook/web dev             # web on :3000  (/ and /flow)
+pnpm --filter @probook/worker start        # background worker (auto-accept sweep, CMP-03)
 ```
+
+The **worker** polls Postgres for bookings whose 24h auto-accept deadline has passed
+(`autoAcceptAt`) and are still `AwaitingCompletion`, then calls the API's
+`accept-completion` to finalize + pay out (CMP-03). It needs `DATABASE_URL` and a
+running API. `pnpm --filter @probook/worker sweep:once` runs a single sweep and exits;
+`AUTO_ACCEPT_SWEEP_MS` sets the interval.
 
 **Persistence is dual-mode.** With no `DATABASE_URL`, the booking flow uses an
 in-memory store, so the API and web boot with **zero services**. Set `DATABASE_URL`

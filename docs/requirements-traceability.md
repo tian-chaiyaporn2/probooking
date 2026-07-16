@@ -18,7 +18,7 @@ Legend: ✅ implemented in scaffold · 🟡 stubbed / partial · ⬜ not started
 | MSG-01..02 | Plain-text thread, contact after confirmation | `db: Message` | `08-*` | ⬜ |
 | NOT-01 / URG-01 | Email/SMS alerts, urgent badge (no guarantee) | `worker: reminders queue`, `domain: URGENT_WINDOW` | `07-*` | 🟡 |
 | PAY-01..11 | Prefunding, checkout split, immutable events, conservation, idempotency, reconciliation | `domain: money`, `api: PaymentsService`, `db: PaymentOrder/FinancialAllocation/FinancialEvent`, `worker: reconciliation` | `06-*`, `11-*` | ✅ |
-| CMP-01..05 | Completion, 24h auto-accept, 48h clinic fallback | `domain: policies (AUTO_ACCEPT_AFTER)`, `worker: autoAccept` | `09-*` | 🟡 |
+| CMP-01..05 | Completion, 24h auto-accept, 48h clinic fallback | `domain: policies (autoAcceptDueAt)`, `api: complete/accept-completion`, `worker: autoAcceptSweep` | `09-*` | 🟡 (01/02/03 live; 04/05 pending) |
 | CAN-01..05 | Cancellation compensation & support routing | `domain: policies (cancellationOutcome)` | `10-*` | ✅ |
 | REV-01..05 | Review rights, cold-start, related-party exclusion | `db: Review` | `12-*` | 🟡 |
 | SUP-01..02 / ADM / RSK | Generic cases, internal tools, risk | `db: SupportCase/RiskIncident`, `apps/ops` | `14-*` | 🟡 |
@@ -40,6 +40,9 @@ in-memory store is the fallback. **Completion → payout** (CMP-01/02, PAY-09) i
 live: `complete` records an `AttendanceEvent` and moves the booking to
 `AwaitingCompletion`; `accept-completion` transitions it to `ServiceCompleted`, sets
 `payoutState=Paid`, and writes an idempotent `Payout` event, re-asserting PAY-07.
+The **worker** (`apps/worker`) closes the loop for CMP-03: it sweeps for bookings past
+their `autoAcceptAt` deadline still in `AwaitingCompletion` and triggers
+`accept-completion` automatically (idempotent — skips already-accepted bookings).
 Covered by: `packages/domain/test/*`, `features/04`, `features/05`, `e2e/tests/booking-flow.spec.ts`
 (the e2e runs against Postgres when `.env` provides `DATABASE_URL`).
 

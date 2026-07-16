@@ -80,6 +80,16 @@ complete → pay out**.
 Every rule in the flow (authority OFF-01, soft hold OFF-04, eligibility §6.3, fee
 PAY-02) is enforced by `@probook/domain`, not by the controller.
 
+**Auto-accept (CMP-03).** When a professional submits completion, `markCompletion`
+stamps `Booking.autoAcceptAt` = `autoAcceptDueAt(shiftEnd, now)` (24h after the later
+of shift end and submission). `apps/worker` polls for bookings past that deadline still
+in `AwaitingCompletion` and triggers the API's controlled `accept-completion` — so the
+worker schedules, the API owns the money action (no duplicated payout logic). A polling
+sweep keeps it Redis-free; it becomes a BullMQ repeatable job at scale (see `queues.ts`)
+without changing the job. Time comparisons use UTC on both sides (Prisma reads/writes
+UTC); a future hardening is switching timestamp columns to `timestamptz` so external
+writers can't introduce a tz skew.
+
 **Env-load ordering:** `@probook/db` constructs its `PrismaClient` (reading
 `DATABASE_URL`) at import time, and ESM hoists imports — so `apps/api/src/main.ts`
 imports `./env.js` (dotenv) *first*, and the Prisma store is loaded via dynamic

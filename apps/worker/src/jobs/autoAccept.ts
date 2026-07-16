@@ -1,22 +1,52 @@
-import { AUTO_ACCEPT_AFTER } from "@probook/domain";
+import { prisma } from "@probook/db";
+
+const API_BASE = process.env.API_BASE_URL ?? "http://localhost:4000";
+
+export interface SweepResult {
+  due: number;
+  accepted: number;
+  failed: number;
+}
 
 /**
- * CMP-03: if the professional submits completion, auto-accept occurs once after
- * 24 hours, measured from the later of scheduled end and submission, unless held
- * or disputed. This job is scheduled at submission time with that delay.
+ * CMP-03 auto-accept sweep. Finds bookings whose professional-submitted completion
+ * has passed its 24h deadline (`autoAcceptAt`) and are still `AwaitingCompletion`
+ * — i.e. the clinic has not accepted and there is no terminal hold — then triggers
+ * the controlled `accept-completion` action on the API for each.
+ *
+ * Why call the API rather than write money here: the payout (booking ->
+ * ServiceCompleted, allocation Paid, Payout event, PAY-07 conservation) is a single
+ * controlled action owned by the API. The worker is the scheduler; it does not
+ * duplicate money logic. Idempotent by construction: a booking the clinic already
+ * accepted is no longer `AwaitingCompletion` (skipped), and accept-completion itself
+ * is idempotent if a race occurs.
  */
-export interface AutoAcceptPayload {
-  bookingId: string;
-  scheduledEnd: number; // epoch ms UTC
-  submittedAt: number; // epoch ms UTC
-}
+export async function autoAcceptSweep(now: number): Promise<SweepResult> {
+  const due = await prisma.booking.findMany({
+    where: {
+      state: "AwaitingCompletion",
+      autoAcceptAt: { not: null, lte: new Date(now) },
+    },
+    select: { id: true },
+  });
 
-export function autoAcceptRunAt(payload: AutoAcceptPayload): number {
-  const base = Math.max(payload.scheduledEnd, payload.submittedAt);
-  return base + AUTO_ACCEPT_AFTER;
-}
-
-export async function processAutoAccept(_payload: AutoAcceptPayload): Promise<void> {
-  // TODO: load booking; if not Held/Disputed, advance completion + mark payout eligible.
-  // Must be idempotent: re-running after success is a no-op (CMP-03 "once").
+  let accepted = 0;
+  let failed = 0;
+  for (const booking of due) {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${booking.id}/accept-completion`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        accepted++;
+      } else {
+        failed++;
+        console.error(`[auto-accept] ${booking.id} -> HTTP ${res.status}`);
+      }
+    } catch (e) {
+      failed++;
+      console.error(`[auto-accept] ${booking.id} failed: ${(e as Error).message}`);
+    }
+  }
+  return { due: due.length, accepted, failed };
 }

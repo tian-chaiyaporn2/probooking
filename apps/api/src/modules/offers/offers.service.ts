@@ -1,6 +1,5 @@
 import { Injectable } from "@nestjs/common";
 import {
-  advanceOffer,
   effectiveOfferExpiry,
   OFFER_TIMERS,
   can,
@@ -30,10 +29,12 @@ export class OffersService {
     return effectiveOfferExpiry(sentAt, shiftStart, urgency);
   }
 
-  /** OFF-03/04: acceptance opens the 30-min funding window and a soft hold. */
-  accept(acceptedAt: number): { fundingDueAt: number } {
-    // Offer PendingResponse -> AwaitingPayment (a booking is NOT created here).
-    advanceOffer("PendingResponse", "AwaitingPayment");
+  /**
+   * OFF-03/04: acceptance opens the 30-min funding window. The offer's actual
+   * PendingResponse -> AwaitingPayment transition is enforced by the caller against
+   * the real offer state (advanceOffer); this only computes the funding deadline.
+   */
+  fundingWindow(acceptedAt: number): { fundingDueAt: number } {
     return { fundingDueAt: acceptedAt + OFFER_TIMERS.fundingWindow };
   }
 }

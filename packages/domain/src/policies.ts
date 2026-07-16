@@ -25,6 +25,15 @@ export const AUTO_ACCEPT_AFTER = 24 * HOUR;
 /** Clinic inactivity after which Operations reviews completion (CMP-04). */
 export const CLINIC_COMPLETION_REVIEW_AFTER = 48 * HOUR;
 
+/**
+ * CMP-03: when a professional submits completion, auto-accept fires once after 24h,
+ * measured from the LATER of scheduled shift end and the submission time. Returns the
+ * epoch-ms instant at which auto-accept becomes due.
+ */
+export function autoAcceptDueAt(scheduledEnd: number, submittedAt: number): number {
+  return Math.max(scheduledEnd, submittedAt) + AUTO_ACCEPT_AFTER;
+}
+
 export type ShiftUrgency = "standard" | "urgent";
 
 export function offerExpiryFor(urgency: ShiftUrgency): number {

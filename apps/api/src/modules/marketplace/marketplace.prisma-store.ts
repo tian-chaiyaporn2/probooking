@@ -1,4 +1,5 @@
 import { prisma } from "@probook/db";
+import { autoAcceptDueAt } from "@probook/domain";
 import type { OfferState, BookingState, PayoutState, ShiftUrgency } from "@probook/domain";
 import type {
   MarketplaceRepository,
@@ -179,10 +180,15 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async markCompletion(id: string): Promise<BookingDetail | null> {
-    const existing = await prisma.booking.findUnique({ where: { id } });
+    const existing = await prisma.booking.findUnique({ where: { id }, include: { shift: true } });
     if (!existing) return null;
-    // CMP-01: professional marks completion; booking -> AwaitingCompletion.
-    await prisma.booking.update({ where: { id }, data: { state: "AwaitingCompletion" } });
+    // CMP-01: professional marks completion; booking -> AwaitingCompletion. Stamp the
+    // auto-accept deadline (CMP-03): 24h after the later of shift end and submission.
+    const autoAcceptAt = new Date(autoAcceptDueAt(existing.shift.endsAt.getTime(), Date.now()));
+    await prisma.booking.update({
+      where: { id },
+      data: { state: "AwaitingCompletion", autoAcceptAt },
+    });
     await prisma.attendanceEvent.create({
       data: { bookingId: id, kind: "Completed", actorId: existing.professionalId },
     });

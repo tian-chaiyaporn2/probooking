@@ -95,7 +95,7 @@ export class MarketplaceController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
-    const { fundingDueAt } = this.offers.accept(Date.now());
+    const { fundingDueAt } = this.offers.fundingWindow(Date.now());
     const updated = await this.repo.setOfferState(id, nextState, fundingDueAt);
     return { id, state: nextState, fundingDueAt: updated?.fundingDueAt ?? fundingDueAt };
   }

@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   cancellationOutcome,
   effectiveOfferExpiry,
+  autoAcceptDueAt,
+  AUTO_ACCEPT_AFTER,
   OFFER_TIMERS,
 } from "../src/policies.js";
 
@@ -53,5 +55,19 @@ describe("offer expiry (OFF-03)", () => {
     const sentAt = 0;
     const shiftStart = 100 * 60 * 60 * 1000; // far away
     expect(effectiveOfferExpiry(sentAt, shiftStart, "urgent")).toBe(OFFER_TIMERS.urgentExpiry);
+  });
+});
+
+describe("auto-accept due time (CMP-03)", () => {
+  it("measures 24h from submission when it is later than scheduled end", () => {
+    const scheduledEnd = 1000;
+    const submittedAt = 5000;
+    expect(autoAcceptDueAt(scheduledEnd, submittedAt)).toBe(5000 + AUTO_ACCEPT_AFTER);
+  });
+
+  it("measures 24h from scheduled end when it is later than submission", () => {
+    const scheduledEnd = 9000;
+    const submittedAt = 5000;
+    expect(autoAcceptDueAt(scheduledEnd, submittedAt)).toBe(9000 + AUTO_ACCEPT_AFTER);
   });
 });

@@ -1,25 +1,36 @@
-import "reflect-metadata";
-import { QUEUES } from "./queues.js";
+import "./env.js"; // MUST be first: loads DATABASE_URL before @probook/db is imported
+import { prisma } from "@probook/db";
+import { autoAcceptSweep } from "./jobs/autoAccept.js";
 
 /**
- * Worker entrypoint. Wires BullMQ Workers to each queue. Kept as an explicit,
- * readable registry so it is obvious which requirement each job serves.
+ * ProBooking worker. Runs time-driven jobs (§7.2). Currently: the CMP-03 auto-accept
+ * sweep. A polling sweep keeps the worker runnable without Redis; for scale this
+ * becomes a BullMQ repeatable job (see queues.ts) without changing the job logic.
  *
- * To activate: add `bullmq` Workers here reading REDIS_URL and dispatch to the
- * job processors in ./jobs. Left inert until Redis is configured so the scaffold
- * boots without external services.
+ * Flags: `--once` runs a single sweep and exits (used by tests / cron-style triggers).
  */
-function main() {
-  const queues = Object.values(QUEUES);
-  // eslint-disable-next-line no-console
-  console.log(`ProBooking worker ready. Queues: ${queues.join(", ")}`);
-  // Example (uncomment once REDIS_URL is set):
-  //
-  // import { Worker } from "bullmq";
-  // import IORedis from "ioredis";
-  // const connection = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
-  // new Worker(QUEUES.autoAccept, async (job) => processAutoAccept(job.data), { connection });
-  // new Worker(QUEUES.reconciliation, async () => processReconciliation(), { connection });
+const SWEEP_MS = Number(process.env.AUTO_ACCEPT_SWEEP_MS ?? 60_000);
+const runOnce = process.argv.includes("--once");
+
+async function tick(): Promise<void> {
+  const r = await autoAcceptSweep(Date.now());
+  if (r.due > 0 || r.failed > 0) {
+    console.log(`[auto-accept] due=${r.due} accepted=${r.accepted} failed=${r.failed}`);
+  }
 }
 
-main();
+async function main(): Promise<void> {
+  console.log(
+    `ProBooking worker starting — auto-accept sweep${runOnce ? " (--once)" : ` every ${SWEEP_MS}ms`}`,
+  );
+  await tick();
+  if (runOnce) {
+    await prisma.$disconnect();
+    process.exit(0);
+  }
+  setInterval(() => {
+    void tick();
+  }, SWEEP_MS);
+}
+
+void main();
