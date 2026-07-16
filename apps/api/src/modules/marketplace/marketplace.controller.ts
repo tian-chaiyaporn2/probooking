@@ -153,20 +153,27 @@ export class MarketplaceController {
     });
 
     // Offer -> Converted happens inside confirmBooking's transaction (BKG-02 atomic).
-    const { booking, paymentOrderId } = await this.repo.confirmBooking({
-      offerId: offer.id,
-      shiftId: offer.shiftId,
-      professionalId: offer.professionalId,
-      allocation: {
-        compensation: checkout.compensation,
-        serviceFee: checkout.serviceFee,
-        tax: checkout.tax,
-      },
-      captured: checkout.total,
-      idempotencyKey: `collection:${offer.id}`,
-    });
-
-    return { booking, checkout, paymentOrderId };
+    try {
+      const { booking, paymentOrderId } = await this.repo.confirmBooking({
+        offerId: offer.id,
+        shiftId: offer.shiftId,
+        professionalId: offer.professionalId,
+        allocation: {
+          compensation: checkout.compensation,
+          serviceFee: checkout.serviceFee,
+          tax: checkout.tax,
+        },
+        captured: checkout.total,
+        idempotencyKey: `collection:${offer.id}`,
+      });
+      return { booking, checkout, paymentOrderId };
+    } catch (e) {
+      // A concurrent confirm may have won the race (unique offerId / collection key).
+      // If a booking now exists, return it idempotently rather than surfacing a 500.
+      const existing = await this.repo.getBookingByOffer(id);
+      if (existing) return { booking: existing, checkout };
+      throw e;
+    }
   }
 
   @Post("bookings/:id/complete")
@@ -221,12 +228,26 @@ export class MarketplaceController {
       adjustments: satang(0),
     });
 
-    const result = await this.repo.recordPayout({
-      bookingId: id,
-      payoutAmount: booking.compensation,
-      idempotencyKey: `payout:${id}`,
-    });
-    return { id, ...result };
+    try {
+      const result = await this.repo.recordPayout({
+        bookingId: id,
+        payoutAmount: booking.compensation,
+        idempotencyKey: `payout:${id}`,
+      });
+      return { id, ...result };
+    } catch (e) {
+      // Concurrent accept (clinic + auto-accept sweep) may have won (unique payout key).
+      const current = await this.repo.getBooking(id);
+      if (current?.state === "ServiceCompleted") {
+        return {
+          id,
+          bookingState: current.state,
+          payoutState: current.payoutState,
+          payoutAmount: current.compensation,
+        };
+      }
+      throw e;
+    }
   }
 
   @Post("bookings/:id/flag-inactive")
@@ -308,14 +329,23 @@ export class MarketplaceController {
       adjustments: satang(0),
     });
 
-    const result = await this.repo.cancelBooking({
-      bookingId: id,
-      payable,
-      refund,
-      payoutKey: `cancel-payout:${id}`,
-      refundKey: `cancel-refund:${id}`,
-    });
-    return { id, outcome: "cancelled", fraction: outcome.fraction, ...result };
+    try {
+      const result = await this.repo.cancelBooking({
+        bookingId: id,
+        payable,
+        refund,
+        payoutKey: `cancel-payout:${id}`,
+        refundKey: `cancel-refund:${id}`,
+      });
+      return { id, outcome: "cancelled", fraction: outcome.fraction, ...result };
+    } catch (e) {
+      // Concurrent cancel may have won (unique cancel-refund key).
+      const current = await this.repo.getBooking(id);
+      if (current?.state === "Cancelled") {
+        return { id, outcome: "cancelled", bookingState: "Cancelled", alreadyCancelled: true };
+      }
+      throw e;
+    }
   }
 
   @Get("offers/:id")
