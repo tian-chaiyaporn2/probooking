@@ -24,6 +24,7 @@ import {
 import { OffersService } from "../offers/offers.service.js";
 import { BookingsService } from "../bookings/bookings.service.js";
 import { PaymentsService } from "../payments/payments.service.js";
+import { NotificationsService } from "./notifications.service.js";
 import { MARKETPLACE_REPOSITORY, type MarketplaceRepository } from "./marketplace.types.js";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -55,6 +56,7 @@ export class MarketplaceController {
     private readonly offers: OffersService,
     private readonly bookings: BookingsService,
     private readonly payments: PaymentsService,
+    private readonly notifications: NotificationsService,
     @Inject(MARKETPLACE_REPOSITORY) private readonly repo: MarketplaceRepository,
   ) {}
 
@@ -132,6 +134,9 @@ export class MarketplaceController {
       throw new BadRequestException("invalid professional reference");
     }
 
+    // NOT-01: notify the professional of the offer (SMS covers offers near expiry).
+    await this.notifications.sms(dto.professionalId, "offer_sent", { type: "Offer", id: offer.id });
+
     return {
       id: offer.id,
       state: offer.state,
@@ -152,6 +157,8 @@ export class MarketplaceController {
     }
     const { fundingDueAt } = this.offers.fundingWindow(Date.now());
     const updated = await this.repo.setOfferState(id, nextState, fundingDueAt);
+    // NOT-01: acceptance opens the funding window — tell the clinic payment is required.
+    await this.notifications.sms(offer.clinicWorkspaceId, "payment_required", { type: "Offer", id });
     return { id, state: nextState, fundingDueAt: updated?.fundingDueAt ?? fundingDueAt };
   }
 
@@ -220,6 +227,10 @@ export class MarketplaceController {
         captured: checkout.total,
         idempotencyKey: `collection:${offer.id}`,
       });
+      // NOT-01: confirmation — email all critical events; SMS the confirmation too.
+      await this.notifications.email(offer.professionalId, "confirmed", { type: "Booking", id: booking.id });
+      await this.notifications.email(offer.clinicWorkspaceId, "confirmed", { type: "Booking", id: booking.id });
+      await this.notifications.sms(offer.professionalId, "confirmed", { type: "Booking", id: booking.id });
       return { booking, checkout, paymentOrderId };
     } catch (e) {
       // A concurrent confirm may have won the race (unique offerId / collection key).
@@ -286,6 +297,8 @@ export class MarketplaceController {
         payoutAmount: booking.compensation,
         idempotencyKey: `payout:${id}`,
       });
+      // NOT-01: payout initiated — email the professional.
+      await this.notifications.email(booking.professionalId, "payout", { type: "Booking", id });
       return { id, ...result };
     } catch (e) {
       // Concurrent accept (clinic + auto-accept sweep) may have won (unique payout key).
@@ -389,6 +402,9 @@ export class MarketplaceController {
         payoutKey: `cancel-payout:${id}`,
         refundKey: `cancel-refund:${id}`,
       });
+      // NOT-01: cancellation — SMS both parties.
+      await this.notifications.sms(booking.professionalId, "cancelled", { type: "Booking", id });
+      await this.notifications.sms(booking.clinicWorkspaceId, "cancelled", { type: "Booking", id });
       return { id, outcome: "cancelled", fraction: outcome.fraction, ...result };
     } catch (e) {
       // Concurrent cancel may have won (unique cancel-refund key).

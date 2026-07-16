@@ -28,6 +28,7 @@ import type {
   OfferEligibility,
   ReviewInput,
   ReviewResult,
+  NotificationInput,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -415,6 +416,18 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       select: { score: true },
     });
     return aggregateRating(reviews.map((r) => r.score));
+  }
+
+  async recordNotification(input: NotificationInput): Promise<void> {
+    await prisma.notification.create({
+      data: {
+        channel: input.channel,
+        to: input.to,
+        event: input.event,
+        refType: input.refType ?? null,
+        refId: input.refId ?? null,
+      },
+    });
   }
 
   private toRecord(o: OfferWithShift): OfferRecord {

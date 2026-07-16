@@ -16,7 +16,7 @@ Legend: ✅ implemented in scaffold · 🟡 stubbed / partial · ⬜ not started
 | APP-01 / OFF-01..04 | Non-binding apps, authority, one active offer, timers, soft hold | `domain: roles, policies, state-machines/offer`, `api: OffersService` | `04-*`, `05-*` | ✅ |
 | BKG-01..04 | Atomic confirmation, immutable snapshots, derived status | `domain: eligibility, state-machines/booking`, `api: BookingsService`, `db: Booking` | `05-*`, `14-*` | ✅ |
 | MSG-01..02 | Plain-text thread, contact after confirmation | `db: Message` | `08-*` | ⬜ |
-| NOT-01 / URG-01 | Email/SMS alerts, urgent badge (no guarantee) | `worker: reminders queue`, `domain: URGENT_WINDOW` | `07-*` | 🟡 |
+| NOT-01 / URG-01 | Email/SMS alerts, reminders, urgent badge | `api: NotificationsService` (mock email/SMS ports, best-effort per §7.4) emits offer_sent/payment_required/confirmed/payout/cancelled; `worker: reminderSweep` (24h/3h, dedup); `db: Notification`; `domain: URGENT_WINDOW` | `07-*` | 🟡 (NOT-01 live; urgent-badge pending) |
 | PAY-01..11 | Prefunding, checkout split, immutable events, conservation, idempotency, reconciliation | `domain: money`, `api: PaymentsService`, `db: PaymentOrder/FinancialAllocation/FinancialEvent`, `worker: reconciliation` | `06-*`, `11-*` | ✅ |
 | CMP-01..05 | Completion, 24h auto-accept, 48h clinic fallback | `domain: policies (autoAcceptDueAt)`, `api: complete/accept-completion`, `worker: autoAcceptSweep` | `09-*` | 🟡 (01/02/03 live; 04/05 pending) |
 | CAN-01..05 | Cancellation compensation & support routing | `domain: cancellationOutcome`, `api: POST /bookings/:id/cancel` (Payout+Refund events, conservation), `store: cancelBooking` | `10-*` | ✅ |

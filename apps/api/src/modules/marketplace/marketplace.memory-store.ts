@@ -18,6 +18,7 @@ import type {
   OfferEligibility,
   ReviewInput,
   ReviewResult,
+  NotificationInput,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -216,6 +217,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       .filter((r) => r.subjectId === subjectId && r.published)
       .map((r) => r.score);
     return aggregateRating(scores);
+  }
+
+  async recordNotification(input: NotificationInput): Promise<void> {
+    // In-memory: notifications aren't persisted for inspection; the mock port logs them.
+    void input;
   }
 
   async cancelBooking(input: CancelInput): Promise<CancelResult> {

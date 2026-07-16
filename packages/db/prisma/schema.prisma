@@ -412,6 +412,20 @@ model FinancialEvent {
   @@index([paymentOrderId, createdAt])
 }
 
+// ----- Notifications (NOT-01) -----
+model Notification {
+  id        String   @id @default(cuid())
+  channel   String // email | sms
+  to        String // recipient (phone/email; a party id in Phase 0)
+  event     String // offer_sent | payment_required | confirmed | payout | cancelled | reminder_24h | reminder_3h
+  refType   String?
+  refId     String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([event, refId])
+  @@index([refType, refId])
+}
+
 // ----- Audit (every privileged change; §6.4) -----
 model AuditRecord {
   id         String   @id @default(cuid())

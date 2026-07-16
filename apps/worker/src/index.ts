@@ -3,6 +3,7 @@ import { prisma } from "@probook/db";
 import { autoAcceptSweep } from "./jobs/autoAccept.js";
 import { clinicCompletionReviewSweep } from "./jobs/clinicReview.js";
 import { reviewPublishSweep } from "./jobs/reviewPublish.js";
+import { reminderSweep } from "./jobs/reminders.js";
 
 /**
  * ProBooking worker. Runs time-driven jobs (§7.2): the CMP-03 auto-accept sweep and
@@ -28,6 +29,10 @@ async function tick(): Promise<void> {
   const rp = await reviewPublishSweep(now);
   if (rp.published > 0) {
     console.log(`[review-publish] published=${rp.published}`);
+  }
+  const rm = await reminderSweep(now);
+  if (rm.sent > 0) {
+    console.log(`[reminders] sent=${rm.sent}`);
   }
 }
 

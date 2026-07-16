@@ -83,6 +83,14 @@ gates on both parties being verified (§6.3) — the demo identity fixtures are 
 Every rule in the flow (authority OFF-01, soft hold OFF-04, eligibility §6.3, fee
 PAY-02) is enforced by `@probook/domain`, not by the controller.
 
+**Notifications (NOT-01).** A `NotificationsService` wraps mock email/SMS ports
+(§7.2) and records each send to a `Notification` row for audit. The controller emits
+on critical events (offer sent, payment required, confirmation, payout, cancellation);
+sends are best-effort so a notification failure never fails the action (§7.4). Time-
+driven reminders (24h/3h before shift start) are a worker sweep, deduped via the
+`Notification` table. In prod the mock ports become the real email/SMS partner without
+touching the call sites.
+
 **Reviews (REV-01..05).** After a booking is `ServiceCompleted`, either party may
 review the other (`POST /bookings/:id/reviews`), one per party (REV-02). Reviews
 publish when both parties submit, or after 7 days via a worker sweep (REV-03). A

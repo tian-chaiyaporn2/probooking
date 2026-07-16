@@ -19,6 +19,10 @@ export const OFFER_TIMERS = {
 /** A shift within this window of start may receive the Urgent badge (URG-01). */
 export const URGENT_WINDOW = 72 * HOUR;
 
+/** NOT-01 booking reminders: sent 24h and 3h before the shift start. */
+export const REMINDER_24H_BEFORE = 24 * HOUR;
+export const REMINDER_3H_BEFORE = 3 * HOUR;
+
 /** Auto-accept of professional-submitted completion (CMP-03): once, after 24h. */
 export const AUTO_ACCEPT_AFTER = 24 * HOUR;
 

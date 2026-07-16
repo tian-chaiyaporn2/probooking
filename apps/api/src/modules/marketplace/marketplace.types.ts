@@ -67,6 +67,17 @@ export interface ReviewResult {
   published: boolean;
 }
 
+// ----- Notifications (NOT-01) -----
+export type NotificationChannel = "email" | "sms";
+
+export interface NotificationInput {
+  channel: NotificationChannel;
+  to: string;
+  event: string;
+  refType?: string;
+  refId?: string;
+}
+
 export interface BookingRecord {
   id: string;
   offerId: string;
@@ -216,6 +227,9 @@ export interface MarketplaceRepository {
   createReview(input: ReviewInput): Promise<ReviewResult>;
   /** Aggregate rating from a subject's PUBLISHED reviews, or null below 3 (REV-04). */
   getSubjectRating(subjectId: string): Promise<RatingSummary | null>;
+
+  // --- Notifications (NOT-01) ---
+  recordNotification(input: NotificationInput): Promise<void>;
 }
 
 /** DI token for the repository. */
