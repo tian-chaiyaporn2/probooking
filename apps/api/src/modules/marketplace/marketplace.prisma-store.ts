@@ -14,7 +14,10 @@ import type {
   OfferRecord,
   BookingRecord,
   BookingDetail,
-  CreateOfferInput,
+  ShiftPostInput,
+  ShiftRecord,
+  Candidate,
+  CreateOfferForShiftInput,
   ConfirmBookingInput,
   ConfirmBookingResult,
   PayoutInput,
@@ -135,34 +138,91 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     };
   }
 
-  async createOffer(input: CreateOfferInput): Promise<OfferRecord> {
-    // One transaction so a bad professionalId (FK violation on the offer) rolls back
-    // the shift too — no orphan Published shift.
+  async postShift(input: ShiftPostInput): Promise<{ shiftId: string }> {
+    const shift = await prisma.shift.create({
+      data: {
+        workspaceId: input.clinicWorkspaceId,
+        state: "Published",
+        urgency: input.urgency,
+        category: input.category,
+        scope: input.category,
+        startsAt: new Date(input.shiftStart),
+        endsAt: new Date(input.shiftStart + SHIFT_LENGTH_MS),
+        compensation: input.compensation,
+        termsLocked: false,
+      },
+    });
+    return { shiftId: shift.id };
+  }
+
+  async getShift(id: string): Promise<ShiftRecord | null> {
+    const s = await prisma.shift.findUnique({
+      where: { id },
+      include: { offers: { select: { state: true } }, booking: { select: { id: true } } },
+    });
+    if (!s) return null;
+    return {
+      id: s.id,
+      clinicWorkspaceId: s.workspaceId,
+      category: s.category,
+      compensation: s.compensation,
+      urgency: s.urgency as ShiftUrgency,
+      startsAt: s.startsAt.getTime(),
+      state: s.state,
+      hasActiveOffer: s.offers.some((o) => o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+      booked: s.booking !== null,
+    };
+  }
+
+  async applyToShift(shiftId: string, professionalId: string): Promise<{ id: string }> {
+    const a = await prisma.application.create({
+      data: { shiftId, professionalId, state: "Submitted" },
+    });
+    return { id: a.id };
+  }
+
+  async inviteToShift(shiftId: string, professionalId: string): Promise<{ id: string }> {
+    const i = await prisma.invitation.create({
+      data: { shiftId, professionalId, state: "Sent" },
+    });
+    return { id: i.id };
+  }
+
+  async listShiftCandidates(shiftId: string): Promise<Candidate[]> {
+    const apps = await prisma.application.findMany({
+      where: { shiftId },
+      select: { professionalId: true, state: true },
+    });
+    const invs = await prisma.invitation.findMany({
+      where: { shiftId },
+      select: { professionalId: true, state: true },
+    });
+    return [
+      ...apps.map((a) => ({ professionalId: a.professionalId, via: "application" as const, state: a.state })),
+      ...invs.map((i) => ({ professionalId: i.professionalId, via: "invitation" as const, state: i.state })),
+    ];
+  }
+
+  async createOfferForShift(input: CreateOfferForShiftInput): Promise<OfferRecord> {
+    // Atomic: create the one binding offer, mark the applicant OfferSent, lock terms (SHF-04).
     const offer = await prisma.$transaction(async (tx) => {
-      const shift = await tx.shift.create({
+      const o = await tx.offer.create({
         data: {
-          workspaceId: input.clinicWorkspaceId,
-          state: "Published",
-          urgency: input.urgency,
-          category: input.category,
-          scope: input.category,
-          startsAt: new Date(input.shiftStart),
-          endsAt: new Date(input.shiftStart + SHIFT_LENGTH_MS),
-          compensation: input.compensation,
-          termsLocked: true,
-        },
-      });
-      return tx.offer.create({
-        data: {
-          shiftId: shift.id,
+          shiftId: input.shiftId,
           professionalId: input.professionalId,
           state: "PendingResponse",
-          termsSnapshot: { compensation: input.compensation, urgency: input.urgency },
+          termsSnapshot: {},
           sentAt: new Date(input.sentAt),
           expiresAt: new Date(input.expiresAt),
         },
         include: { shift: true },
       });
+      await tx.application.updateMany({
+        where: { shiftId: input.shiftId, professionalId: input.professionalId },
+        data: { state: "OfferSent" },
+      });
+      await tx.shift.update({ where: { id: input.shiftId }, data: { termsLocked: true } });
+      return o;
     });
     return this.toRecord(offer as OfferWithShift);
   }
@@ -173,10 +233,14 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async listOpenShifts(): Promise<OpenShift[]> {
-    // Published shifts still awaiting a response, priority-ordered: urgent first
-    // (enum sorts "urgent" > "standard"), then soonest start (SRC-03 deterministic).
+    // Open = Published, unbooked, and with no active offer yet — priority-ordered:
+    // urgent first (enum sorts "urgent" > "standard"), then soonest (SRC-03 deterministic).
     const shifts = await prisma.shift.findMany({
-      where: { state: "Published", offers: { some: { state: "PendingResponse" } } },
+      where: {
+        state: "Published",
+        booking: null,
+        offers: { none: { state: { in: ["PendingResponse", "AwaitingPayment"] } } },
+      },
       select: { id: true, category: true, compensation: true, urgency: true, startsAt: true },
       orderBy: [{ urgency: "desc" }, { startsAt: "asc" }],
     });

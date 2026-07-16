@@ -6,7 +6,9 @@ import {
   registerProfessional,
   verifyClinic,
   verifyProfessional,
-  createOffer,
+  postShift,
+  applyToShift,
+  offerToProfessional,
   acceptOffer,
   confirmOffer,
   completeBooking,
@@ -73,11 +75,13 @@ export default function FlowPage() {
       setProfessionalId(pro.id);
       log("Operations verified", "clinic + professional → Verified");
 
-      const offer = await createOffer({
-        clinicWorkspaceId: clinic.id,
-        professionalId: pro.id,
-        compensation: 1_000_000, // 10,000 THB in satang
-      });
+      const shift = await postShift({ clinicWorkspaceId: clinic.id, compensation: 1_000_000 });
+      log("Shift posted", `open shift (${shift.state})`);
+
+      await applyToShift(shift.shiftId, pro.id);
+      log("Professional applied", "application submitted (non-binding)");
+
+      const offer = await offerToProfessional(shift.shiftId, pro.id);
       log("Offer created", `state=${offer.state}, fee=${formatThb(offer.checkout.serviceFee)}`);
 
       const accepted = await acceptOffer(offer.id);

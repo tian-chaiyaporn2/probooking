@@ -4,7 +4,10 @@ import type {
   OfferRecord,
   BookingRecord,
   BookingDetail,
-  CreateOfferInput,
+  ShiftPostInput,
+  ShiftRecord,
+  Candidate,
+  CreateOfferForShiftInput,
   ConfirmBookingInput,
   ConfirmBookingResult,
   PayoutInput,
@@ -35,6 +38,23 @@ interface MemReview {
   published: boolean;
 }
 
+interface MemShift {
+  id: string;
+  clinicWorkspaceId: string;
+  category: string;
+  compensation: number;
+  urgency: OfferRecord["urgency"];
+  startsAt: number;
+  state: string;
+}
+
+interface MemCandidate {
+  shiftId: string;
+  professionalId: string;
+  via: "application" | "invitation";
+  state: string;
+}
+
 /**
  * Zero-dependency in-memory implementation. Used when DATABASE_URL is unset so the
  * flow (and the e2e) run without Postgres. State is lost on restart — dev only.
@@ -48,6 +68,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly professionals = new Map<string, VerificationState>();
   private readonly suspendedCredentials = new Set<string>();
   private readonly reviews: MemReview[] = [];
+  private readonly shifts = new Map<string, MemShift>();
+  private readonly candidates: MemCandidate[] = [];
 
   async registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }> {
     void input;
@@ -94,21 +116,83 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     };
   }
 
-  async createOffer(input: CreateOfferInput): Promise<OfferRecord> {
-    const record: OfferRecord = {
-      id: randomUUID(),
-      shiftId: randomUUID(),
+  async postShift(input: ShiftPostInput): Promise<{ shiftId: string }> {
+    const id = randomUUID();
+    this.shifts.set(id, {
+      id,
       clinicWorkspaceId: input.clinicWorkspaceId,
-      professionalId: input.professionalId,
+      category: input.category,
       compensation: input.compensation,
       urgency: input.urgency,
+      startsAt: input.shiftStart,
+      state: "Published",
+    });
+    return { shiftId: id };
+  }
+
+  async getShift(id: string): Promise<ShiftRecord | null> {
+    const s = this.shifts.get(id);
+    if (!s) return null;
+    const hasActiveOffer = [...this.offers.values()].some(
+      (o) => o.shiftId === id && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+    );
+    const booked = [...this.bookings.values()].some((b) => b.shiftId === id);
+    return {
+      id: s.id,
+      clinicWorkspaceId: s.clinicWorkspaceId,
+      category: s.category,
+      compensation: s.compensation,
+      urgency: s.urgency,
+      startsAt: s.startsAt,
+      state: s.state,
+      hasActiveOffer,
+      booked,
+    };
+  }
+
+  async applyToShift(shiftId: string, professionalId: string): Promise<{ id: string }> {
+    if (this.candidates.some((c) => c.shiftId === shiftId && c.professionalId === professionalId && c.via === "application")) {
+      throw new Error("already applied");
+    }
+    const id = randomUUID();
+    this.candidates.push({ shiftId, professionalId, via: "application", state: "Submitted" });
+    return { id };
+  }
+
+  async inviteToShift(shiftId: string, professionalId: string): Promise<{ id: string }> {
+    const id = randomUUID();
+    this.candidates.push({ shiftId, professionalId, via: "invitation", state: "Sent" });
+    return { id };
+  }
+
+  async listShiftCandidates(shiftId: string): Promise<Candidate[]> {
+    return this.candidates
+      .filter((c) => c.shiftId === shiftId)
+      .map((c) => ({ professionalId: c.professionalId, via: c.via, state: c.state }));
+  }
+
+  async createOfferForShift(input: CreateOfferForShiftInput): Promise<OfferRecord> {
+    const shift = this.shifts.get(input.shiftId);
+    if (!shift) throw new Error("shift not found");
+    const record: OfferRecord = {
+      id: randomUUID(),
+      shiftId: input.shiftId,
+      clinicWorkspaceId: shift.clinicWorkspaceId,
+      professionalId: input.professionalId,
+      compensation: shift.compensation,
+      urgency: shift.urgency,
       state: "PendingResponse",
       sentAt: input.sentAt,
-      shiftStart: input.shiftStart,
+      shiftStart: shift.startsAt,
       expiresAt: input.expiresAt,
       fundingDueAt: null,
     };
     this.offers.set(record.id, record);
+    for (const c of this.candidates) {
+      if (c.shiftId === input.shiftId && c.professionalId === input.professionalId && c.via === "application") {
+        c.state = "OfferSent";
+      }
+    }
     return record;
   }
 
@@ -117,18 +201,26 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async listOpenShifts(): Promise<OpenShift[]> {
-    return [...this.offers.values()]
-      .filter((o) => o.state === "PendingResponse")
+    const isOpen = (s: MemShift) => {
+      if (s.state !== "Published") return false;
+      const hasActive = [...this.offers.values()].some(
+        (o) => o.shiftId === s.id && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+      );
+      const booked = [...this.bookings.values()].some((b) => b.shiftId === s.id);
+      return !hasActive && !booked;
+    };
+    return [...this.shifts.values()]
+      .filter(isOpen)
       .sort((a, b) =>
-        a.urgency === b.urgency ? a.shiftStart - b.shiftStart : a.urgency === "urgent" ? -1 : 1,
+        a.urgency === b.urgency ? a.startsAt - b.startsAt : a.urgency === "urgent" ? -1 : 1,
       )
-      .map((o) => ({
-        shiftId: o.shiftId,
-        category: "general",
-        compensation: o.compensation,
-        startsAt: o.shiftStart,
-        urgency: o.urgency,
-        urgent: o.urgency === "urgent",
+      .map((s) => ({
+        shiftId: s.id,
+        category: s.category,
+        compensation: s.compensation,
+        startsAt: s.startsAt,
+        urgency: s.urgency,
+        urgent: s.urgency === "urgent",
       }));
   }
 

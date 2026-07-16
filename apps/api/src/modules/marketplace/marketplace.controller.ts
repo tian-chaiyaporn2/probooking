@@ -15,6 +15,7 @@ import {
   cancellationOutcome,
   payableFromFraction,
   isUrgentEligible,
+  can,
   satang,
   type ConfirmationContext,
   type Role,
@@ -30,9 +31,8 @@ import { MARKETPLACE_REPOSITORY, type MarketplaceRepository } from "./marketplac
 
 const HOUR_MS = 60 * 60 * 1000;
 
-interface CreateOfferDto {
+interface PostShiftDto {
   clinicWorkspaceId: string;
-  professionalId: string;
   compensation: number; // integer satang
   category?: string;
   urgency?: ShiftUrgency;
@@ -137,8 +137,78 @@ export class MarketplaceController {
     return { id, held: false };
   }
 
-  @Post("offers")
-  async createOffer(@Body() dto: CreateOfferDto) {
+  @Post("shifts")
+  async postShift(@Body() dto: PostShiftDto) {
+    const role: Role = dto.actorRole ?? "clinic_owner";
+    if (!can(role, "clinic.publish_shift")) {
+      throw new BadRequestException("only a clinic owner/admin may publish a shift");
+    }
+    // AUTH-04: an unverified clinic cannot transact.
+    const clinicV = await this.repo.clinicVerification(dto.clinicWorkspaceId);
+    if (clinicV === null) throw new NotFoundException("clinic not found");
+    if (clinicV !== "Verified") {
+      throw new BadRequestException(`clinic is ${clinicV}; must be Verified to post a shift`);
+    }
+    const now = Date.now();
+    const shiftStart = now + (dto.shiftStartInHours ?? 48) * HOUR_MS;
+    const urgency: ShiftUrgency = dto.urgency ?? "standard";
+    if (urgency === "urgent" && !isUrgentEligible(shiftStart, now)) {
+      throw new BadRequestException("urgent requires the shift to start within 72h (URG-01)");
+    }
+    const { shiftId } = await this.repo.postShift({
+      clinicWorkspaceId: dto.clinicWorkspaceId,
+      category: dto.category ?? "general",
+      compensation: dto.compensation,
+      urgency,
+      shiftStart,
+    });
+    return { shiftId, state: "Published", urgent: urgency === "urgent" };
+  }
+
+  @Get("shifts")
+  async listShifts() {
+    // URG-01 / SRC-03: open shifts, urgent first then soonest (priority placement).
+    return { shifts: await this.repo.listOpenShifts() };
+  }
+
+  @Post("shifts/:id/apply")
+  async apply(@Param("id") shiftId: string, @Body() dto: { professionalId: string }) {
+    // APP-01: applications are non-binding and reserve neither party.
+    const shift = await this.requireOpenShift(shiftId);
+    void shift;
+    try {
+      const a = await this.repo.applyToShift(shiftId, dto.professionalId);
+      return { id: a.id, state: "Submitted" };
+    } catch {
+      throw new BadRequestException("already applied, or invalid professional");
+    }
+  }
+
+  @Post("shifts/:id/invite")
+  async invite(@Param("id") shiftId: string, @Body() dto: { professionalId: string }) {
+    const shift = await this.repo.getShift(shiftId);
+    if (!shift) throw new NotFoundException("shift not found");
+    try {
+      const i = await this.repo.inviteToShift(shiftId, dto.professionalId);
+      await this.notifications.sms(dto.professionalId, "invited", { type: "Shift", id: shiftId });
+      return { id: i.id, state: "Sent" };
+    } catch {
+      throw new BadRequestException("invalid professional");
+    }
+  }
+
+  @Get("shifts/:id/candidates")
+  async candidates(@Param("id") shiftId: string) {
+    const shift = await this.repo.getShift(shiftId);
+    if (!shift) throw new NotFoundException("shift not found");
+    return { candidates: await this.repo.listShiftCandidates(shiftId) };
+  }
+
+  @Post("shifts/:id/offer")
+  async offerToProfessional(
+    @Param("id") shiftId: string,
+    @Body() dto: { professionalId: string; actorRole?: Role },
+  ) {
     const role: Role = dto.actorRole ?? "clinic_owner";
     // OFF-01: only a clinic owner/admin may send a binding offer.
     try {
@@ -146,58 +216,40 @@ export class MarketplaceController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
-
-    // AUTH-04: an unverified clinic cannot transact.
-    const clinicV = await this.repo.clinicVerification(dto.clinicWorkspaceId);
-    if (clinicV === null) throw new NotFoundException("clinic not found");
-    if (clinicV !== "Verified") {
-      throw new BadRequestException(`clinic is ${clinicV}; must be Verified to post a shift`);
+    const shift = await this.requireOpenShift(shiftId);
+    // OFF-02: one active offer per shift.
+    if (shift.hasActiveOffer) {
+      throw new BadRequestException("shift already has an active offer (OFF-02)");
     }
-
+    // The offer goes to a professional who applied or was invited.
+    const candidates = await this.repo.listShiftCandidates(shiftId);
+    if (!candidates.some((c) => c.professionalId === dto.professionalId)) {
+      throw new BadRequestException("professional must apply or be invited first");
+    }
     const now = Date.now();
-    const shiftStart = now + (dto.shiftStartInHours ?? 48) * HOUR_MS;
-    const urgency: ShiftUrgency = dto.urgency ?? "standard";
-    // URG-01: only a shift within 72h may be marked Urgent.
-    if (urgency === "urgent" && !isUrgentEligible(shiftStart, now)) {
-      throw new BadRequestException("urgent requires the shift to start within 72h (URG-01)");
-    }
-    const expiresAt = this.offers.computeExpiry(now, shiftStart, urgency);
-
+    const expiresAt = this.offers.computeExpiry(now, shift.startsAt, shift.urgency);
     let offer;
     try {
-      offer = await this.repo.createOffer({
-        clinicWorkspaceId: dto.clinicWorkspaceId,
+      offer = await this.repo.createOfferForShift({
+        shiftId,
         professionalId: dto.professionalId,
-        category: dto.category ?? "general",
-        compensation: dto.compensation,
-        urgency,
         sentAt: now,
-        shiftStart,
         expiresAt,
       });
     } catch {
-      throw new BadRequestException("invalid professional reference");
+      throw new BadRequestException("could not create offer");
     }
-
-    // NOT-01: notify the professional of the offer (SMS covers offers near expiry).
+    // NOT-01: notify the professional (SMS covers offers near expiry).
     await this.notifications.sms(dto.professionalId, "offer_sent", { type: "Offer", id: offer.id });
-    // URG-01: urgent shifts get an extra assisted-outreach alert.
-    if (urgency === "urgent") {
+    if (shift.urgency === "urgent") {
       await this.notifications.sms(dto.professionalId, "urgent_alert", { type: "Offer", id: offer.id });
     }
-
     return {
       id: offer.id,
       state: offer.state,
       expiresAt: offer.expiresAt,
-      checkout: this.payments.checkout(satang(dto.compensation)),
+      checkout: this.payments.checkout(satang(shift.compensation)),
     };
-  }
-
-  @Get("shifts")
-  async listShifts() {
-    // URG-01 / SRC-03: open shifts, urgent first then soonest (priority placement).
-    return { shifts: await this.repo.listOpenShifts() };
   }
 
   // ----- Operations dashboard (ADM-01) -----
@@ -545,5 +597,14 @@ export class MarketplaceController {
     const booking = await this.repo.getBooking(id);
     if (!booking) throw new NotFoundException("booking not found");
     return booking;
+  }
+
+  private async requireOpenShift(id: string) {
+    const shift = await this.repo.getShift(id);
+    if (!shift) throw new NotFoundException("shift not found");
+    if (shift.state !== "Published" || shift.booked) {
+      throw new BadRequestException("shift is not open");
+    }
+    return shift;
   }
 }

@@ -72,12 +72,18 @@ export const verifyClinic = (id: string) => post<Registered>(`/ops/clinics/${id}
 export const verifyProfessional = (id: string) =>
   post<Registered>(`/ops/professionals/${id}/verify`);
 
-export const createOffer = (input: {
+export const postShift = (input: {
   clinicWorkspaceId: string;
-  professionalId: string;
   compensation: number;
+  category?: string;
   urgency?: "standard" | "urgent";
-}) => post<OfferCreated>("/offers", input);
+}) => post<{ shiftId: string; state: string; urgent: boolean }>("/shifts", input);
+
+export const applyToShift = (shiftId: string, professionalId: string) =>
+  post<{ id: string; state: string }>(`/shifts/${shiftId}/apply`, { professionalId });
+
+export const offerToProfessional = (shiftId: string, professionalId: string) =>
+  post<OfferCreated>(`/shifts/${shiftId}/offer`, { professionalId });
 
 export const acceptOffer = (id: string) => post<Accepted>(`/offers/${id}/accept`);
 

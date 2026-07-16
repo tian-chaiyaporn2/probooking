@@ -111,14 +111,38 @@ export interface BookingRecord {
   state: BookingState;
 }
 
-export interface CreateOfferInput {
-  clinicWorkspaceId: string; // the verified clinic branch posting the shift
-  professionalId: string; // the professional the binding offer is sent to
-  category: string; // shift category / scope label
+// ----- Shift posting, applications, invitations (APP-01, OFF-01/02) -----
+export interface ShiftPostInput {
+  clinicWorkspaceId: string;
+  category: string;
   compensation: number; // integer satang
   urgency: ShiftUrgency;
+  shiftStart: number; // epoch ms UTC
+}
+
+export interface ShiftRecord {
+  id: string;
+  clinicWorkspaceId: string;
+  category: string;
+  compensation: number;
+  urgency: ShiftUrgency;
+  startsAt: number; // epoch ms UTC
+  state: string; // ShiftState
+  hasActiveOffer: boolean; // OFF-02: one active offer per shift
+  booked: boolean;
+}
+
+/** A professional who applied to or was invited to a shift. */
+export interface Candidate {
+  professionalId: string;
+  via: "application" | "invitation";
+  state: string;
+}
+
+export interface CreateOfferForShiftInput {
+  shiftId: string;
+  professionalId: string;
   sentAt: number;
-  shiftStart: number;
   expiresAt: number;
 }
 
@@ -210,9 +234,16 @@ export interface MarketplaceRepository {
   /** Verification facts for an offer's clinic and professional (§6.3). */
   getOfferEligibility(offerId: string): Promise<OfferEligibility | null>;
 
-  createOffer(input: CreateOfferInput): Promise<OfferRecord>;
+  // --- Shift posting & discovery (APP-01, OFF-01/02) ---
+  postShift(input: ShiftPostInput): Promise<{ shiftId: string }>;
+  getShift(id: string): Promise<ShiftRecord | null>;
+  applyToShift(shiftId: string, professionalId: string): Promise<{ id: string }>;
+  inviteToShift(shiftId: string, professionalId: string): Promise<{ id: string }>;
+  listShiftCandidates(shiftId: string): Promise<Candidate[]>;
+  /** Create the one binding offer for a shift (OFF-02); marks the applicant OfferSent. */
+  createOfferForShift(input: CreateOfferForShiftInput): Promise<OfferRecord>;
   getOffer(id: string): Promise<OfferRecord | null>;
-  /** Open shifts, priority-ordered: urgent first, then soonest start (URG-01, SRC-03). */
+  /** Open shifts (Published, no active offer, unbooked), urgent first then soonest (URG-01/SRC-03). */
   listOpenShifts(): Promise<OpenShift[]>;
   /** Transition an offer's state (and optionally set fundingDueAt). Returns the updated record. */
   setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null>;
