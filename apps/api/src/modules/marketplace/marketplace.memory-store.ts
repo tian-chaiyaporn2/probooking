@@ -31,6 +31,7 @@ import type {
   ProfessionalSearchResult,
   MessageRecord,
   BookingContact,
+  InsuranceStatus,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -52,7 +53,10 @@ interface MemShift {
   urgency: OfferRecord["urgency"];
   startsAt: number;
   state: string;
+  insuranceRequired: boolean;
 }
+
+const SHIFT_LEN_MS = 4 * 60 * 60 * 1000;
 
 interface MemCandidate {
   shiftId: string;
@@ -117,11 +121,22 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async getOfferEligibility(offerId: string): Promise<OfferEligibility | null> {
     const o = this.offers.get(offerId);
     if (!o) return null;
+    const shift = this.shifts.get(o.shiftId);
+    const insuranceRequired = shift?.insuranceRequired ?? false;
+    const ins = this.insurance.get(o.professionalId);
+    const shiftEnd = o.shiftStart + SHIFT_LEN_MS;
+    const insuranceValid =
+      !insuranceRequired ||
+      (ins?.state === "Verified" && ins.validUntil !== null && ins.validUntil >= shiftEnd);
     return {
       clinicVerified: this.clinics.get(o.clinicWorkspaceId) === "Verified",
       professionalVerified: this.professionals.get(o.professionalId) === "Verified",
+      insuranceRequired,
+      insuranceValidThroughShiftEnd: insuranceValid,
     };
   }
+
+  private readonly insurance = new Map<string, InsuranceStatus>();
 
   async postShift(input: ShiftPostInput): Promise<{ shiftId: string }> {
     const id = randomUUID();
@@ -133,8 +148,26 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       urgency: input.urgency,
       startsAt: input.shiftStart,
       state: "Published",
+      insuranceRequired: input.insuranceRequired,
     });
     return { shiftId: id };
+  }
+
+  async submitInsurance(professionalId: string, validUntil: number): Promise<InsuranceStatus> {
+    const status: InsuranceStatus = { state: "Submitted", validUntil };
+    this.insurance.set(professionalId, status);
+    return status;
+  }
+
+  async verifyInsurance(professionalId: string): Promise<InsuranceStatus | null> {
+    const ins = this.insurance.get(professionalId);
+    if (!ins) return null;
+    ins.state = "Verified";
+    return ins;
+  }
+
+  async getInsuranceStatus(professionalId: string): Promise<InsuranceStatus> {
+    return this.insurance.get(professionalId) ?? { state: "NotProvided", validUntil: null };
   }
 
   async getShift(id: string): Promise<ShiftRecord | null> {

@@ -42,6 +42,7 @@ interface PostShiftDto {
   compensation: number; // integer satang
   category?: string;
   urgency?: ShiftUrgency;
+  insuranceRequired?: boolean;
   actorRole?: Role;
   shiftStartInHours?: number;
 }
@@ -100,6 +101,29 @@ export class MarketplaceController {
   async verifyProfessional(@Param("id") id: string) {
     const r = await this.repo.verifyProfessional(id);
     if (!r) throw new NotFoundException("professional not found");
+    return r;
+  }
+
+  @Post("professionals/:id/insurance")
+  async submitInsurance(
+    @Param("id") professionalId: string,
+    @Body() dto: { validUntilHours?: number },
+  ) {
+    // PRO-01: optional insurance evidence (VER-05). validUntil relative for convenience.
+    const validUntil = Date.now() + (dto.validUntilHours ?? 24 * 365) * HOUR_MS;
+    return this.repo.submitInsurance(professionalId, validUntil);
+  }
+
+  @Get("professionals/:id/insurance")
+  async insuranceStatus(@Param("id") professionalId: string) {
+    // VER-05 status: Verified | UnderReview | Expired | Unverified | NotProvided.
+    return this.repo.getInsuranceStatus(professionalId);
+  }
+
+  @Post("ops/professionals/:id/verify-insurance")
+  async verifyInsurance(@Param("id") professionalId: string) {
+    const r = await this.repo.verifyInsurance(professionalId);
+    if (!r) throw new NotFoundException("no insurance evidence submitted");
     return r;
   }
 
@@ -192,6 +216,7 @@ export class MarketplaceController {
       compensation: dto.compensation,
       urgency,
       shiftStart,
+      insuranceRequired: dto.insuranceRequired ?? false,
     });
     return { shiftId, state: "Published", urgent: urgency === "urgent" };
   }
@@ -379,8 +404,8 @@ export class MarketplaceController {
       professionalActiveVerified: eligibility?.professionalVerified ?? false,
       licenceValidThroughShiftEnd: true,
       specialtyValidThroughShiftEnd: true,
-      insuranceRequired: false,
-      insuranceValidThroughShiftEnd: true,
+      insuranceRequired: eligibility?.insuranceRequired ?? false,
+      insuranceValidThroughShiftEnd: eligibility?.insuranceValidThroughShiftEnd ?? true,
       clinicServiceSupported: true,
       shiftCategorySupported: true,
       hasSuspension: false,

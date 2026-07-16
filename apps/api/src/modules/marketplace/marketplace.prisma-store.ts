@@ -41,6 +41,7 @@ import type {
   ProfessionalSearchResult,
   MessageRecord,
   BookingContact,
+  InsuranceStatus,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -135,13 +136,55 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async getOfferEligibility(offerId: string): Promise<OfferEligibility | null> {
     const offer = await prisma.offer.findUnique({
       where: { id: offerId },
-      include: { shift: { include: { workspace: true } }, professional: true },
+      include: {
+        shift: { include: { workspace: true } },
+        professional: { include: { insurance: true } },
+      },
     });
     if (!offer) return null;
+    const insuranceRequired = offer.shift.insuranceRequired;
+    const shiftEnd = offer.shift.endsAt.getTime();
+    const insuranceValid =
+      !insuranceRequired ||
+      offer.professional.insurance.some(
+        (i) => i.state === "Verified" && i.validUntil !== null && i.validUntil.getTime() >= shiftEnd,
+      );
     return {
       clinicVerified: offer.shift.workspace.verification === "Verified",
       professionalVerified: offer.professional.verification === "Verified",
+      insuranceRequired,
+      insuranceValidThroughShiftEnd: insuranceValid,
     };
+  }
+
+  async submitInsurance(professionalId: string, validUntil: number): Promise<InsuranceStatus> {
+    const existing = await prisma.insuranceEvidence.findFirst({ where: { professionalId } });
+    const rec = existing
+      ? await prisma.insuranceEvidence.update({
+          where: { id: existing.id },
+          data: { state: "Submitted", validUntil: new Date(validUntil) },
+        })
+      : await prisma.insuranceEvidence.create({
+          data: { professionalId, state: "Submitted", validUntil: new Date(validUntil) },
+        });
+    return { state: rec.state, validUntil: rec.validUntil ? rec.validUntil.getTime() : null };
+  }
+
+  async verifyInsurance(professionalId: string): Promise<InsuranceStatus | null> {
+    const ins = await prisma.insuranceEvidence.findFirst({ where: { professionalId } });
+    if (!ins) return null;
+    if (ins.state !== "Verified") {
+      const next = advanceVerification(ins.state as VerificationState, "Verified");
+      await prisma.insuranceEvidence.update({ where: { id: ins.id }, data: { state: next } });
+    }
+    const fresh = await prisma.insuranceEvidence.findUnique({ where: { id: ins.id } });
+    return { state: fresh!.state, validUntil: fresh!.validUntil ? fresh!.validUntil.getTime() : null };
+  }
+
+  async getInsuranceStatus(professionalId: string): Promise<InsuranceStatus> {
+    const ins = await prisma.insuranceEvidence.findFirst({ where: { professionalId } });
+    if (!ins) return { state: "NotProvided", validUntil: null };
+    return { state: ins.state, validUntil: ins.validUntil ? ins.validUntil.getTime() : null };
   }
 
   async postShift(input: ShiftPostInput): Promise<{ shiftId: string }> {
@@ -155,6 +198,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         startsAt: new Date(input.shiftStart),
         endsAt: new Date(input.shiftStart + SHIFT_LENGTH_MS),
         compensation: input.compensation,
+        insuranceRequired: input.insuranceRequired,
         termsLocked: false,
       },
     });

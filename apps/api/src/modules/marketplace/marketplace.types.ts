@@ -87,6 +87,13 @@ export interface EntityRef {
 export interface OfferEligibility {
   clinicVerified: boolean;
   professionalVerified: boolean;
+  insuranceRequired: boolean; // VER-05: does the shift require insurance?
+  insuranceValidThroughShiftEnd: boolean;
+}
+
+export interface InsuranceStatus {
+  state: string; // VER-05: Verified | UnderReview | Expired | Unverified | NotProvided
+  validUntil: number | null; // epoch ms UTC
 }
 
 // ----- Reviews (REV-01..05) -----
@@ -159,6 +166,7 @@ export interface ShiftPostInput {
   compensation: number; // integer satang
   urgency: ShiftUrgency;
   shiftStart: number; // epoch ms UTC
+  insuranceRequired: boolean; // VER-05
 }
 
 export interface ShiftRecord {
@@ -274,6 +282,11 @@ export interface MarketplaceRepository {
   clinicVerification(id: string): Promise<VerificationState | null>;
   /** Verification facts for an offer's clinic and professional (§6.3). */
   getOfferEligibility(offerId: string): Promise<OfferEligibility | null>;
+
+  // --- Insurance evidence (VER-05) ---
+  submitInsurance(professionalId: string, validUntil: number): Promise<InsuranceStatus>;
+  verifyInsurance(professionalId: string): Promise<InsuranceStatus | null>;
+  getInsuranceStatus(professionalId: string): Promise<InsuranceStatus>;
 
   // --- Shift posting & discovery (APP-01, OFF-01/02) ---
   postShift(input: ShiftPostInput): Promise<{ shiftId: string }>;

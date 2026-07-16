@@ -242,6 +242,7 @@ model Shift {
   startsAt      DateTime @db.Timestamptz(3) // UTC; one position, fixed schedule (SHF-01)
   endsAt        DateTime @db.Timestamptz(3)
   compensation  Int // scheduled compensation, satang (SHF-01)
+  insuranceRequired Boolean     @default(false) // VER-05: shift requires valid insurance
   termsLocked   Boolean         @default(false) // SHF-04
   createdAt     DateTime        @default(now()) @db.Timestamptz(3)
   applications  Application[]
