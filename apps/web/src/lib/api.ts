@@ -15,6 +15,15 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export interface Checkout {
   compensation: number;
   serviceFee: number;
@@ -87,6 +96,27 @@ export const completeBooking = (bookingId: string) =>
 
 export const acceptCompletion = (bookingId: string) =>
   post<Payout>(`/bookings/${bookingId}/accept-completion`);
+
+export interface ReviewResult {
+  id: string;
+  published: boolean;
+}
+
+export interface Rating {
+  subjectId: string;
+  hasRating: boolean;
+  count?: number;
+  average?: number;
+  note?: string;
+}
+
+export const createReview = (
+  bookingId: string,
+  input: { by: "clinic" | "professional"; score: number; text?: string },
+) => post<ReviewResult>(`/bookings/${bookingId}/reviews`, input);
+
+export const getRating = (professionalId: string) =>
+  get<Rating>(`/professionals/${professionalId}/rating`);
 
 /** Format integer satang as THB, e.g. 1_120_000 -> "฿11,200.00". */
 export const formatThb = (s: number) =>

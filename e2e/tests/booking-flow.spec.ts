@@ -32,7 +32,7 @@ test("booking flow confirms a booking with the correct checkout total", async ({
   await expect(steps.nth(4)).toContainText("Booking confirmed");
 });
 
-test("completion pays out the professional's compensation", async ({ page }) => {
+test("completion pays out, then both parties review", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();
   await expect(page.getByTestId("booking-status")).toHaveText("Booking Confirmed");
@@ -41,4 +41,9 @@ test("completion pays out the professional's compensation", async ({ page }) => 
   await expect(page.getByTestId("payout-status")).toHaveText("Paid out");
   // Professional receives the 10,000 THB compensation (fee stays with the platform).
   await expect(page.getByTestId("payout-amount")).toHaveText("฿10,000.00");
+
+  // Both parties review; the pair publishes (REV-03). Rating stays hidden until 3 (REV-04).
+  await page.getByTestId("run-reviews").click();
+  await expect(page.getByTestId("reviews-status")).toHaveText("Reviews published");
+  await expect(page.getByTestId("rating")).toContainText("needs 3 reviews");
 });

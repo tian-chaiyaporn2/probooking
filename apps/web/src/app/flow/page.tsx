@@ -11,9 +11,12 @@ import {
   confirmOffer,
   completeBooking,
   acceptCompletion,
+  createReview,
+  getRating,
   formatThb,
   type Checkout,
   type Payout,
+  type Rating,
 } from "../../lib/api";
 
 type Step = { label: string; detail: string };
@@ -27,17 +30,24 @@ export default function FlowPage() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [professionalId, setProfessionalId] = useState<string | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
+  const [reviewsPublished, setReviewsPublished] = useState(false);
+  const [rating, setRating] = useState<Rating | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [payingOut, setPayingOut] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
 
   async function run() {
     setRunning(true);
     setSteps([]);
     setCheckout(null);
     setBookingId(null);
+    setProfessionalId(null);
     setPayout(null);
+    setReviewsPublished(false);
+    setRating(null);
     setError(null);
     const log = (label: string, detail: string) =>
       setSteps((s) => [...s, { label, detail }]);
@@ -60,6 +70,7 @@ export default function FlowPage() {
 
       await verifyClinic(clinic.id);
       await verifyProfessional(pro.id);
+      setProfessionalId(pro.id);
       log("Operations verified", "clinic + professional → Verified");
 
       const offer = await createOffer({
@@ -98,12 +109,30 @@ export default function FlowPage() {
     }
   }
 
+  async function runReviews() {
+    if (!bookingId || !professionalId) return;
+    setReviewing(true);
+    setError(null);
+    try {
+      // Both parties review; the second submission publishes the pair (REV-03).
+      await createReview(bookingId, { by: "professional", score: 5 });
+      const r = await createReview(bookingId, { by: "clinic", score: 5 });
+      setReviewsPublished(r.published);
+      setRating(await getRating(professionalId)); // hasRating false until 3 reviews (REV-04)
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setReviewing(false);
+    }
+  }
+
   return (
     <main style={{ maxWidth: 640, margin: "3rem auto", padding: "0 1.5rem", fontFamily: "system-ui" }}>
       <h1>ProBooking — booking flow</h1>
       <p style={{ color: "#555" }}>
         Onboard and verify a clinic and professional, create a binding offer, accept it
-        (soft hold), confirm the booking, then complete it and pay out the professional.
+        (soft hold), confirm the booking, complete it and pay out the professional, then
+        leave reviews.
       </p>
 
       <button
@@ -181,6 +210,41 @@ export default function FlowPage() {
               </div>
             )}
           </div>
+
+          {payout && (
+            <div style={{ marginTop: "1rem" }}>
+              {!reviewsPublished ? (
+                <button
+                  data-testid="run-reviews"
+                  onClick={runReviews}
+                  disabled={reviewing}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: 8,
+                    border: "1px solid #849",
+                    background: reviewing ? "#eee" : "#849",
+                    color: reviewing ? "#666" : "#fff",
+                    cursor: reviewing ? "default" : "pointer",
+                  }}
+                >
+                  {reviewing ? "Submitting…" : "Leave reviews (both parties)"}
+                </button>
+              ) : (
+                <div data-testid="reviews">
+                  <span data-testid="reviews-status" style={{ fontWeight: 600, color: "#0a5" }}>
+                    Reviews published
+                  </span>
+                  {rating && (
+                    <div data-testid="rating" style={{ color: "#555", marginTop: "0.25rem" }}>
+                      {rating.hasRating
+                        ? `Professional rating: ${rating.average} (${rating.count} reviews)`
+                        : "Professional rating: not shown yet (needs 3 reviews)"}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
