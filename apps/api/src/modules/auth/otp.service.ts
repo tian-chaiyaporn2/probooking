@@ -6,6 +6,8 @@ import { Injectable, Logger } from "@nestjs/common";
  */
 /** §7.3 rate limiting: minimum seconds between OTP requests for one phone. */
 const OTP_MIN_INTERVAL_MS = 30 * 1000;
+/** Max wrong verify attempts before the current code is burned (brute-force guard). */
+const OTP_MAX_ATTEMPTS = 5;
 
 /** Thrown when a phone requests OTP codes too quickly (mapped to HTTP 429). */
 export class OtpRateLimitError extends Error {
@@ -17,7 +19,7 @@ export class OtpRateLimitError extends Error {
 @Injectable()
 export class OtpService {
   private readonly logger = new Logger("Otp");
-  private readonly codes = new Map<string, { code: string; exp: number }>();
+  private readonly codes = new Map<string, { code: string; exp: number; attempts: number }>();
   private readonly lastRequestAt = new Map<string, number>();
 
   request(phone: string): string {
@@ -30,15 +32,23 @@ export class OtpService {
     this.lastRequestAt.set(phone, now);
     // Deterministic in dev so the flow is testable; random + SMS in production.
     const code = "123456";
-    this.codes.set(phone, { code, exp: now + 5 * 60 * 1000 });
+    this.codes.set(phone, { code, exp: now + 5 * 60 * 1000, attempts: 0 });
     this.logger.log(`OTP for ${phone}: ${code}`);
     return code;
   }
 
   verify(phone: string, code: string): boolean {
     const rec = this.codes.get(phone);
-    if (!rec || rec.exp < Date.now() || rec.code !== code) return false;
-    this.codes.delete(phone);
-    return true;
+    if (!rec || rec.exp < Date.now()) return false;
+    if (rec.code === code) {
+      this.codes.delete(phone); // single-use
+      return true;
+    }
+    // Brute-force guard: burn the code after too many wrong attempts, forcing a re-request.
+    if (++rec.attempts >= OTP_MAX_ATTEMPTS) {
+      this.codes.delete(phone);
+      this.logger.warn(`OTP for ${phone} burned after ${OTP_MAX_ATTEMPTS} failed attempts`);
+    }
+    return false;
   }
 }

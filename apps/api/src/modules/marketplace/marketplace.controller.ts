@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   Header,
@@ -14,6 +15,8 @@ import {
 import { AuthGuard, Roles, CurrentUser } from "../auth/auth.guard.js";
 import type { TokenPayload } from "../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "./privacy.util.js";
+import { validateBody } from "./validate.util.js";
+import { isConflict } from "./errors.util.js";
 import {
   advanceOffer,
   advanceBooking,
@@ -81,23 +84,37 @@ export class MarketplaceController {
 
   @Post("clinics")
   async registerClinic(
-    @Body() dto: { branchName: string; licenceNo: string; address: string; ownerPhone: string },
+    @Body() raw: { branchName: string; licenceNo: string; address: string; ownerPhone: string },
   ) {
+    const dto = validateBody<typeof raw>(raw, {
+      branchName: { type: "string", maxLen: 200 },
+      licenceNo: { type: "string", maxLen: 100 },
+      address: { type: "string", maxLen: 500 },
+      ownerPhone: { type: "string", maxLen: 32 },
+    });
     try {
       return await this.repo.registerClinic(dto);
-    } catch {
-      throw new BadRequestException("could not register clinic (duplicate owner phone?)");
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictException("a clinic with that owner phone already exists");
+      throw e; // real infra failure — surface as 500, don't mask as a business error
     }
   }
 
   @Post("professionals")
   async registerProfessional(
-    @Body() dto: { displayName: string; profession: string; phone: string; payoutRef: string },
+    @Body() raw: { displayName: string; profession: string; phone: string; payoutRef: string },
   ) {
+    const dto = validateBody<typeof raw>(raw, {
+      displayName: { type: "string", maxLen: 200 },
+      profession: { type: "string", enum: ["physician", "dentist"] },
+      phone: { type: "string", maxLen: 32 },
+      payoutRef: { type: "string", maxLen: 100 },
+    });
     try {
       return await this.repo.registerProfessional(dto);
-    } catch {
-      throw new BadRequestException("could not register professional (duplicate phone?)");
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictException("a professional with that phone already exists");
+      throw e;
     }
   }
 
@@ -198,10 +215,14 @@ export class MarketplaceController {
 
   // ----- Booking messages (MSG-01/02) -----
   @Post("bookings/:id/messages")
-  async postMessage(@Param("id") id: string, @Body() dto: { senderId: string; body: string }) {
+  async postMessage(@Param("id") id: string, @Body() raw: { senderId: string; body: string }) {
+    const dto = validateBody<typeof raw>(raw, {
+      senderId: { type: "string", maxLen: 64 },
+      body: { type: "string", maxLen: 2000 },
+    });
     await this.requireBooking(id);
     // MSG-01: plain text only, no attachments.
-    const body = (dto.body ?? "").trim();
+    const body = dto.body.trim();
     if (!body) throw new BadRequestException("message body required");
     if (body.length > 2000) throw new BadRequestException("message too long");
     // §7.3: patient data is prohibited in messages — warn and reject on obvious IDs.
@@ -312,28 +333,31 @@ export class MarketplaceController {
   }
 
   @Post("shifts/:id/apply")
-  async apply(@Param("id") shiftId: string, @Body() dto: { professionalId: string }) {
+  async apply(@Param("id") shiftId: string, @Body() raw: { professionalId: string }) {
+    const dto = validateBody<typeof raw>(raw, { professionalId: { type: "string", maxLen: 64 } });
     // APP-01: applications are non-binding and reserve neither party.
-    const shift = await this.requireOpenShift(shiftId);
-    void shift;
+    await this.requireOpenShift(shiftId);
     try {
       const a = await this.repo.applyToShift(shiftId, dto.professionalId);
       return { id: a.id, state: "Submitted" };
-    } catch {
-      throw new BadRequestException("already applied, or invalid professional");
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictException("already applied to this shift");
+      throw e;
     }
   }
 
   @Post("shifts/:id/invite")
-  async invite(@Param("id") shiftId: string, @Body() dto: { professionalId: string }) {
-    const shift = await this.repo.getShift(shiftId);
-    if (!shift) throw new NotFoundException("shift not found");
+  async invite(@Param("id") shiftId: string, @Body() raw: { professionalId: string }) {
+    const dto = validateBody<typeof raw>(raw, { professionalId: { type: "string", maxLen: 64 } });
+    // A professional can only be invited to a shift that is still open (consistency with apply/offer).
+    await this.requireOpenShift(shiftId);
     try {
       const i = await this.repo.inviteToShift(shiftId, dto.professionalId);
       await this.notifications.sms(dto.professionalId, "invited", { type: "Shift", id: shiftId });
       return { id: i.id, state: "Sent" };
-    } catch {
-      throw new BadRequestException("invalid professional");
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictException("already invited to this shift");
+      throw e;
     }
   }
 
@@ -376,8 +400,9 @@ export class MarketplaceController {
         sentAt: now,
         expiresAt,
       });
-    } catch {
-      throw new BadRequestException("could not create offer");
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictException("shift already has an active offer (OFF-02)");
+      throw e;
     }
     // NOT-01: notify the professional (SMS covers offers near expiry).
     await this.notifications.sms(dto.professionalId, "offer_sent", { type: "Offer", id: offer.id });
@@ -703,8 +728,25 @@ export class MarketplaceController {
   @Post("bookings/:id/cancel")
   async cancel(
     @Param("id") id: string,
-    @Body() dto: { actor: CancelActor; reason: CancelReason; hoursBeforeStart?: number; arrived?: boolean },
+    @Body() raw: { actor: CancelActor; reason: CancelReason; hoursBeforeStart?: number; arrived?: boolean },
   ) {
+    const dto = validateBody<typeof raw>(raw, {
+      actor: { type: "string", enum: ["clinic", "professional"] },
+      reason: {
+        type: "string",
+        enum: [
+          "ordinary",
+          "clinic_unavailable_after_arrival",
+          "force_majeure",
+          "safety",
+          "credential",
+          "platform_or_provider_failure",
+          "partial_work",
+        ],
+      },
+      hoursBeforeStart: { type: "number", optional: true, min: 0 },
+      arrived: { type: "boolean", optional: true },
+    });
     const booking = await this.requireBooking(id);
     // Idempotent: a cancelled booking is terminal for this action.
     if (booking.state === "Cancelled") {
@@ -781,8 +823,13 @@ export class MarketplaceController {
   @Post("bookings/:id/reviews")
   async createReview(
     @Param("id") id: string,
-    @Body() dto: { by: "clinic" | "professional"; score: number; tags?: string[]; text?: string },
+    @Body() rawBody: { by: "clinic" | "professional"; score: number; tags?: string[]; text?: string },
   ) {
+    const dto = validateBody<typeof rawBody>(rawBody, {
+      by: { type: "string", enum: ["clinic", "professional"] },
+      score: { type: "number", int: true, min: 1, max: 5 },
+      text: { type: "string", optional: true, maxLen: 2000 },
+    });
     const booking = await this.requireBooking(id);
     // REV-01/05: only a completed paid booking creates review rights (cancelled or
     // unfinished bookings never reach ServiceCompleted, so they earn no reputation).
@@ -790,9 +837,6 @@ export class MarketplaceController {
       throw new BadRequestException(
         `booking is ${booking.state}; reviews require a completed booking`,
       );
-    }
-    if (!Number.isInteger(dto.score) || dto.score < 1 || dto.score > 5) {
-      throw new BadRequestException("score must be an integer 1..5");
     }
     // §7.3: patient data is prohibited in reviews.
     if (dto.text && containsProhibitedPatientData(dto.text)) {
@@ -811,8 +855,9 @@ export class MarketplaceController {
         ...(dto.text !== undefined ? { text: dto.text } : {}),
       });
       return { id: r.id, published: r.published };
-    } catch {
-      throw new BadRequestException("this party has already reviewed this booking");
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictException("this party has already reviewed this booking");
+      throw e;
     }
   }
 
