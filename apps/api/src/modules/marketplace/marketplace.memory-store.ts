@@ -20,6 +20,8 @@ import type {
   ReviewResult,
   NotificationInput,
   OpenShift,
+  CaseSummary,
+  PendingVerification,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -241,6 +243,30 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async recordNotification(input: NotificationInput): Promise<void> {
     // In-memory: notifications aren't persisted for inspection; the mock port logs them.
     void input;
+  }
+
+  async listOpenCases(): Promise<CaseSummary[]> {
+    const out: CaseSummary[] = [];
+    for (const [key, c] of this.supportCases) {
+      if (c.state === "Resolved") continue;
+      out.push({
+        id: c.id,
+        kind: key.slice(c.bookingId.length + 1), // key is `${bookingId}:${kind}`
+        state: c.state,
+        refId: c.bookingId,
+        subject: "",
+      });
+    }
+    return out;
+  }
+
+  async listPendingVerifications(): Promise<PendingVerification[]> {
+    const out: PendingVerification[] = [];
+    for (const [id, v] of this.clinics) if (v === "Submitted") out.push({ kind: "clinic", id, name: "" });
+    for (const [id, v] of this.professionals) {
+      if (v === "Submitted") out.push({ kind: "professional", id, name: "" });
+    }
+    return out;
   }
 
   async suspendCredential(professionalId: string): Promise<boolean> {

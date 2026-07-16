@@ -200,6 +200,17 @@ export class MarketplaceController {
     return { shifts: await this.repo.listOpenShifts() };
   }
 
+  // ----- Operations dashboard (ADM-01) -----
+  @Get("ops/cases")
+  async listCases() {
+    return { cases: await this.repo.listOpenCases() };
+  }
+
+  @Get("ops/pending")
+  async listPending() {
+    return { pending: await this.repo.listPendingVerifications() };
+  }
+
   @Post("offers/:id/accept")
   async accept(@Param("id") id: string) {
     const offer = await this.requireOffer(id);

@@ -22,6 +22,11 @@ export default function Home() {
           → Try the booking flow demo
         </a>
       </p>
+      <p>
+        <a href="/ops" data-testid="ops-link">
+          → Operations dashboard
+        </a>
+      </p>
     </main>
   );
 }

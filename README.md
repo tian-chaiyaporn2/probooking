@@ -29,7 +29,9 @@ probook/
 
 The Phase 0 booking flow (create offer → accept → confirm) lives in
 `apps/api/src/modules/marketplace` (API) and `apps/web/src/app/flow` (web), both
-composing `@probook/domain`.
+composing `@probook/domain`. An **Operations dashboard** (`apps/web/src/app/ops`)
+verifies pending clinics/professionals and resolves credential holds via controlled
+API actions (ADM-01/02).
 
 Why this shape: PRD §7.2 asks for a responsive web app, a modular backend + relational
 DB, background jobs, and low-code internal tools calling controlled APIs — and explicitly

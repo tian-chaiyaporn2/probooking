@@ -30,6 +30,8 @@ import type {
   ReviewResult,
   NotificationInput,
   OpenShift,
+  CaseSummary,
+  PendingVerification,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -469,6 +471,38 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       select: { score: true },
     });
     return aggregateRating(reviews.map((r) => r.score));
+  }
+
+  async listOpenCases(): Promise<CaseSummary[]> {
+    const cases = await prisma.supportCase.findMany({
+      where: { state: { not: "Resolved" } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return cases.map((c) => ({
+      id: c.id,
+      kind: c.kind,
+      state: c.state as CaseSummary["state"],
+      refId: c.refId,
+      subject: c.subject,
+    }));
+  }
+
+  async listPendingVerifications(): Promise<PendingVerification[]> {
+    const clinics = await prisma.clinicWorkspace.findMany({
+      where: { verification: "Submitted" },
+      select: { id: true, branchName: true },
+      take: 50,
+    });
+    const pros = await prisma.professionalProfile.findMany({
+      where: { verification: "Submitted" },
+      select: { id: true, displayName: true },
+      take: 50,
+    });
+    return [
+      ...clinics.map((c) => ({ kind: "clinic" as const, id: c.id, name: c.branchName })),
+      ...pros.map((p) => ({ kind: "professional" as const, id: p.id, name: p.displayName })),
+    ];
   }
 
   async recordNotification(input: NotificationInput): Promise<void> {

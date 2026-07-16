@@ -118,6 +118,26 @@ export const createReview = (
 export const getRating = (professionalId: string) =>
   get<Rating>(`/professionals/${professionalId}/rating`);
 
+// ----- Operations dashboard -----
+export interface CaseSummary {
+  id: string;
+  kind: string;
+  state: string;
+  refId: string | null;
+  subject: string;
+}
+
+export interface PendingVerification {
+  kind: "clinic" | "professional";
+  id: string;
+  name: string;
+}
+
+export const getOpsCases = () => get<{ cases: CaseSummary[] }>("/ops/cases");
+export const getOpsPending = () => get<{ pending: PendingVerification[] }>("/ops/pending");
+export const resolveHold = (bookingId: string) =>
+  post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`);
+
 /** Format integer satang as THB, e.g. 1_120_000 -> "฿11,200.00". */
 export const formatThb = (s: number) =>
   `฿${(s / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

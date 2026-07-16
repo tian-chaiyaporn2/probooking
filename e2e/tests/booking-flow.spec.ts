@@ -32,6 +32,22 @@ test("booking flow confirms a booking with the correct checkout total", async ({
   await expect(steps.nth(4)).toContainText("Booking confirmed");
 });
 
+test("ops dashboard verifies a pending clinic", async ({ page }) => {
+  const uniq = `${Date.now()}`;
+  // Register a clinic (lands in Submitted) directly against the API.
+  const res = await page.request.post("http://localhost:4000/clinics", {
+    data: { branchName: `Ops Test ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66ops${uniq}` },
+  });
+  const clinic = await res.json();
+
+  await page.goto("/ops");
+  const row = page.getByTestId(`pending-${clinic.id}`);
+  await expect(row).toBeVisible();
+  await row.getByTestId("verify-btn").click();
+  // After verifying, the clinic leaves the pending list.
+  await expect(page.getByTestId(`pending-${clinic.id}`)).toHaveCount(0);
+});
+
 test("completion pays out, then both parties review", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();

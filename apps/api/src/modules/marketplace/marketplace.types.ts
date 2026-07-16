@@ -77,6 +77,21 @@ export interface ReviewResult {
   published: boolean;
 }
 
+// ----- Operations dashboard (ADM-01) -----
+export interface CaseSummary {
+  id: string;
+  kind: string;
+  state: CaseState;
+  refId: string | null;
+  subject: string;
+}
+
+export interface PendingVerification {
+  kind: "clinic" | "professional";
+  id: string;
+  name: string;
+}
+
 // ----- Notifications (NOT-01) -----
 export type NotificationChannel = "email" | "sms";
 
@@ -251,6 +266,10 @@ export interface MarketplaceRepository {
   holdBooking(bookingId: string, reason: string): Promise<BookingDetail | null>;
   /** Clear a booking's Hold after Operations review. */
   resolveHold(bookingId: string): Promise<BookingDetail | null>;
+
+  // --- Operations dashboard (ADM-01) ---
+  listOpenCases(): Promise<CaseSummary[]>;
+  listPendingVerifications(): Promise<PendingVerification[]>;
 }
 
 /** DI token for the repository. */
