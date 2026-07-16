@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   getReconciliation,
   getDevToken,
@@ -9,6 +9,10 @@ import {
   formatThb,
   type Reconciliation,
 } from "../../lib/api";
+import { btn, Stat } from "../../lib/ui";
+import { th } from "../../lib/strings";
+
+const MAX_ROWS = 25;
 
 /**
  * Finance dashboard (ADM-01, PAY-11). Reconciles each payment order's events against
@@ -18,17 +22,22 @@ import {
 export default function FinancePage() {
   const [data, setData] = useState<Reconciliation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const tokenRef = useRef<string | null>(null);
+
+  const ensureFinanceToken = useCallback(async () => {
+    if (!tokenRef.current) tokenRef.current = (await getDevToken("finance")).token;
+    setAuthToken(tokenRef.current);
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const { token } = await getDevToken("finance");
-      setAuthToken(token);
+      await ensureFinanceToken();
       setData(await getReconciliation());
     } catch (e) {
       setError((e as Error).message);
     }
-  }, []);
+  }, [ensureFinanceToken]);
 
   useEffect(() => {
     void load();
@@ -37,40 +46,46 @@ export default function FinancePage() {
   async function exportCsv() {
     setError(null);
     try {
-      const { token } = await getDevToken("finance");
-      setAuthToken(token);
+      await ensureFinanceToken();
       const csv = await fetchFinanceExport();
+      // Append to the DOM before clicking (some browsers require it) and revoke on a
+      // later tick so the download isn't aborted mid-read.
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;
       a.download = "finance-export.csv";
+      a.style.display = "none";
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (e) {
       setError((e as Error).message);
     }
   }
 
   const s = data?.summary;
+  const rows = data?.rows ?? [];
+  const shown = rows.slice(0, MAX_ROWS);
 
   return (
     <main style={{ maxWidth: 820, margin: "3rem auto", padding: "0 1.5rem", fontFamily: "system-ui" }}>
-      <h1>Finance — reconciliation</h1>
+      <h1>{th.finance.title}</h1>
       <button data-testid="refresh" onClick={() => void load()} style={btn("#555")}>
-        Refresh
+        {th.common.refresh}
       </button>{" "}
       <button data-testid="export-csv" onClick={() => void exportCsv()} style={btn("#06b")}>
-        Export CSV (REP-02)
+        {th.finance.exportCsv}
       </button>
 
       {s && (
         <div data-testid="fin-summary" style={{ marginTop: "1rem", display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
-          <Stat label="Payment orders" value={String(s.count)} testid="fin-count" />
-          <Stat label="Captured" value={formatThb(s.captured)} />
-          <Stat label="Payouts" value={formatThb(s.payouts)} />
-          <Stat label="Refunds" value={formatThb(s.refunds)} />
+          <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
+          <Stat label={th.finance.captured} value={formatThb(s.captured)} />
+          <Stat label={th.finance.payouts} value={formatThb(s.payouts)} />
+          <Stat label={th.finance.refunds} value={formatThb(s.refunds)} />
           <Stat
-            label="Exceptions"
+            label={th.finance.exceptions}
             value={String(s.exceptions)}
             testid="fin-exceptions"
             color={s.exceptions === 0 ? "#0a5" : "#c00"}
@@ -81,16 +96,16 @@ export default function FinancePage() {
       <table style={{ marginTop: "1.5rem", borderCollapse: "collapse", width: "100%", fontSize: "0.85rem" }}>
         <thead>
           <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
-            <th style={cell}>Booking</th>
-            <th style={cell}>Captured</th>
-            <th style={cell}>Payouts</th>
-            <th style={cell}>Refunds</th>
-            <th style={cell}>Undistributed</th>
-            <th style={cell}>Conserved</th>
+            <th scope="col" style={cell}>{th.finance.colBooking}</th>
+            <th scope="col" style={cell}>{th.finance.captured}</th>
+            <th scope="col" style={cell}>{th.finance.payouts}</th>
+            <th scope="col" style={cell}>{th.finance.refunds}</th>
+            <th scope="col" style={cell}>{th.finance.colUndistributed}</th>
+            <th scope="col" style={cell}>{th.finance.colConserved}</th>
           </tr>
         </thead>
         <tbody data-testid="reconciliation-rows">
-          {(data?.rows ?? []).slice(0, 25).map((r) => (
+          {shown.map((r) => (
             <tr key={r.paymentOrderId} style={{ borderBottom: "1px solid #eee" }}>
               <td style={cell}><code>{(r.bookingId ?? "—").slice(0, 8)}</code></td>
               <td style={cell}>{formatThb(r.captured)}</td>
@@ -102,35 +117,19 @@ export default function FinancePage() {
           ))}
         </tbody>
       </table>
+      {rows.length > MAX_ROWS && (
+        <p data-testid="rows-truncated" style={{ color: "#888", fontSize: "0.8rem" }}>
+          {th.finance.showing(shown.length, rows.length)}
+        </p>
+      )}
 
       {error && (
         <p data-testid="error" style={{ color: "#c00" }}>
-          Error: {error}
+          {th.common.error}: {error}
         </p>
       )}
     </main>
   );
 }
 
-function Stat({ label, value, testid, color }: { label: string; value: string; testid?: string; color?: string }) {
-  return (
-    <div>
-      <div style={{ fontSize: "0.75rem", color: "#888" }}>{label}</div>
-      <div data-testid={testid} style={{ fontWeight: 600, color: color ?? "#222" }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-const btn = (color: string): React.CSSProperties => ({
-  padding: "0.2rem 0.7rem",
-  borderRadius: 6,
-  border: `1px solid ${color}`,
-  background: color,
-  color: "#fff",
-  cursor: "pointer",
-  fontSize: "0.85rem",
-});
-
-const cell: React.CSSProperties = { padding: "0.3rem 0.6rem" };
+const cell: CSSProperties = { padding: "0.3rem 0.6rem" };
