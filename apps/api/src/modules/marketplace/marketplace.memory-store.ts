@@ -34,6 +34,9 @@ import type {
   InsuranceStatus,
   Reconciliation,
   VerifiedProfile,
+  BookingHistoryRow,
+  FinanceExportRow,
+  MarketplaceMetrics,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
@@ -505,6 +508,77 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async reconcile(): Promise<Reconciliation> {
     // In-memory keeps no financial-event ledger; reconciliation is a DB-store concern.
     return { rows: [], summary: { count: 0, captured: 0, payouts: 0, refunds: 0, exceptions: 0 } };
+  }
+
+  async listPartyBookings(party: "clinic" | "professional", id: string): Promise<BookingHistoryRow[]> {
+    const rows: BookingHistoryRow[] = [];
+    for (const b of this.bookings.values()) {
+      const mine = party === "professional" ? b.professionalId === id : b.clinicWorkspaceId === id;
+      if (!mine) continue;
+      rows.push({
+        bookingId: b.id,
+        shiftId: b.shiftId,
+        counterpartyId: party === "professional" ? b.clinicWorkspaceId : b.professionalId,
+        state: b.state,
+        compensation: b.compensation,
+        serviceFee: b.serviceFee,
+        tax: b.tax,
+        total: b.compensation + b.serviceFee + b.tax,
+        payoutState: b.payoutState,
+      });
+    }
+    return rows;
+  }
+
+  async exportFinancials(): Promise<FinanceExportRow[]> {
+    // Degraded: the in-memory store keeps allocation columns but no timestamped event
+    // ledger, so events are synthesised from the booking's known financial state.
+    const rows: FinanceExportRow[] = [];
+    for (const b of this.bookings.values()) {
+      if (!b.paymentOrderId) continue;
+      const events: FinanceExportRow["events"] = [{ type: "Collection", amount: b.captured, providerRef: null, at: 0 }];
+      if (b.payoutState === "Paid") events.push({ type: "Payout", amount: b.compensation, providerRef: null, at: 0 });
+      rows.push({
+        paymentOrderId: b.paymentOrderId,
+        bookingId: b.id,
+        state: b.state === "Cancelled" ? "Refunded" : "Captured",
+        providerRef: null,
+        captured: b.captured,
+        compensation: b.compensation,
+        serviceFee: b.serviceFee,
+        tax: b.tax,
+        events,
+      });
+    }
+    return rows;
+  }
+
+  async getMetrics(): Promise<MarketplaceMetrics> {
+    const byState = (s: string) => [...this.bookings.values()].filter((b) => b.state === s).length;
+    let captured = 0;
+    let paidOut = 0;
+    for (const b of this.bookings.values()) {
+      captured += b.captured;
+      if (b.payoutState === "Paid") paidOut += b.compensation;
+    }
+    const openCases = [...this.supportCases.values()].filter((c) => c.state !== "Resolved").length;
+    return {
+      shifts: {
+        total: this.shifts.size,
+        open: [...this.shifts.values()].filter((s) => s.state === "Published").length,
+      },
+      offers: { total: this.offers.size },
+      bookings: {
+        total: this.bookings.size,
+        confirmed: byState("Confirmed"),
+        awaitingCompletion: byState("AwaitingCompletion"),
+        completed: byState("ServiceCompleted"),
+        cancelled: byState("Cancelled"),
+        held: [...this.bookings.values()].filter((b) => b.heldAt !== null).length,
+      },
+      cases: { open: openCases },
+      money: { captured, paidOut, refunded: 0, reconciliationExceptions: 0 },
+    };
   }
 
   async listPendingVerifications(): Promise<PendingVerification[]> {

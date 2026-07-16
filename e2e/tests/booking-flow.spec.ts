@@ -118,6 +118,61 @@ test("verified profile separates self-declared claims from verified facts (VER-0
   expect(after.selfDeclared.profession).toBe("dentist");
 });
 
+test("reporting: history, receipt, metrics, and finance CSV export (REP-01..03)", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: Awaited<ReturnType<typeof page.request.get>>) => (await r.json()) as any;
+  const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
+  const fin = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "finance" } }));
+  const opsAuth = { authorization: `Bearer ${ops.token}` };
+  const finAuth = { authorization: `Bearer ${fin.token}` };
+
+  // Drive one booking to payout so the reports have data.
+  const clinic = await j(await page.request.post(`${api}/clinics`, {
+    data: { branchName: `Rep ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66rr${uniq}` },
+  }));
+  await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Rep", profession: "physician", phone: `+66rq${uniq}`, payoutRef: "x-1" },
+  }));
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
+  const shift = await j(await page.request.post(`${api}/shifts`, {
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+  }));
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: pro.id } });
+  const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
+    data: { professionalId: pro.id },
+  }));
+  await page.request.post(`${api}/offers/${offer.id}/accept`);
+  const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`, {
+    data: { prefundingSucceeded: true },
+  }));
+  const bookingId = confirmed.booking.id;
+  await page.request.post(`${api}/bookings/${bookingId}/complete`);
+  await page.request.post(`${api}/bookings/${bookingId}/accept-completion`);
+
+  // REP-01: history + receipt reflect the ฿11,200 checkout and the ฿10,000 payout.
+  const history = await j(await page.request.get(`${api}/professionals/${pro.id}/bookings`));
+  expect(history.bookings.some((b: any) => b.bookingId === bookingId && b.total === 1_120_000)).toBe(true);
+  const receipt = await j(await page.request.get(`${api}/bookings/${bookingId}/receipt`));
+  expect(receipt.checkout.total).toBe(1_120_000);
+  expect(receipt.payout).toEqual({ state: "Paid", amount: 1_000_000 });
+
+  // REP-03: metrics require an ops role; unauth is rejected.
+  expect((await page.request.get(`${api}/ops/metrics`)).status()).toBe(401);
+  const metrics = await j(await page.request.get(`${api}/ops/metrics`, { headers: opsAuth }));
+  expect(metrics.bookings.completed).toBeGreaterThan(0);
+  expect(metrics.money.reconciliationExceptions).toBe(0);
+
+  // REP-02: finance CSV export is finance-guarded and contains the ledger.
+  expect((await page.request.get(`${api}/finance/export`, { headers: opsAuth })).status()).toBe(403);
+  const csvRes = await page.request.get(`${api}/finance/export`, { headers: finAuth });
+  expect(csvRes.headers()["content-type"]).toContain("text/csv");
+  const csv = await csvRes.text();
+  expect(csv.split("\n")[0]).toContain("paymentOrderId");
+  expect(csv).toContain("Payout");
+});
+
 test("completion pays out, then both parties review", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();

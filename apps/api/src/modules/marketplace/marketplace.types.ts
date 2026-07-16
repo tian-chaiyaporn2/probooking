@@ -119,6 +119,49 @@ export interface InsuranceStatus {
   validUntil: number | null; // epoch ms UTC
 }
 
+// ----- Reporting & exports (REP-01..03) -----
+/** REP-01: one row of a party's booking + financial history. */
+export interface BookingHistoryRow {
+  bookingId: string;
+  shiftId: string;
+  counterpartyId: string; // the other party on the booking
+  state: string;
+  compensation: number; // satang
+  serviceFee: number;
+  tax: number;
+  total: number;
+  payoutState: string;
+}
+
+/** REP-02: a payment order's allocation + events for the Finance export. */
+export interface FinanceExportRow {
+  paymentOrderId: string;
+  bookingId: string | null;
+  state: string;
+  providerRef: string | null;
+  captured: number; // satang
+  compensation: number | null;
+  serviceFee: number | null;
+  tax: number | null;
+  events: { type: string; amount: number; providerRef: string | null; at: number }[];
+}
+
+/** REP-03: core marketplace + operations metrics for management. */
+export interface MarketplaceMetrics {
+  shifts: { total: number; open: number };
+  offers: { total: number };
+  bookings: {
+    total: number;
+    confirmed: number;
+    awaitingCompletion: number;
+    completed: number;
+    cancelled: number;
+    held: number;
+  };
+  cases: { open: number };
+  money: { captured: number; paidOut: number; refunded: number; reconciliationExceptions: number };
+}
+
 // ----- Reviews (REV-01..05) -----
 export interface ReviewInput {
   bookingId: string;
@@ -395,6 +438,15 @@ export interface MarketplaceRepository {
 
   /** VER-03: self-declared vs platform-verified profile facts. */
   getProfessionalProfile(id: string): Promise<VerifiedProfile | null>;
+
+  /** REP-01: a party's booking + financial history (most recent first). */
+  listPartyBookings(party: "clinic" | "professional", id: string): Promise<BookingHistoryRow[]>;
+
+  /** REP-02: allocations + events + provider refs for the Finance export. */
+  exportFinancials(): Promise<FinanceExportRow[]>;
+
+  /** REP-03: core marketplace + operations metrics. */
+  getMetrics(): Promise<MarketplaceMetrics>;
 
   // --- Booking messages (MSG-01/02) ---
   postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord>;

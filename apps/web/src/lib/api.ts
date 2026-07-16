@@ -195,6 +195,31 @@ export interface Reconciliation {
 }
 
 export const getReconciliation = () => get<Reconciliation>("/finance/reconciliation");
+
+// ----- Reporting & exports (REP-02/03) -----
+export interface MarketplaceMetrics {
+  shifts: { total: number; open: number };
+  offers: { total: number };
+  bookings: {
+    total: number;
+    confirmed: number;
+    awaitingCompletion: number;
+    completed: number;
+    cancelled: number;
+    held: number;
+  };
+  cases: { open: number };
+  money: { captured: number; paidOut: number; refunded: number; reconciliationExceptions: number };
+}
+
+export const getMetrics = () => get<MarketplaceMetrics>("/ops/metrics");
+
+/** REP-02: fetch the Finance CSV export as text (Authorization header required). */
+export async function fetchFinanceExport(): Promise<string> {
+  const res = await fetch(`${API_BASE}/finance/export`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+  return res.text();
+}
 export const resolveHold = (bookingId: string) =>
   post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`);
 

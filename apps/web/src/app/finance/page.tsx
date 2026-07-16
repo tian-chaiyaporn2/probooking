@@ -5,6 +5,7 @@ import {
   getReconciliation,
   getDevToken,
   setAuthToken,
+  fetchFinanceExport,
   formatThb,
   type Reconciliation,
 } from "../../lib/api";
@@ -33,6 +34,23 @@ export default function FinancePage() {
     void load();
   }, [load]);
 
+  async function exportCsv() {
+    setError(null);
+    try {
+      const { token } = await getDevToken("finance");
+      setAuthToken(token);
+      const csv = await fetchFinanceExport();
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "finance-export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   const s = data?.summary;
 
   return (
@@ -40,6 +58,9 @@ export default function FinancePage() {
       <h1>Finance — reconciliation</h1>
       <button data-testid="refresh" onClick={() => void load()} style={btn("#555")}>
         Refresh
+      </button>{" "}
+      <button data-testid="export-csv" onClick={() => void exportCsv()} style={btn("#06b")}>
+        Export CSV (REP-02)
       </button>
 
       {s && (

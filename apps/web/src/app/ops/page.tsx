@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getOpsPending,
   getOpsCases,
+  getMetrics,
   verifyClinic,
   verifyProfessional,
   resolveHold,
@@ -11,6 +12,7 @@ import {
   setAuthToken,
   type CaseSummary,
   type PendingVerification,
+  type MarketplaceMetrics,
 } from "../../lib/api";
 
 /** Ensure the dashboard holds an operations token before any guarded call. */
@@ -27,6 +29,7 @@ async function ensureOpsToken() {
 export default function OpsPage() {
   const [pending, setPending] = useState<PendingVerification[]>([]);
   const [cases, setCases] = useState<CaseSummary[]>([]);
+  const [metrics, setMetrics] = useState<MarketplaceMetrics | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +39,7 @@ export default function OpsPage() {
       await ensureOpsToken();
       setPending((await getOpsPending()).pending);
       setCases((await getOpsCases()).cases);
+      setMetrics(await getMetrics());
     } catch (e) {
       setError((e as Error).message);
     }
@@ -78,6 +82,21 @@ export default function OpsPage() {
       <button data-testid="refresh" onClick={() => void load()} disabled={busy} style={btn("#555")}>
         Refresh
       </button>
+
+      {metrics && (
+        <div data-testid="ops-metrics" style={{ marginTop: "1rem", display: "flex", gap: "1.25rem", flexWrap: "wrap" }}>
+          <Metric label="Shifts (open)" value={`${metrics.shifts.total} (${metrics.shifts.open})`} />
+          <Metric label="Bookings" value={String(metrics.bookings.total)} />
+          <Metric label="Completed" value={String(metrics.bookings.completed)} />
+          <Metric label="On hold" value={String(metrics.bookings.held)} />
+          <Metric label="Open cases" value={String(metrics.cases.open)} />
+          <Metric
+            label="Recon. exceptions"
+            value={String(metrics.money.reconciliationExceptions)}
+            color={metrics.money.reconciliationExceptions === 0 ? "#0a5" : "#c00"}
+          />
+        </div>
+      )}
 
       <h2 style={{ marginTop: "1.5rem" }}>Pending verifications ({pending.length})</h2>
       <ul data-testid="pending-list" style={{ lineHeight: 1.9, paddingLeft: 0, listStyle: "none" }}>
@@ -125,6 +144,15 @@ export default function OpsPage() {
         </p>
       )}
     </main>
+  );
+}
+
+function Metric({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: "0.72rem", color: "#888" }}>{label}</div>
+      <div style={{ fontWeight: 600, color: color ?? "#222" }}>{value}</div>
+    </div>
   );
 }
 

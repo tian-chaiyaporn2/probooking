@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Inject,
   NotFoundException,
   Param,
@@ -38,6 +39,12 @@ import {
 } from "./marketplace.types.js";
 
 const HOUR_MS = 60 * 60 * 1000;
+
+/** Quote a CSV cell if it contains a comma, quote, or newline (RFC 4180). */
+const csvCell = (v: string | number): string => {
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
 
 interface PostShiftDto {
   clinicWorkspaceId: string;
@@ -388,12 +395,69 @@ export class MarketplaceController {
     return { pending: await this.repo.listPendingVerifications() };
   }
 
+  // REP-03: core marketplace + operations metrics for management (no liquidity dashboard).
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
+  @Get("ops/metrics")
+  async metrics() {
+    return this.repo.getMetrics();
+  }
+
   // ----- Finance (PAY-11 reconciliation) -----
   @UseGuards(AuthGuard)
   @Roles("finance", "administrator")
   @Get("finance/reconciliation")
   async reconciliation() {
     return this.repo.reconcile();
+  }
+
+  // REP-02: Finance exports allocations + events + provider references as CSV.
+  @UseGuards(AuthGuard)
+  @Roles("finance", "administrator")
+  @Header("Content-Type", "text/csv")
+  @Header("Content-Disposition", "attachment; filename=\"finance-export.csv\"")
+  @Get("finance/export")
+  async financeExport() {
+    const rows = await this.repo.exportFinancials();
+    const header = [
+      "paymentOrderId",
+      "bookingId",
+      "orderState",
+      "orderProviderRef",
+      "captured",
+      "compensation",
+      "serviceFee",
+      "tax",
+      "eventType",
+      "eventAmount",
+      "eventProviderRef",
+      "eventAt",
+    ];
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      const base = [
+        r.paymentOrderId,
+        r.bookingId ?? "",
+        r.state,
+        r.providerRef ?? "",
+        r.captured,
+        r.compensation ?? "",
+        r.serviceFee ?? "",
+        r.tax ?? "",
+      ];
+      if (r.events.length === 0) {
+        lines.push([...base, "", "", "", ""].map(csvCell).join(","));
+      } else {
+        for (const e of r.events) {
+          lines.push(
+            [...base, e.type, e.amount, e.providerRef ?? "", e.at ? new Date(e.at).toISOString() : ""]
+              .map(csvCell)
+              .join(","),
+          );
+        }
+      }
+    }
+    return lines.join("\n") + "\n";
   }
 
   @Post("offers/:id/accept")
@@ -733,6 +797,36 @@ export class MarketplaceController {
       return { subjectId: id, hasRating: false, note: "not enough published reviews (need 3)" };
     }
     return { subjectId: id, hasRating: true, ...rating };
+  }
+
+  // ----- Reporting (REP-01): party booking + financial history and receipts -----
+  @Get("professionals/:id/bookings")
+  async professionalBookings(@Param("id") id: string) {
+    return { bookings: await this.repo.listPartyBookings("professional", id) };
+  }
+
+  @Get("clinics/:id/bookings")
+  async clinicBookings(@Param("id") id: string) {
+    return { bookings: await this.repo.listPartyBookings("clinic", id) };
+  }
+
+  @Get("bookings/:id/receipt")
+  async receipt(@Param("id") id: string) {
+    // REP-01: the booking's checkout breakdown + payout statement. A booking exists
+    // only after confirmation, so the captured split is final (BKG-03 snapshots).
+    const b = await this.requireBooking(id);
+    return {
+      bookingId: b.id,
+      shiftId: b.shiftId,
+      state: b.state,
+      checkout: {
+        compensation: b.compensation,
+        serviceFee: b.serviceFee,
+        tax: b.tax,
+        total: b.compensation + b.serviceFee + b.tax,
+      },
+      payout: { state: b.payoutState, amount: b.payoutState === "Paid" ? b.compensation : 0 },
+    };
   }
 
   @Get("professionals/:id/profile")

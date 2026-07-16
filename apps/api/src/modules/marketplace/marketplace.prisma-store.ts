@@ -44,6 +44,9 @@ import type {
   InsuranceStatus,
   Reconciliation,
   VerifiedProfile,
+  BookingHistoryRow,
+  FinanceExportRow,
+  MarketplaceMetrics,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -666,6 +669,101 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       select: { score: true },
     });
     return aggregateRating(reviews.map((r) => r.score));
+  }
+
+  async listPartyBookings(party: "clinic" | "professional", id: string): Promise<BookingHistoryRow[]> {
+    // REP-01: a party's booking + financial history. A clinic owns bookings via its
+    // shifts' workspace; a professional owns them directly.
+    const bookings = await prisma.booking.findMany({
+      where:
+        party === "professional"
+          ? { professionalId: id }
+          : { shift: { workspaceId: id } },
+      include: { shift: true, paymentOrder: { include: { allocation: true } } },
+      orderBy: { confirmedAt: "desc" },
+    });
+    return bookings.map((b) => {
+      const alloc = b.paymentOrder?.allocation;
+      const compensation = alloc?.compensation ?? 0;
+      const serviceFee = alloc?.serviceFee ?? b.feeSnapshot;
+      const tax = alloc?.tax ?? b.taxSnapshot;
+      return {
+        bookingId: b.id,
+        shiftId: b.shiftId,
+        counterpartyId: party === "professional" ? b.shift.workspaceId : b.professionalId,
+        state: b.state,
+        compensation,
+        serviceFee,
+        tax,
+        total: compensation + serviceFee + tax,
+        payoutState: alloc?.payoutState ?? "NotEligible",
+      };
+    });
+  }
+
+  async exportFinancials(): Promise<FinanceExportRow[]> {
+    // REP-02: every payment order with its allocation and event ledger.
+    const orders = await prisma.paymentOrder.findMany({
+      include: { allocation: true, events: { orderBy: { createdAt: "asc" } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return orders.map((o) => ({
+      paymentOrderId: o.id,
+      bookingId: o.bookingId,
+      state: o.state,
+      providerRef: o.providerRef,
+      captured: o.captured,
+      compensation: o.allocation?.compensation ?? null,
+      serviceFee: o.allocation?.serviceFee ?? null,
+      tax: o.allocation?.tax ?? null,
+      events: o.events.map((e) => ({
+        type: e.type,
+        amount: e.amount,
+        providerRef: e.providerRef,
+        at: e.createdAt.getTime(),
+      })),
+    }));
+  }
+
+  async getMetrics(): Promise<MarketplaceMetrics> {
+    // REP-03: core counts + money totals. Reuses reconcile for conserved money math.
+    const [
+      shiftsTotal,
+      shiftsOpen,
+      offersTotal,
+      bookingsTotal,
+      confirmed,
+      awaitingCompletion,
+      completed,
+      cancelled,
+      held,
+      casesOpen,
+      recon,
+    ] = await Promise.all([
+      prisma.shift.count(),
+      prisma.shift.count({ where: { state: "Published" } }),
+      prisma.offer.count(),
+      prisma.booking.count(),
+      prisma.booking.count({ where: { state: "Confirmed" } }),
+      prisma.booking.count({ where: { state: "AwaitingCompletion" } }),
+      prisma.booking.count({ where: { state: "ServiceCompleted" } }),
+      prisma.booking.count({ where: { state: "Cancelled" } }),
+      prisma.booking.count({ where: { heldAt: { not: null } } }),
+      prisma.supportCase.count({ where: { state: { not: "Resolved" } } }),
+      this.reconcile(),
+    ]);
+    return {
+      shifts: { total: shiftsTotal, open: shiftsOpen },
+      offers: { total: offersTotal },
+      bookings: { total: bookingsTotal, confirmed, awaitingCompletion, completed, cancelled, held },
+      cases: { open: casesOpen },
+      money: {
+        captured: recon.summary.captured,
+        paidOut: recon.summary.payouts,
+        refunded: recon.summary.refunds,
+        reconciliationExceptions: recon.summary.exceptions,
+      },
+    };
   }
 
   async getProfessionalProfile(id: string): Promise<VerifiedProfile | null> {
