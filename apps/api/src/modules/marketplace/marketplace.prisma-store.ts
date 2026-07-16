@@ -125,8 +125,13 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     const next = advanceVerification(p.verification as VerificationState, "Verified");
     await prisma.$transaction([
       prisma.professionalProfile.update({ where: { id }, data: { verification: next } }),
-      // VER-04/07: the licence credential and the payout account are confirmed too.
-      prisma.credential.updateMany({ where: { professionalId: id }, data: { state: "Verified" } }),
+      // VER-04/07: confirm the LICENCE credential and the payout account. Other
+      // credential kinds (specialty_evidence, identity) are reviewed separately and
+      // must not be blanket-endorsed here.
+      prisma.credential.updateMany({
+        where: { professionalId: id, kind: "licence" },
+        data: { state: "Verified" },
+      }),
       prisma.payoutAccount.updateMany({ where: { professionalId: id }, data: { verified: true } }),
     ]);
     return { id, verification: next };

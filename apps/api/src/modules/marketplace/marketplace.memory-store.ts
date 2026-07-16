@@ -41,6 +41,7 @@ import type {
   AuditRow,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating } from "@probook/domain";
+import { ConflictError } from "./errors.util.js";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
 
 interface MemReview {
@@ -84,6 +85,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly clinics = new Map<string, VerificationState>();
   private readonly professionals = new Map<string, VerificationState>();
   private readonly professionalProfiles = new Map<string, { displayName: string; profession: string }>();
+  private readonly usedPhones = new Set<string>(); // mirrors the Prisma User.phone unique constraint
   private readonly suspendedCredentials = new Set<string>();
   private readonly reviews: MemReview[] = [];
   private readonly shifts = new Map<string, MemShift>();
@@ -91,13 +93,16 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly availabilityBlocks: (AvailabilityBlock & { professionalId: string })[] = [];
 
   async registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }> {
-    void input;
+    if (this.usedPhones.has(input.ownerPhone)) throw new ConflictError("owner phone already registered");
+    this.usedPhones.add(input.ownerPhone);
     const id = randomUUID();
     this.clinics.set(id, "Submitted");
     return { id, verification: "Submitted", ownerUserId: randomUUID() };
   }
 
   async registerProfessional(input: RegisterProfessionalInput): Promise<EntityRef> {
+    if (this.usedPhones.has(input.phone)) throw new ConflictError("phone already registered");
+    this.usedPhones.add(input.phone);
     const id = randomUUID();
     this.professionals.set(id, "Submitted");
     this.professionalProfiles.set(id, { displayName: input.displayName, profession: input.profession });
@@ -204,7 +209,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
 
   async applyToShift(shiftId: string, professionalId: string): Promise<{ id: string }> {
     if (this.candidates.some((c) => c.shiftId === shiftId && c.professionalId === professionalId && c.via === "application")) {
-      throw new Error("already applied");
+      throw new ConflictError("already applied");
     }
     const id = randomUUID();
     this.candidates.push({ shiftId, professionalId, via: "application", state: "Submitted" });
@@ -212,6 +217,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async inviteToShift(shiftId: string, professionalId: string): Promise<{ id: string }> {
+    if (this.candidates.some((c) => c.shiftId === shiftId && c.professionalId === professionalId && c.via === "invitation")) {
+      throw new ConflictError("already invited");
+    }
     const id = randomUUID();
     this.candidates.push({ shiftId, professionalId, via: "invitation", state: "Sent" });
     return { id };
@@ -226,6 +234,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async createOfferForShift(input: CreateOfferForShiftInput): Promise<OfferRecord> {
     const shift = this.shifts.get(input.shiftId);
     if (!shift) throw new Error("shift not found");
+    // OFF-02: at most one active offer per shift (mirrors the Prisma partial-unique guard).
+    const active = [...this.offers.values()].some(
+      (o) => o.shiftId === input.shiftId && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+    );
+    if (active) throw new ConflictError("shift already has an active offer");
     const record: OfferRecord = {
       id: randomUUID(),
       shiftId: input.shiftId,
@@ -292,12 +305,14 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       const profile = this.professionalProfiles.get(id);
       if (wantProfession && profile?.profession.toLowerCase() !== wantProfession) continue;
       if (filters.specialty) continue; // no specialty data in-memory
+      // Include the real aggregate rating (REV-04) — the store has the review data.
+      const rating = await this.getSubjectRating(id);
       out.push({
         id,
         displayName: profile?.displayName ?? "",
         profession: profile?.profession ?? "",
         specialty: null,
-        rating: null,
+        rating: rating ? rating.average : null,
       });
     }
     return out;
@@ -341,6 +356,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult> {
+    // Idempotency parity with the Prisma Booking.offerId unique constraint: a second
+    // confirm for the same offer must conflict, not fabricate a second booking.
+    if (this.bookingByOffer.has(input.offerId)) throw new ConflictError("booking already exists for this offer");
     const offer = this.offers.get(input.offerId);
     if (offer) offer.state = "Converted"; // atomic with the booking here by construction
     const detail: BookingDetail = {
@@ -370,19 +388,22 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async getBooking(id: string): Promise<BookingDetail | null> {
-    return this.bookings.get(id) ?? null;
+    const detail = this.bookings.get(id);
+    return detail ? { ...detail } : null; // copy: callers must not mutate store state
   }
 
   async markCompletion(id: string): Promise<BookingDetail | null> {
     const detail = this.bookings.get(id);
     if (!detail) return null;
     detail.state = "AwaitingCompletion";
-    return detail;
+    return { ...detail };
   }
 
   async recordPayout(input: PayoutInput): Promise<PayoutResult> {
     const detail = this.bookings.get(input.bookingId);
     if (!detail) throw new Error("booking not found");
+    // Idempotency parity with the Prisma Payout idempotencyKey unique constraint.
+    if (detail.payoutState === "Paid") throw new ConflictError("payout already recorded");
     detail.state = "ServiceCompleted";
     detail.payoutState = "Paid";
     return {
@@ -409,7 +430,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         (r) => r.bookingId === input.bookingId && r.authorId === input.authorId,
       )
     ) {
-      throw new Error("duplicate review");
+      throw new ConflictError("duplicate review");
     }
     const review: MemReview = {
       id: randomUUID(),
@@ -529,7 +550,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         payoutState: b.payoutState,
       });
     }
-    return rows;
+    // Most-recent first, matching the Prisma store's `orderBy: confirmedAt desc`.
+    return rows.reverse();
   }
 
   async exportFinancials(): Promise<FinanceExportRow[]> {
@@ -615,19 +637,21 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const detail = this.bookings.get(bookingId);
     if (!detail) return null;
     if (detail.heldAt === null) detail.heldAt = Date.now();
-    return detail;
+    return { ...detail };
   }
 
   async resolveHold(bookingId: string): Promise<BookingDetail | null> {
     const detail = this.bookings.get(bookingId);
     if (!detail) return null;
     detail.heldAt = null;
-    return detail;
+    return { ...detail };
   }
 
   async cancelBooking(input: CancelInput): Promise<CancelResult> {
     const detail = this.bookings.get(input.bookingId);
     if (!detail) throw new Error("booking not found");
+    // Idempotency parity with the Prisma cancel-refund idempotencyKey unique constraint.
+    if (detail.state === "Cancelled") throw new ConflictError("booking already cancelled");
     detail.state = "Cancelled";
     detail.payoutState = input.payable > 0 ? "Paid" : "NotEligible";
     return {
