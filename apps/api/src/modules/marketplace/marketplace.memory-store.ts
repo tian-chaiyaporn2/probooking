@@ -98,6 +98,13 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly arrivals = new Set<string>(); // bookingIds with a recorded arrival (CAN-03)
   private readonly autoAcceptAt = new Map<string, number>(); // bookingId -> CMP-03 deadline
   private readonly approvals = new Map<string, ApprovalRequestRecord>(); // §6.4 dual control
+  // Money ledger, mirroring Prisma's FinancialEvent rows. Without it `reconcile` returned
+  // hardcoded zeros, so "0 reconciliation exceptions" (PAY-11) was unconditionally true in
+  // every test run — it could not fail no matter what the money paths did.
+  private readonly events: { bookingId: string; type: "Collection" | "Payout" | "Refund"; amount: number; key: string }[] = [];
+  // phone directory, mirroring Prisma's User.phone -> party resolution (MSG-02).
+  private readonly clinicOwnerPhone = new Map<string, string>(); // workspaceId -> phone
+  private readonly professionalPhone = new Map<string, string>(); // professionalId -> phone
   private readonly reviews: MemReview[] = [];
   private readonly shifts = new Map<string, MemShift>();
   private readonly candidates: MemCandidate[] = [];
@@ -117,6 +124,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       ...(this.membershipsByPhone.get(input.ownerPhone) ?? []),
       { workspaceId: id, role: "clinic_owner" },
     ]);
+    this.clinicOwnerPhone.set(id, input.ownerPhone);
     return { id, verification: "Submitted", ownerUserId };
   }
 
@@ -128,6 +136,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     this.professionalProfiles.set(id, { displayName: input.displayName, profession: input.profession });
     this.users.set(input.phone, randomUUID());
     this.professionalByPhone.set(input.phone, id);
+    this.professionalPhone.set(id, input.phone);
     return { id, verification: "Submitted" };
   }
 
@@ -411,6 +420,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     };
     this.bookings.set(detail.id, detail);
     this.bookingByOffer.set(input.offerId, detail.id);
+    this.appendEvent(detail.id, "Collection", input.captured, input.idempotencyKey);
     return { booking: this.toRecord(detail), paymentOrderId: detail.paymentOrderId ?? randomUUID() };
   }
 
@@ -465,6 +475,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     req.executorId = input.executorId;
     req.executorRole = input.executorRole;
     req.decidedAt = Date.now();
+    this.appendEvent(req.refId, "Refund", req.amount, input.idempotencyKey);
     return { refund: req.amount, bookingId: req.refId };
   }
 
@@ -509,6 +520,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (detail.payoutState === "Paid") throw new ConflictError("payout already recorded");
     detail.state = "ServiceCompleted";
     detail.payoutState = "Paid";
+    this.appendEvent(input.bookingId, "Payout", input.payoutAmount, input.idempotencyKey);
     return {
       bookingState: "ServiceCompleted",
       payoutState: "Paid",
@@ -606,9 +618,14 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async getBookingContact(bookingId: string): Promise<BookingContact | null> {
-    // In-memory keeps no phone directory; contact resolution is a DB-store concern.
-    if (!this.bookings.has(bookingId)) return null;
-    return { clinicPhone: null, professionalPhone: null };
+    // Parity with Prisma: resolve the two parties' real phones. This used to return nulls,
+    // so MSG-02 (and any regression that leaked or dropped a phone) was never exercised.
+    const b = this.bookings.get(bookingId);
+    if (!b) return null;
+    return {
+      clinicPhone: this.clinicOwnerPhone.get(b.clinicWorkspaceId) ?? null,
+      professionalPhone: this.professionalPhone.get(b.professionalId) ?? null,
+    };
   }
 
   async recordNotification(input: NotificationInput): Promise<void> {
@@ -632,8 +649,37 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async reconcile(): Promise<Reconciliation> {
-    // In-memory keeps no financial-event ledger; reconciliation is a DB-store concern.
-    return { rows: [], summary: { count: 0, captured: 0, payouts: 0, refunds: 0, exceptions: 0 } };
+    // PAY-11, computed from the recorded events — same shape as the Prisma store. Returning
+    // zeros here meant the finance dashboard and the e2e "zero exceptions" assertion were
+    // true by construction and could not detect a real imbalance.
+    const rows = [...this.bookings.values()].map((b) => {
+      const mine = this.events.filter((e) => e.bookingId === b.id);
+      const captured = mine.filter((e) => e.type === "Collection").reduce((t, e) => t + e.amount, 0);
+      const payouts = mine.filter((e) => e.type === "Payout").reduce((t, e) => t + e.amount, 0);
+      const refunds = mine.filter((e) => e.type === "Refund").reduce((t, e) => t + e.amount, 0);
+      // Undistributed = what the platform still holds: the fee/tax it keeps, plus anything
+      // not yet released. An order conserves when nothing has leaked out of it.
+      const undistributed = captured - payouts - refunds;
+      return {
+        paymentOrderId: b.paymentOrderId ?? b.id,
+        bookingId: b.id,
+        captured,
+        payouts,
+        refunds,
+        undistributed,
+        conserved: undistributed >= 0,
+      };
+    });
+    return {
+      rows,
+      summary: {
+        count: rows.length,
+        captured: rows.reduce((t, r) => t + r.captured, 0),
+        payouts: rows.reduce((t, r) => t + r.payouts, 0),
+        refunds: rows.reduce((t, r) => t + r.refunds, 0),
+        exceptions: rows.filter((r) => !r.conserved).length,
+      },
+    };
   }
 
   async listPartyBookings(party: "clinic" | "professional", id: string): Promise<BookingHistoryRow[]> {
@@ -762,6 +808,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (detail.state === "Cancelled") throw new ConflictError("booking already cancelled");
     detail.state = "Cancelled";
     detail.payoutState = input.payable > 0 ? "Paid" : "NotEligible";
+    if (input.payable > 0) this.appendEvent(input.bookingId, "Payout", input.payable, input.payoutKey);
+    this.appendEvent(input.bookingId, "Refund", input.refund, input.refundKey);
     return {
       bookingState: "Cancelled",
       payoutState: detail.payoutState,
@@ -769,6 +817,23 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       payable: input.payable,
       refund: input.refund,
     };
+  }
+
+  /**
+   * Append an immutable money event. Mirrors Prisma's FinancialEvent, including the
+   * `idempotencyKey` unique constraint (PAY-04) — a duplicate key must conflict here too,
+   * or the in-memory store would silently accept a double-spend the real one rejects.
+   */
+  private appendEvent(
+    bookingId: string,
+    type: "Collection" | "Payout" | "Refund",
+    amount: number,
+    key: string,
+  ): void {
+    if (this.events.some((e) => e.key === key)) {
+      throw new ConflictError(`financial event already recorded for key ${key}`);
+    }
+    this.events.push({ bookingId, type, amount, key });
   }
 
   private toRecord(d: BookingDetail): BookingRecord {

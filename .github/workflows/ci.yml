@@ -17,8 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # The Prisma store is the one that runs in production, so CI must exercise it rather
-    # than only the in-memory fallback.
+    # The repository port has two implementations, swapped at boot by DATABASE_URL. Running
+    # the suite against only one lets them drift: every divergence is a bug the tests cannot
+    # see, and the in-memory store is what the suites used to exercise while Postgres is what
+    # production runs. Both must pass the same tests.
+    strategy:
+      fail-fast: false
+      matrix:
+        store: [postgres, memory]
+
+    # Postgres runs for both legs (the service is cheap); only the `postgres` leg points
+    # DATABASE_URL at it. The Prisma store is what production uses, so it must be tested.
     services:
       postgres:
         image: postgres:15
@@ -34,7 +43,8 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://probook:probook@localhost:5432/probook_test?schema=public
+      # Empty for the `memory` leg: an unset DATABASE_URL is what selects the in-memory store.
+      DATABASE_URL: ${{ matrix.store == 'postgres' && 'postgresql://probook:probook@localhost:5432/probook_test?schema=public' || '' }}
       # Explicit, not inherited from a developer's .env — a stale CORS_ORIGINS silently
       # blocks every browser call in the e2e suite and the failure looks like a code bug.
       CORS_ORIGINS: http://localhost:3000
@@ -62,9 +72,14 @@ jobs:
         run: pnpm db:generate
 
       - name: Apply migrations
+        if: matrix.store == 'postgres'
         # `migrate deploy`, not `migrate dev`: it fails on a broken migration instead of
-        # rewriting history, which is what we want CI to tell us about.
+        # rewriting history, which is what we want CI to tell us about. Running it against a
+        # database that already has rows is also the only way to catch a migration that
+        # assumes an empty table.
         run: pnpm --filter @probook/db exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://probook:probook@localhost:5432/probook_test?schema=public
 
       - run: pnpm build
 
@@ -79,13 +94,14 @@ jobs:
       - name: Install Playwright browser
         run: pnpm e2e:install
 
-      - name: End-to-end (against Postgres)
+      - name: End-to-end (${{ matrix.store }} store)
         run: pnpm exec playwright test
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          # Per-leg name: matrix jobs cannot upload to the same artifact name.
+          name: playwright-report-${{ matrix.store }}
           path: playwright-report/
           retention-days: 7
