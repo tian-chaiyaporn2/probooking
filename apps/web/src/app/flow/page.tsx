@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
+import { th } from "../../lib/strings";
 import {
   registerClinic,
   registerProfessional,
@@ -151,19 +152,28 @@ export default function FlowPage() {
   return (
     <>
     <AppHeader current="/flow" />
-    <main className="page" style={{ maxWidth: 640 }}>
-      <h1>ProBooking — booking flow</h1>
-      <p className="muted">
-        Onboard and verify a clinic and professional, create a binding offer, accept it
-        (soft hold), confirm the booking, complete it and pay out the professional, then
-        leave reviews.
-      </p>
+    <main className="page" style={{ maxWidth: 680 }}>
+      <span className="hero__eyebrow" style={{ marginBottom: "var(--s3)" }}>{th.home.phase}</span>
+      <h1>{th.flow.title}</h1>
+      <p className="lead muted" style={{ maxWidth: "52ch" }}>{th.flow.subtitle}</p>
 
       <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
-        Run booking flow
+        {th.flow.run}
       </Button>
 
-      <ol data-testid="steps" style={{ marginTop: "1.5rem", lineHeight: 1.8 }}>
+      {/* Preview the flow before it runs, so the page is not an empty button in a void. */}
+      {steps.length === 0 && !bookingId && (
+        <ol className="flow-preview" aria-hidden>
+          {th.home.steps.map((s, i) => (
+            <li key={s.t}>
+              <span className="flow-preview__num">{i + 1}</span>
+              <span><strong>{s.t}</strong> — <span className="muted">{s.d}</span></span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <ol data-testid="steps" className="flow-log" style={{ marginTop: "1.5rem" }}>
         {steps.map((s, i) => (
           <li key={i}>
             <strong>{s.label}</strong> — <span>{s.detail}</span>
