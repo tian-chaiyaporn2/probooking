@@ -25,6 +25,8 @@ export const th = {
     ops: "ปฏิบัติการ",
     finance: "การเงิน",
     flow: "เดโม",
+    openMenu: "เปิดเมนู",
+    closeMenu: "ปิดเมนู",
   },
   ops: {
     title: "แดชบอร์ดฝ่ายปฏิบัติการ",

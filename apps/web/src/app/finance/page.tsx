@@ -71,7 +71,12 @@ export default function FinancePage() {
   const shown = rows.slice(0, MAX_ROWS);
 
   const columns: Column<ReconciliationRow>[] = [
-    { key: "booking", header: th.finance.colBooking, render: (r) => <code>{(r.bookingId ?? "—").slice(0, 8)}</code> },
+    {
+      key: "booking",
+      header: th.finance.colBooking,
+      mobileTitle: true,
+      render: (r) => <code>{(r.bookingId ?? "—").slice(0, 8)}</code>,
+    },
     { key: "captured", header: th.finance.captured, align: "right", render: (r) => formatThb(r.captured) },
     { key: "payouts", header: th.finance.payouts, align: "right", render: (r) => formatThb(r.payouts) },
     { key: "refunds", header: th.finance.refunds, align: "right", render: (r) => formatThb(r.refunds) },
@@ -92,9 +97,9 @@ export default function FinancePage() {
     <>
       <AppHeader current="/finance" />
       <main className="page" style={{ maxWidth: 1040 }}>
-        <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: 0 }}>{th.finance.title}</h1>
-          <div className="actions">
+        <div className="page-toolbar">
+          <h1 className="page-toolbar__title">{th.finance.title}</h1>
+          <div className="page-toolbar__actions">
             <Button data-testid="refresh" onClick={() => void load()} icon={<RefreshIcon />}>
               {th.common.refresh}
             </Button>

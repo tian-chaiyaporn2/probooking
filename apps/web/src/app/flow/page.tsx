@@ -169,17 +169,24 @@ export default function FlowPage() {
           </div>
           <div>Booking ID: <code data-testid="booking-id">{bookingId}</code></div>
           {checkout && (
-            <table style={{ marginTop: "0.5rem", borderCollapse: "collapse" }}>
-              <tbody>
-                <tr><td>Compensation</td><td style={{ paddingLeft: 16 }}>{formatThb(checkout.compensation)}</td></tr>
-                <tr><td>Service fee (12%)</td><td style={{ paddingLeft: 16 }}>{formatThb(checkout.serviceFee)}</td></tr>
-                <tr><td>Tax</td><td style={{ paddingLeft: 16 }}>{formatThb(checkout.tax)}</td></tr>
-                <tr style={{ fontWeight: 600 }}>
-                  <td>Total</td>
-                  <td data-testid="checkout-total" style={{ paddingLeft: 16 }}>{formatThb(checkout.total)}</td>
-                </tr>
-              </tbody>
-            </table>
+            <ul className="kv-list" style={{ marginTop: "0.5rem" }}>
+              <li>
+                <span className="kv-list__label">Compensation</span>
+                <span className="kv-list__value">{formatThb(checkout.compensation)}</span>
+              </li>
+              <li>
+                <span className="kv-list__label">Service fee (12%)</span>
+                <span className="kv-list__value">{formatThb(checkout.serviceFee)}</span>
+              </li>
+              <li>
+                <span className="kv-list__label">Tax</span>
+                <span className="kv-list__value">{formatThb(checkout.tax)}</span>
+              </li>
+              <li className="kv-list--total">
+                <span className="kv-list__label">Total</span>
+                <span className="kv-list__value" data-testid="checkout-total">{formatThb(checkout.total)}</span>
+              </li>
+            </ul>
           )}
 
           <div style={{ marginTop: "1rem" }}>

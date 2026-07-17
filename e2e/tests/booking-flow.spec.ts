@@ -17,7 +17,7 @@ test("pages are responsive — no horizontal page overflow on a small screen", a
   await page.setViewportSize({ width: 360, height: 740 }); // small phone
   for (const path of ["/", "/flow", "/ops", "/finance"]) {
     await page.goto(path);
-    // Let data-driven dashboards settle (finance renders its 6-column table).
+    // Let data-driven dashboards settle (finance renders card list on mobile).
     if (path === "/finance") await expect(page.getByTestId("fin-summary")).toBeVisible();
     if (path === "/ops") await expect(page.getByTestId("refresh")).toBeVisible();
     // The page itself must not scroll horizontally (wide tables scroll inside their box).
@@ -26,6 +26,21 @@ test("pages are responsive — no horizontal page overflow on a small screen", a
     );
     expect(overflow, `horizontal overflow on ${path}`).toBeLessThanOrEqual(1);
   }
+});
+
+test("mobile nav opens and closes", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  const toggle = page.getByRole("button", { name: "เปิดเมนู" });
+  await expect(toggle).toBeVisible();
+  await expect(nav.getByRole("link", { name: "ปฏิบัติการ" })).not.toBeVisible();
+  await toggle.click();
+  await expect(page.getByRole("button", { name: "ปิดเมนู" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "ปฏิบัติการ" })).toBeVisible();
+  await nav.getByRole("link", { name: "การเงิน" }).click();
+  await expect(page).toHaveURL(/\/finance$/);
+  await expect(page.getByRole("button", { name: "เปิดเมนู" })).toBeVisible();
 });
 
 test("booking flow confirms a booking with the correct checkout total", async ({ page }) => {

@@ -91,11 +91,13 @@ export default function OpsPage() {
     <>
       <AppHeader current="/ops" />
       <main className="page" style={{ maxWidth: 960 }}>
-        <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: 0 }}>{th.ops.title}</h1>
-          <Button data-testid="refresh" onClick={() => void load()} disabled={busy} icon={<RefreshIcon />}>
-            {th.common.refresh}
-          </Button>
+        <div className="page-toolbar">
+          <h1 className="page-toolbar__title">{th.ops.title}</h1>
+          <div className="page-toolbar__actions">
+            <Button data-testid="refresh" onClick={() => void load()} disabled={busy} icon={<RefreshIcon />}>
+              {th.common.refresh}
+            </Button>
+          </div>
         </div>
 
         <div className="stat-grid" data-testid="ops-metrics">
