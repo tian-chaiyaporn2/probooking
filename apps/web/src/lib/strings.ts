@@ -128,7 +128,7 @@ export const th = {
 } as const;
 
 /** Turn common API/network failures into useful Thai feedback instead of exposing raw server text. */
-export function getThaiErrorMessage(error: unknown, fallback = th.errors.generic): string {
+export function getThaiErrorMessage(error: unknown, fallback: string = th.errors.generic): string {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
 
   if (message.includes("too many requests") || message.startsWith("429:")) {
