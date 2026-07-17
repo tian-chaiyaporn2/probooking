@@ -57,9 +57,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` — package.json's `packageManager` pins pnpm@9.12.0, and specifying
+      # both is an error. Letting the repo be the single source of truth also means CI and
+      # local dev cannot drift onto different pnpm versions.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
