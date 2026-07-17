@@ -14,7 +14,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
-import { AuthGuard, Roles, CurrentUser } from "../auth/auth.guard.js";
+import { AuthGuard, Roles, CurrentUser, Public } from "../auth/auth.guard.js";
 import type { TokenPayload } from "../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "./privacy.util.js";
 import { validateBody } from "./validate.util.js";
@@ -31,6 +31,7 @@ import {
   can,
   dualControlSatisfied,
   satang,
+  completionReviewDueAt,
   type ConfirmationContext,
   type Capability,
   type Role,
@@ -95,15 +96,16 @@ export class MarketplaceController {
     @Inject(MARKETPLACE_REPOSITORY) private readonly repo: MarketplaceRepository,
   ) {}
 
+  @Public()
   @Post("clinics")
   async registerClinic(
     @Body() raw: { branchName: string; licenceNo: string; address: string; ownerPhone: string },
   ) {
     const dto = validateBody<typeof raw>(raw, {
-      branchName: { type: "string", maxLen: 200 },
-      licenceNo: { type: "string", maxLen: 100 },
-      address: { type: "string", maxLen: 500 },
-      ownerPhone: { type: "string", maxLen: 32 },
+      branchName: { type: "string", minLen: 1, maxLen: 200 },
+      licenceNo: { type: "string", minLen: 1, maxLen: 100 },
+      address: { type: "string", minLen: 1, maxLen: 500 },
+      ownerPhone: { type: "string", minLen: 8, maxLen: 32 },
     });
     try {
       return await this.repo.registerClinic(dto);
@@ -113,15 +115,16 @@ export class MarketplaceController {
     }
   }
 
+  @Public()
   @Post("professionals")
   async registerProfessional(
     @Body() raw: { displayName: string; profession: string; phone: string; payoutRef: string },
   ) {
     const dto = validateBody<typeof raw>(raw, {
-      displayName: { type: "string", maxLen: 200 },
+      displayName: { type: "string", minLen: 1, maxLen: 200 },
       profession: { type: "string", enum: ["physician", "dentist"] },
-      phone: { type: "string", maxLen: 32 },
-      payoutRef: { type: "string", maxLen: 100 },
+      phone: { type: "string", minLen: 8, maxLen: 32 },
+      payoutRef: { type: "string", minLen: 1, maxLen: 100 },
     });
     try {
       return await this.repo.registerProfessional(dto);
@@ -155,13 +158,16 @@ export class MarketplaceController {
   @Post("professionals/:id/insurance")
   async submitInsurance(
     @Param("id") professionalId: string,
-    @Body() dto: { validUntilHours?: number },
+    @Body() raw: { validUntilHours?: number },
     @CurrentUser() user?: TokenPayload,
   ) {
     // Only the professional themselves (or staff) may submit their insurance. Unguarded,
     // this let anyone downgrade a rival's Verified insurance to Submitted and block every
     // subsequent confirm on an insurance-required shift — a targeted denial of earnings.
     await this.requireProfessional(user, professionalId);
+    const dto = validateBody<{ validUntilHours?: number }>(raw ?? {}, {
+      validUntilHours: { type: "number", optional: true, positive: true, max: 24 * 365 * 10 },
+    });
     // PRO-01: optional insurance evidence (VER-05). validUntil relative for convenience.
     const validUntil = Date.now() + (dto.validUntilHours ?? 24 * 365) * HOUR_MS;
     return this.repo.submitInsurance(professionalId, validUntil);
@@ -175,6 +181,7 @@ export class MarketplaceController {
   ) {
     // VER-05 status is party/staff-only — unauthenticated id guessing leaked insurance facts.
     await this.requireProfessional(user, professionalId);
+
     return this.repo.getInsuranceStatus(professionalId);
   }
 
@@ -291,7 +298,15 @@ export class MarketplaceController {
 
   @UseGuards(AuthGuard)
   @Post("shifts")
-  async postShift(@Body() dto: PostShiftDto, @CurrentUser() user?: TokenPayload) {
+  async postShift(@Body() raw: PostShiftDto, @CurrentUser() user?: TokenPayload) {
+    const dto = validateBody<PostShiftDto>(raw, {
+      clinicWorkspaceId: { type: "string", maxLen: 64 },
+      compensation: { type: "number", int: true, positive: true },
+      category: { type: "string", optional: true, maxLen: 64 },
+      urgency: { type: "string", optional: true, enum: ["standard", "urgent"] },
+      insuranceRequired: { type: "boolean", optional: true },
+      shiftStartInHours: { type: "number", optional: true, min: 0, max: 24 * 365 },
+    });
     // §3: authority comes from the caller's membership in THIS workspace, not from an
     // `actorRole` field in the body that defaulted to "clinic_owner" when omitted.
     await this.requireClinicAuthority(user, dto.clinicWorkspaceId, "clinic.publish_shift");
@@ -323,6 +338,7 @@ export class MarketplaceController {
     return { shiftId, state: "Published", urgent: urgency === "urgent" };
   }
 
+  @Public()
   @Get("shifts")
   async listShifts(
     @Query("category") category?: string,
@@ -334,8 +350,10 @@ export class MarketplaceController {
     const filters: ShiftFilters = {};
     if (category) filters.category = category;
     if (urgency === "urgent" || urgency === "standard") filters.urgency = urgency;
-    if (minCompensation) filters.minCompensation = Number(minCompensation);
-    if (maxCompensation) filters.maxCompensation = Number(maxCompensation);
+    const min = minCompensation !== undefined ? Number(minCompensation) : NaN;
+    const max = maxCompensation !== undefined ? Number(maxCompensation) : NaN;
+    if (Number.isFinite(min)) filters.minCompensation = min;
+    if (Number.isFinite(max)) filters.maxCompensation = max;
     const shifts = await this.repo.listOpenShifts(filters);
     // SRC-04: empty results offer posting / matching assistance.
     return shifts.length === 0
@@ -348,10 +366,18 @@ export class MarketplaceController {
   @Post("professionals/:id/availability")
   async addAvailability(
     @Param("id") professionalId: string,
-    @Body() dto: { startsInHours?: number; durationHours?: number; openToRequests?: boolean },
+    @Body() raw: { startsInHours?: number; durationHours?: number; openToRequests?: boolean },
     @CurrentUser() user?: TokenPayload,
   ) {
     await this.requireProfessional(user, professionalId);
+    const dto = validateBody<{ startsInHours?: number; durationHours?: number; openToRequests?: boolean }>(
+      raw ?? {},
+      {
+        startsInHours: { type: "number", optional: true, min: 0, max: 24 * 365 },
+        durationHours: { type: "number", optional: true, positive: true, max: 24 * 14 },
+        openToRequests: { type: "boolean", optional: true },
+      },
+    );
     // AVL-01: one-off Available blocks. Kept relative (hours from now) for convenience.
     const now = Date.now();
     const startsAt = now + (dto.startsInHours ?? 24) * HOUR_MS;
@@ -360,12 +386,14 @@ export class MarketplaceController {
   }
 
   @UseGuards(AuthGuard)
+
   @Get("professionals/:id/availability")
   async listAvailability(@Param("id") professionalId: string) {
     // AVL-02: authenticated browse only — schedule windows are not a public anonymous surface.
     return { availability: await this.repo.listAvailability(professionalId) };
   }
 
+  @Public()
   @Get("professionals")
   async searchProfessionals(
     @Query("profession") profession?: string,
@@ -431,6 +459,7 @@ export class MarketplaceController {
     const shift = await this.repo.getShift(shiftId);
     if (!shift) throw new NotFoundException("shift not found");
     // Applicant lists are commercial PII — clinic of record or staff only.
+
     await this.requireClinicAuthority(user, shift.clinicWorkspaceId, "clinic.search_invite");
     return { candidates: await this.repo.listShiftCandidates(shiftId) };
   }
@@ -439,9 +468,12 @@ export class MarketplaceController {
   @Post("shifts/:id/offer")
   async offerToProfessional(
     @Param("id") shiftId: string,
-    @Body() dto: { professionalId: string },
+    @Body() raw: { professionalId: string },
     @CurrentUser() user?: TokenPayload,
   ) {
+    const dto = validateBody<{ professionalId: string }>(raw, {
+      professionalId: { type: "string", maxLen: 64 },
+    });
     const shift = await this.requireOpenShift(shiftId);
     // OFF-01: only a clinic owner/admin of THIS workspace may send a binding offer. The
     // role now comes from the caller's membership; it used to be `dto.actorRole` defaulting
@@ -504,14 +536,14 @@ export class MarketplaceController {
       amount: { type: "number", int: true, positive: true },
       reason: { type: "string", maxLen: 500 },
     });
-    const booking = await this.requireBooking(dto.bookingId);
-    // PAY-08 at proposal time: refuse against remaining headroom (prior refunds count).
-    const alreadyRefunded = await this.repo.sumRefunded(dto.bookingId);
-    this.payments.assertWithinAllocation(
-      satang(dto.amount),
-      satang(booking.captured - alreadyRefunded),
-      "refund",
-    );
+    await this.requireBooking(dto.bookingId);
+    // PAY-08 at proposal time: refuse to record a request that could never be executed.
+    // Cap against *remaining* funds (captured − prior refunds − other Pending proposals),
+    // not the original capture — otherwise two dual-control refunds of `captured` each
+    // over-refund 2× after both execute.
+    const available = await this.repo.refundAvailable(dto.bookingId);
+    this.payments.assertWithinAllocation(satang(dto.amount), satang(available), "refund");
+
     const approval = await this.repo.createApproval({
       capability: "finance.execute_refund",
       refType: "Booking",
@@ -559,11 +591,16 @@ export class MarketplaceController {
       );
     }
 
-    const booking = await this.requireBooking(approval.refId);
-    const alreadyRefunded = await this.repo.sumRefunded(approval.refId);
+    await this.requireBooking(approval.refId);
+    // Re-check remaining at approve time (other refunds may have landed since proposal).
+    // This Pending row is still Pending, so refundAvailable includes its own amount — add
+    // it back so the executor can approve the proposal that reserved those funds.
+    const availableIncludingThis =
+      (await this.repo.refundAvailable(approval.refId)) + approval.amount;
     this.payments.assertWithinAllocation(
       satang(approval.amount),
-      satang(booking.captured - alreadyRefunded),
+      satang(availableIncludingThis),
+
       "refund",
     );
 
@@ -750,6 +787,7 @@ export class MarketplaceController {
     const fundingDeadline = offer.fundingDueAt ?? offer.expiresAt;
     const offerExpired = isExpired(now, fundingDeadline);
 
+
     const eligibility = await this.repo.getOfferEligibility(id);
     const overlap = await this.repo.hasScheduleOverlap(
       offer.professionalId,
@@ -761,15 +799,18 @@ export class MarketplaceController {
     const preCaptureCtx: ConfirmationContext = {
       clinicActiveVerified: eligibility?.clinicVerified ?? false,
       professionalActiveVerified: eligibility?.professionalVerified ?? false,
+      // VER-04: read licence suspension/expiry at confirm time — a credential the
+      // professional held at offer time may have been suspended by Operations since.
       licenceValidThroughShiftEnd: eligibility?.licenceValidThroughShiftEnd ?? false,
-      // Phase-1: published shift categories are treated as supported for every verified pro.
-      specialtyValidThroughShiftEnd: true,
+      specialtyValidThroughShiftEnd: eligibility?.specialtyValidThroughShiftEnd ?? true,
       insuranceRequired: eligibility?.insuranceRequired ?? false,
       // Fail closed: unknown insurance facts must not book an insurance-required shift.
       insuranceValidThroughShiftEnd: eligibility?.insuranceValidThroughShiftEnd ?? false,
+      // No clinic service / shift-category catalog in Phase 0 — stay permissive until modelled.
       clinicServiceSupported: true,
       shiftCategorySupported: true,
       hasSuspension: !(eligibility?.professionalNotSuspended ?? false),
+      // VER-06 holds attach to bookings; confirm creates the booking, so none exist yet.
       hasBlockingHold: false,
       hasScheduleOverlap: overlap,
       offerExpired,
@@ -778,10 +819,13 @@ export class MarketplaceController {
 
     try {
       this.bookings.assertEligible({ ...preCaptureCtx, durablePrefundingSucceeded: true });
-      advanceOffer(offer.state, "Converted");
+      advanceOffer(offer.state, "Converted"); // throws if the offer was never accepted
     } catch (e) {
+      // A concurrent confirm may have already booked this offer — the overlap check
+      // then trips on that very booking. Return it idempotently instead of a 400.
       const won = await this.repo.getBookingByOffer(id);
       if (won) return { booking: won, checkout };
+
       throw new BadRequestException((e as Error).message);
     }
 
@@ -991,7 +1035,7 @@ export class MarketplaceController {
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator", "worker")
   @Post("bookings/:id/flag-inactive")
-  async flagInactive(@Param("id") id: string) {
+  async flagInactive(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const booking = await this.requireBooking(id);
     // CMP-04 applies only when the professional never submitted completion — i.e. the
     // booking is still Confirmed/InProgress (not AwaitingCompletion/ServiceCompleted).
@@ -1000,17 +1044,35 @@ export class MarketplaceController {
         `booking is ${booking.state}; not eligible for inactivity review`,
       );
     }
+    // Defence in depth for the worker role: the time policy must not live only in the
+    // sweep query — a replayed worker token could otherwise flag any Confirmed booking early.
+    if (user?.role === "worker") {
+      const dueAt = completionReviewDueAt(booking.shiftEnd);
+      if (Date.now() < dueAt) {
+        throw new BadRequestException("clinic inactivity review deadline has not passed");
+      }
+    }
     // Idempotent: one review case per booking.
     const existing = await this.repo.findSupportCase(id, "completion_review");
     if (existing) {
       return { id, caseId: existing.id, state: existing.state, created: false };
     }
-    const created = await this.repo.createSupportCase(
-      id,
-      "completion_review",
-      "Clinic inactivity — completion needs Operations review (CMP-04)",
-    );
-    return { id, caseId: created.id, state: created.state, created: true };
+    try {
+      const created = await this.repo.createSupportCase(
+        id,
+        "completion_review",
+        "Clinic inactivity — completion needs Operations review (CMP-04)",
+      );
+      await this.audit(user, "flag_inactive", "booking", id, { caseId: created.id });
+      return { id, caseId: created.id, state: created.state, created: true };
+    } catch (e) {
+      if (isConflict(e)) {
+        const raced = await this.repo.findSupportCase(id, "completion_review");
+        if (raced) return { id, caseId: raced.id, state: raced.state, created: false };
+        throw new ConflictException("support case already exists");
+      }
+      throw e;
+    }
   }
 
   @UseGuards(AuthGuard)
@@ -1173,6 +1235,11 @@ export class MarketplaceController {
             throw new BadRequestException("staff must state which party is reviewing");
           })()
         : party;
+    // Clinic reviews are an official reputation act — clinic_staff membership alone is
+    // not enough (they cannot bind terms or move money either).
+    if (by === "clinic" && party === "clinic") {
+      await this.requireClinicAuthority(user, booking.clinicWorkspaceId, "clinic.confirm_completion");
+    }
     // REV-01/05: only a completed paid booking creates review rights (cancelled or
     // unfinished bookings never reach ServiceCompleted, so they earn no reputation).
     if (!canLeaveReview(booking.state)) {
@@ -1203,6 +1270,7 @@ export class MarketplaceController {
     }
   }
 
+  @Public()
   @Get("professionals/:id/rating")
   async getRating(@Param("id") id: string) {
     const rating = await this.repo.getSubjectRating(id);
@@ -1257,6 +1325,7 @@ export class MarketplaceController {
     };
   }
 
+  @Public()
   @Get("professionals/:id/profile")
   async getProfile(@Param("id") id: string) {
     // VER-03: public marketplace profile split into self-declared vs verified facts.
@@ -1271,6 +1340,7 @@ export class MarketplaceController {
   async getOffer(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const offer = await this.requireOffer(id);
     // Offer terms are commercial — the professional, clinic of record, or staff only.
+
     if (!this.isStaff(user)) {
       const me = await this.identityOf(user);
       const isPro = me.professionalId === offer.professionalId;
@@ -1278,6 +1348,7 @@ export class MarketplaceController {
       if (!isPro && !isClinic) {
         throw new ForbiddenException("not a party to this offer");
       }
+
     }
     return { offer, booking: await this.repo.getBookingByOffer(id) };
   }
@@ -1339,7 +1410,15 @@ export class MarketplaceController {
     workspaceId: string,
     capability: Capability,
   ): Promise<Role> {
-    if (this.isStaff(user)) return "administrator";
+    // Cross-tenant staff support (ADM-01) is for operations/administrator only. Finance
+    // holds money capabilities of its own and must not inherit clinic.pay / send_offer via
+    // the old "any staff" bypass.
+    if (user?.role === "operations" || user?.role === "administrator") {
+      return "administrator";
+    }
+    if (user?.role === "finance") {
+      throw new ForbiddenException(`role finance cannot ${capability}`);
+    }
     const me = await this.identityOf(user);
     const membership = me.memberships.find((m) => m.workspaceId === workspaceId);
     if (!membership) throw new ForbiddenException("not a member of this clinic workspace");

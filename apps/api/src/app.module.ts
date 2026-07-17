@@ -3,6 +3,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { HealthModule } from "./modules/health/health.module.js";
 import { MarketplaceModule } from "./modules/marketplace/marketplace.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
+import { AuthGuard } from "./modules/auth/auth.guard.js";
 import { ThrottleGuard } from "./modules/throttle/throttle.guard.js";
 
 /**
@@ -14,9 +15,10 @@ import { ThrottleGuard } from "./modules/throttle/throttle.guard.js";
   imports: [HealthModule, AuthModule, MarketplaceModule],
   providers: [
     // Global (§7.3). A per-handler decorator only protects the handlers someone remembered
-    // to decorate — which is exactly how AuthGuard came to cover 15 endpoints and miss
-    // every money path. Rate limiting fails the same way, so it is on by default and
-    // opted OUT of, per handler.
+    // to decorate — which is exactly how AuthGuard came to cover money paths late and miss
+    // sensitive GETs. Auth and rate limiting fail closed by default; handlers opt OUT with
+    // `@Public()` / `@NoThrottle()`.
+    { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: ThrottleGuard },
   ],
 })

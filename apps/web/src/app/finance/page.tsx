@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getReconciliation,
-  setAuthToken,
   fetchFinanceExport,
   formatThb,
   type Reconciliation,
@@ -31,7 +30,6 @@ export default function FinancePage() {
 
   const signOut = useCallback(() => {
     setToken(null);
-    setAuthToken(null);
     setData(null);
     setLoadError(null);
   }, []);

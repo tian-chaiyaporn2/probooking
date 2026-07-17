@@ -210,6 +210,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       // suite that runs against it.
       professionalNotSuspended: !this.suspendedCredentials.has(o.professionalId),
       licenceValidThroughShiftEnd: this.licenceValidThrough(o.professionalId, shiftEnd),
+      // Memory store has no specialty_evidence seam yet — specialty gate stays permissive
+      // here (Prisma path reads the credential when present).
+      specialtyValidThroughShiftEnd: true,
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,
     };
@@ -439,7 +442,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       if (o.state === "PendingResponse" && o.expiresAt <= now) {
         o.state = "Expired";
         count++;
-      } else if (o.state === "AwaitingPayment" && (o.fundingDueAt === null || o.fundingDueAt <= now)) {
+      } else if (
+        o.state === "AwaitingPayment" &&
+        o.fundingDueAt !== null &&
+        o.fundingDueAt <= now
+      ) {
         o.state = "Expired";
         count++;
       }
@@ -528,20 +535,36 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       throw new ConflictError("an approval cannot be executed by its initiator");
     }
     const booking = this.bookings.get(req.refId);
-    if (!booking) throw new Error("no payment allocation for booking");
-    // PAY-08: refund must not exceed remaining refundable headroom.
-    const refunded = this.events
+    if (!booking) throw new Error("no payment allocation for booking");    // PAY-08: refund must not exceed remaining refundable headroom.
+    const alreadyRefunded = this.events
       .filter((e) => e.bookingId === req.refId && e.type === "Refund")
-      .reduce((t, e) => t + e.amount, 0);
-    if (req.amount > booking.captured - refunded) {
-      throw new Error("approval amount exceeds refundable headroom");
-    }
+      .reduce((s, e) => s + e.amount, 0);
+    if (alreadyRefunded + req.amount > booking.captured) {
+      throw new ConflictError(
+        `ALLOCATION_EXCEEDED: refund of ${req.amount} exceeds remaining ${booking.captured - alreadyRefunded}`,
+      );    }
     req.state = "Executed";
     req.executorId = input.executorId;
     req.executorRole = input.executorRole;
     req.decidedAt = Date.now();
     this.appendEvent(req.refId, "Refund", req.amount, input.idempotencyKey);
     return { refund: req.amount, bookingId: req.refId };
+  }
+  async refundAvailable(bookingId: string): Promise<number> {
+    const booking = this.bookings.get(bookingId);
+    if (!booking) return 0;
+    const refunded = this.events
+      .filter((e) => e.bookingId === bookingId && e.type === "Refund")
+      .reduce((s, e) => s + e.amount, 0);
+    const pending = [...this.approvals.values()]
+      .filter(
+        (a) =>
+          a.refId === bookingId &&
+          a.state === "Pending" &&
+          a.capability === "finance.execute_refund",
+      )
+      .reduce((s, a) => s + a.amount, 0);
+    return Math.max(0, booking.captured - refunded - pending);
   }
 
   async sumRefunded(bookingId: string): Promise<number> {
@@ -623,8 +646,10 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async createSupportCase(bookingId: string, kind: string, _subject: string): Promise<ReviewCase> {
+    const key = `${bookingId}:${kind}`;
+    if (this.supportCases.has(key)) throw new ConflictError("support case already exists");
     const c: ReviewCase = { id: randomUUID(), state: "Open", bookingId };
-    this.supportCases.set(`${bookingId}:${kind}`, c);
+    this.supportCases.set(key, c);
     return c;
   }
 

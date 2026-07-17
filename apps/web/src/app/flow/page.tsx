@@ -20,7 +20,6 @@ import {
   createReview,
   getRating,
   getDevToken,
-  setAuthToken,
   loginAs,
   formatThb,
   type Checkout,
@@ -81,10 +80,9 @@ export default function FlowPage() {
       log("Registered", `clinic + professional (both ${clinic.verification})`);
 
       // The verify calls are operations-guarded; obtain an ops token for the demo.
-      const { token } = await getDevToken("operations");
-      setAuthToken(token);
-      await verifyClinic(clinic.id);
-      await verifyProfessional(pro.id);
+      const { token: opsToken } = await getDevToken("operations");
+      await verifyClinic(clinic.id, opsToken);
+      await verifyProfessional(pro.id, opsToken);
       setProfessionalId(pro.id);
       log("Operations verified", "clinic + professional → Verified");
 

@@ -15,13 +15,16 @@ export interface ReviewSweepResult {
 /**
  * CMP-04 sweep. When the professional never submits completion, a booking sits in
  * Confirmed/InProgress. 48h after the scheduled shift end, Operations must review it.
- * Already-cased bookings are excluded in SQL (NOT EXISTS) so a backlog of stuck
- * Confirmed rows cannot fill the batch and starve new due bookings forever.
+ * This finds those bookings (whose shift ended > 48h ago) that don't already have a
+ * review case, and triggers the API's controlled flag-inactive action to open one.
+ * Idempotent: bookings already cased are excluded in SQL, and flag-inactive itself dedupes.
+ *
+ * Anti-join in SQL (not take-then-filter): cased bookings used to fill a `take: 500`
+ * candidate set forever, starving newer due rows once history exceeded the batch size.
  */
 export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSweepResult> {
   const cutoff = new Date(now - CLINIC_COMPLETION_REVIEW_AFTER);
-  // SupportCase uses polymorphic refType/refId (no Booking relation), so NOT EXISTS.
-  const candidates = await prisma.$queryRaw<{ id: string }[]>`
+  const due = await prisma.$queryRaw<{ id: string }[]>`
     SELECT b.id
     FROM "Booking" b
     INNER JOIN "Shift" s ON s.id = b."shiftId"
@@ -30,17 +33,17 @@ export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSw
       AND NOT EXISTS (
         SELECT 1 FROM "SupportCase" sc
         WHERE sc."refType" = 'Booking'
-          AND sc."refId" = b.id
           AND sc.kind = ${REVIEW_KIND}
+          AND sc."refId" = b.id
       )
     ORDER BY s."endsAt" ASC
     LIMIT ${BATCH}
   `;
-  if (candidates.length === 0) return { due: 0, flagged: 0, failed: 0 };
+  if (due.length === 0) return { due: 0, flagged: 0, failed: 0 };
 
   let flagged = 0;
   let failed = 0;
-  for (const booking of candidates) {
+  for (const booking of due) {
     try {
       const res = await fetch(`${API_BASE}/bookings/${booking.id}/flag-inactive`, {
         method: "POST",
@@ -59,5 +62,8 @@ export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSw
       console.error(`[clinic-review] ${booking.id} failed: ${(e as Error).message}`);
     }
   }
-  return { due: candidates.length, flagged, failed };
+  if (due.length === BATCH) {
+    console.log(`[clinic-review] batch full (${BATCH}); more due bookings remain for the next pass`);
+  }
+  return { due: due.length, flagged, failed };
 }

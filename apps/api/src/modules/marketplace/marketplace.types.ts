@@ -111,6 +111,7 @@ export interface OfferEligibility {
   professionalVerified: boolean;
   professionalNotSuspended: boolean; // VER-04: licence credential not suspended by Ops
   licenceValidThroughShiftEnd: boolean; // VER-04: licence not expired before shift ends
+  specialtyValidThroughShiftEnd: boolean; // specialty_evidence credential, if any
   insuranceRequired: boolean; // VER-05: does the shift require insurance?
   insuranceValidThroughShiftEnd: boolean;
 }
@@ -515,6 +516,13 @@ export interface MarketplaceRepository {
    * Also enforces remaining refundable headroom (PAY-08) against prior Refund events.
    */
   executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }>;
+
+  /**
+   * PAY-08: satang still available to refund on this booking — captured minus executed
+   * Refund events minus Pending dual-control proposals. Returns 0 when there is no
+   * payment order yet.
+   */
+  refundAvailable(bookingId: string): Promise<number>;
 
   getBooking(id: string): Promise<BookingDetail | null>;
   /** Sum of Refund financial events for a booking (PAY-08 remaining headroom). */

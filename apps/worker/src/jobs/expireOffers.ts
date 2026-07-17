@@ -1,35 +1,64 @@
 import { prisma } from "@probook/db";
+import { advanceOffer, type OfferState } from "@probook/domain";
 
-const API_BASE = process.env.API_BASE_URL ?? "http://localhost:4000";
+/** Bound each pass; a backlog drains across passes rather than in one unbounded query. */
+const BATCH = 500;
 
 export interface ExpireOffersResult {
+  due: number;
   expired: number;
+  failed: number;
 }
 
 /**
- * OFF-03 sweep. Past-deadline PendingResponse / AwaitingPayment offers must move to
- * Expired so the one-active-offer invariant (OFF-02) does not permanently block a shift.
+ * OFF-03 offer-expiry sweep. Wall-clock-expired offers that stay in
+ * PendingResponse / AwaitingPayment / PaymentFailed still count as "active" for the
+ * partial unique index and open-shift listing — blocking a new offer (OFF-02) forever.
+ * Confirm already rejects late payment via `offerExpired`; this job transitions the row
+ * so the DB invariant matches wall-clock reality.
  *
- * Prefers the API when available so both stores stay consistent; falls back to a direct
- * Prisma update when the worker is co-located with the DB (same as other sweeps' pattern
- * of querying then calling the API — here the write is local because there is no public
- * expire endpoint and the state transition is a pure deadline check).
+ * Pure state (no money) → write Prisma directly, same shape as reviewPublish. Domain
+ * `advanceOffer` validates the transition; races that already left the active set are skipped.
+ *
+ * Prefer per-row updates over a bulk `updateMany` that treats `fundingDueAt: null` as
+ * already due — that would expire AwaitingPayment offers that have not yet stamped a window.
  */
 export async function expireOffersSweep(now: number): Promise<ExpireOffersResult> {
-  const nowDate = new Date(now);
-  const [pending, awaiting] = await Promise.all([
-    prisma.offer.updateMany({
-      where: { state: "PendingResponse", expiresAt: { lte: nowDate } },
-      data: { state: "Expired" },
-    }),
-    prisma.offer.updateMany({
-      where: {
-        state: "AwaitingPayment",
-        OR: [{ fundingDueAt: { lte: nowDate } }, { fundingDueAt: null }],
-      },
-      data: { state: "Expired" },
-    }),
-  ]);
-  void API_BASE; // reserved for a future HTTP-driven expire path
-  return { expired: pending.count + awaiting.count };
+  const at = new Date(now);
+  const due = await prisma.offer.findMany({
+    where: {
+      state: { in: ["PendingResponse", "AwaitingPayment", "PaymentFailed"] },
+      OR: [
+        { expiresAt: { lte: at } },
+        // Funding window elapsed after accept (OFF-03) — still AwaitingPayment.
+        { AND: [{ state: "AwaitingPayment" }, { fundingDueAt: { not: null, lte: at } }] },
+      ],
+    },
+    select: { id: true, state: true },
+    orderBy: { expiresAt: "asc" },
+    take: BATCH,
+  });
+
+  let expired = 0;
+  let failed = 0;
+  for (const o of due) {
+    try {
+      advanceOffer(o.state as OfferState, "Expired");
+      const updated = await prisma.offer.updateMany({
+        where: {
+          id: o.id,
+          state: { in: ["PendingResponse", "AwaitingPayment", "PaymentFailed"] },
+        },
+        data: { state: "Expired" },
+      });
+      if (updated.count === 1) expired++;
+    } catch (e) {
+      failed++;
+      console.error(`[offer-expiry] ${o.id} failed:`, (e as Error).message);
+    }
+  }
+  if (due.length === BATCH) {
+    console.log(`[offer-expiry] batch full (${BATCH}); more due offers remain for the next pass`);
+  }
+  return { due: due.length, expired, failed };
 }

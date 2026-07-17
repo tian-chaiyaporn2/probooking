@@ -7,14 +7,16 @@ import { reminderSweep } from "./jobs/reminders.js";
 import { expireOffersSweep } from "./jobs/expireOffers.js";
 
 /**
- * ProBooking worker. Runs time-driven jobs (§7.2): auto-accept (CMP-03), clinic
- * completion review (CMP-04), review publish (REV-03), and shift reminders (NOT-01).
+ * ProBooking worker. Runs time-driven jobs (§7.2): offer expiry (OFF-03), auto-accept
+ * (CMP-03), clinic completion review (CMP-04), review publish (REV-03), and shift
+ * reminders (NOT-01).
  * A polling loop keeps the worker runnable without Redis; for scale these would become
  * durable repeatable jobs (e.g. BullMQ) without changing the job logic.
  *
  * Flags: `--once` runs a single pass and exits (used by tests / cron-style triggers).
  */
-const SWEEP_MS = Number(process.env.AUTO_ACCEPT_SWEEP_MS ?? 60_000);
+const rawSweep = Number(process.env.AUTO_ACCEPT_SWEEP_MS ?? 60_000);
+const SWEEP_MS = Number.isFinite(rawSweep) && rawSweep > 0 ? rawSweep : 60_000;
 const runOnce = process.argv.includes("--once");
 
 /** Run one sweep in isolation — a failure here must not starve the other sweeps. */
@@ -30,9 +32,11 @@ async function tick(): Promise<void> {
   const now = Date.now();
   // Each sweep is isolated so a DB error in one (e.g. review-publish) can't skip the
   // rest of the pass (e.g. reminders / auto-accept).
-  await runSweep("expire-offers", async () => {
+  await runSweep("offer-expiry", async () => {
     const ex = await expireOffersSweep(now);
-    if (ex.expired > 0) console.log(`[expire-offers] expired=${ex.expired}`);
+    if (ex.due > 0 || ex.failed > 0) {
+      console.log(`[offer-expiry] due=${ex.due} expired=${ex.expired} failed=${ex.failed}`);
+    }
   });
   await runSweep("auto-accept", async () => {
     const aa = await autoAcceptSweep(now);
@@ -63,15 +67,16 @@ async function tick(): Promise<void> {
 
 /** Set once a shutdown signal arrives; the loop drains rather than dying mid-pass. */
 let stopping = false;
-/** Resolves when the in-flight tick (if any) finishes — shutdown waits on this. */
-let tickDone: Promise<void> = Promise.resolve();
+/** In-flight tick promise so SIGTERM can wait for the current pass to finish. */
+let tickInFlight: Promise<void> | null = null;
 
 async function main(): Promise<void> {
   console.log(
-    `ProBooking worker starting — auto-accept sweep${runOnce ? " (--once)" : ` every ${SWEEP_MS}ms`}`,
+    `ProBooking worker starting — sweeps${runOnce ? " (--once)" : ` every ${SWEEP_MS}ms`}`,
   );
-  tickDone = tick();
-  await tickDone;
+  tickInFlight = tick();
+  await tickInFlight;
+  tickInFlight = null;
   if (runOnce) {
     await prisma.$disconnect();
     process.exit(0);
@@ -85,10 +90,12 @@ async function main(): Promise<void> {
       // `.catch` before `.finally`: an unhandled rejection here would terminate the process
       // and the loop would never re-arm — auto-accept (i.e. payouts) would stop silently.
       // runSweep already absorbs per-sweep errors; this covers anything thrown outside them.
-      tickDone = tick()
+      tickInFlight = tick()
         .catch((e) => console.error("[worker] tick failed:", (e as Error)?.message ?? e))
-        .finally(loop);
-      void tickDone;
+        .finally(() => {
+          tickInFlight = null;
+          loop();
+        });
     }, SWEEP_MS);
   };
   loop();
@@ -96,18 +103,21 @@ async function main(): Promise<void> {
 
 /**
  * Drain on shutdown: an orchestrator sends SIGTERM on every redeploy. Wait for the
- * current pass to finish so we don't cut connections mid-batch.
+ * in-flight pass (every action is idempotent) before disconnecting — exiting mid-pass
+ * used to truncate at an arbitrary booking despite the "finishing current pass" log line.
  */
+function shutdown(signal: string): void {
+  if (stopping) return;
+  stopping = true;
+  console.log(`[worker] ${signal} received — finishing current pass, then exiting`);
+  const done = tickInFlight ?? Promise.resolve();
+  void done
+    .catch(() => undefined)
+    .finally(() => prisma.$disconnect().finally(() => process.exit(0)));
+}
+
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
-  process.on(signal, () => {
-    if (stopping) return;
-    stopping = true;
-    console.log(`[worker] ${signal} received — finishing current pass, then exiting`);
-    void tickDone
-      .catch(() => undefined)
-      .then(() => prisma.$disconnect())
-      .finally(() => process.exit(0));
-  });
+  process.on(signal, () => shutdown(signal));
 }
 
 // A rejection that escapes every catch above must be loud, not a silent process death.

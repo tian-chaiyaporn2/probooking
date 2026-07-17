@@ -14,6 +14,7 @@ interface FieldSpec {
   positive?: boolean; // number must be > 0
   min?: number; // number lower bound (inclusive)
   max?: number; // number upper bound (inclusive)
+  minLen?: number; // string min length
   maxLen?: number; // string max length, or max element count for stringArray
   itemMaxLen?: number; // stringArray: max length of each element
   enum?: readonly string[]; // string must be one of these
@@ -66,11 +67,17 @@ export function validateBody<T>(body: unknown, spec: Record<string, FieldSpec>):
     }
     if (s.type === "string") {
       const str = v as string;
+      if (s.minLen !== undefined && str.length < s.minLen) errors.push(`${key} must be at least ${s.minLen} chars`);
       if (s.maxLen !== undefined && str.length > s.maxLen) errors.push(`${key} exceeds ${s.maxLen} chars`);
       if (s.enum && !s.enum.includes(str)) errors.push(`${key} must be one of: ${s.enum.join(", ")}`);
     }
   }
 
   if (errors.length) throw new BadRequestException(errors.join("; "));
-  return b as T;
+  // Strip unknown keys so mass-assignment cannot slip extra fields into typed DTOs.
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(spec)) {
+    if (b[key] !== undefined) out[key] = b[key];
+  }
+  return out as T;
 }

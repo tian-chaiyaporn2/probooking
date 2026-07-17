@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { thb, satang, serviceFee, buildCheckout, conserves, withinAllocation } from "../src/money.js";
+import {
+  thb,
+  satang,
+  serviceFee,
+  buildCheckout,
+  conserves,
+  withinAllocation,
+  formatThb,
+} from "../src/money.js";
 
 describe("money (integer satang, LOC-02)", () => {
   it("converts THB to satang", () => {
@@ -126,5 +134,10 @@ describe("money constructors reject impossible amounts", () => {
 
   it("keeps satang() itself signed — reversals and adjustments need a direction", () => {
     expect(satang(-100)).toBe(-100);
+  });
+
+  it("formats satang as THB for UI (LOC-02)", () => {
+    expect(formatThb(1_120_000)).toBe("฿11,200.00");
+    expect(formatThb(satang(50))).toBe("฿0.50");
   });
 });

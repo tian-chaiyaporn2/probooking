@@ -7,7 +7,7 @@ import {
   ratingFromCounts,
   DEFAULT_SERVICE_FEE_BPS,
 } from "@probook/domain";
-import { ConflictError } from "./errors.util.js";
+import { ConflictError, isConflict } from "./errors.util.js";
 import { encryptField, decryptField, blindIndex } from "./field-crypto.js";
 
 /** Shape of the fields a terms snapshot freezes. Structural, so both Shift reads fit. */
@@ -280,15 +280,21 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // missing, unverified, or null-expiry licences are not valid through the shift.
     const licence = offer.professional.credentials.find((c) => c.kind === "licence");
     const professionalNotSuspended = licence?.state !== "Suspended";
-    const licenceValidThroughShiftEnd =
-      licence?.state === "Verified" &&
+    const licenceValidThroughShiftEnd =      licence?.state === "Verified" &&
       licence.validUntil !== null &&
       licence.validUntil.getTime() >= shiftEnd;
-    return {
+    // Specialty evidence is optional: absent → nothing to invalidate; present → must cover
+    // the shift end and not be Suspended (same shape as licence).
+    const specialty = offer.professional.credentials.find((c) => c.kind === "specialty_evidence");
+    const specialtyValidThroughShiftEnd =
+      !specialty ||
+      (specialty.state !== "Suspended" &&
+        (!specialty.validUntil || specialty.validUntil.getTime() >= shiftEnd));    return {
       clinicVerified: offer.shift.workspace.verification === "Verified",
       professionalVerified: offer.professional.verification === "Verified",
       professionalNotSuspended,
       licenceValidThroughShiftEnd,
+      specialtyValidThroughShiftEnd,
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,
     };
@@ -572,6 +578,8 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async expireStaleOffers(now: number): Promise<number> {
+    // Prefer not treating fundingDueAt: null as already due — that would expire
+    // AwaitingPayment offers that have not yet stamped a funding window.
     const nowDate = new Date(now);
     const [pending, awaiting] = await Promise.all([
       prisma.offer.updateMany({
@@ -581,7 +589,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       prisma.offer.updateMany({
         where: {
           state: "AwaitingPayment",
-          OR: [{ fundingDueAt: { lte: nowDate } }, { fundingDueAt: null }],
+          fundingDueAt: { not: null, lte: nowDate },
         },
         data: { state: "Expired" },
       }),
@@ -726,18 +734,17 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
 
       const po = await tx.paymentOrder.findUnique({
         where: { bookingId: req.refId },
-        include: { allocation: true },
+        include: { allocation: true, events: true },
       });
       if (!po?.allocation) throw new Error("no payment allocation for booking");
-
-      // PAY-08: remaining refundable headroom against prior Refund events.
-      const prior = await tx.financialEvent.aggregate({
-        where: { paymentOrderId: po.id, type: "Refund" },
-        _sum: { amount: true },
-      });
-      const remaining = po.captured - (prior._sum.amount ?? 0);
-      if (req.amount > remaining) {
-        throw new ConflictError("refund amount exceeds remaining refundable amount");
+      // PAY-08 inside the transaction: prior refunds must not exceed captured.
+      const alreadyRefunded = po.events
+        .filter((e) => e.type === "Refund")
+        .reduce((s, e) => s + e.amount, 0);
+      if (alreadyRefunded + req.amount > po.captured) {
+        throw new ConflictError(
+          `ALLOCATION_EXCEEDED: refund of ${req.amount} exceeds remaining ${po.captured - alreadyRefunded}`,
+        );
       }
 
       // PAY-05/06: the money moves as an immutable event, exactly like every other path —
@@ -756,6 +763,19 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       });
       return { refund: req.amount, bookingId: req.refId };
     });
+  }
+  async refundAvailable(bookingId: string): Promise<number> {
+    const po = await prisma.paymentOrder.findUnique({
+      where: { bookingId },
+      include: { events: { where: { type: "Refund" }, select: { amount: true } } },
+    });
+    if (!po) return 0;
+    const refunded = po.events.reduce((s, e) => s + e.amount, 0);
+    const pending = await prisma.approvalRequest.aggregate({
+      where: { refType: "Booking", refId: bookingId, state: "Pending", capability: "finance.execute_refund" },
+      _sum: { amount: true },
+    });
+    return Math.max(0, po.captured - refunded - (pending._sum.amount ?? 0));
   }
 
   async sumRefunded(bookingId: string): Promise<number> {
@@ -955,10 +975,15 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async createSupportCase(bookingId: string, kind: string, subject: string): Promise<ReviewCase> {
-    const c = await prisma.supportCase.create({
-      data: { subject, kind, state: "Open", refType: "Booking", refId: bookingId },
-    });
-    return { id: c.id, state: "Open", bookingId };
+    try {
+      const c = await prisma.supportCase.create({
+        data: { subject, kind, state: "Open", refType: "Booking", refId: bookingId },
+      });
+      return { id: c.id, state: "Open", bookingId };
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictError("support case already exists");
+      throw e;
+    }
   }
 
   async cancelBooking(input: CancelInput): Promise<CancelResult> {

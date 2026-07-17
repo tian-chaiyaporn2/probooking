@@ -32,6 +32,11 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // Behind a reverse proxy / tunnel, `req.ip` is only trustworthy when Express honours
+  // X-Forwarded-For. Without this, every caller shares one throttle key (or spoofs freely
+  // if the proxy is misconfigured). One hop is enough for our tunnel / single LB shape.
+  app.getHttpAdapter().getInstance().set("trust proxy", 1);
+
   // §7.3 security headers (HSTS, X-Content-Type-Options, Referrer-Policy, …). None were
   // set on a service handling medical credentials and money. `contentSecurityPolicy` is
   // left off: this process serves JSON only — the web app is a separate static origin, and
@@ -61,6 +66,8 @@ async function bootstrap() {
 
   const port = Number(process.env.API_PORT ?? 4000);
   await app.listen(port);
+  // Drain Nest on SIGTERM so Prisma's pool is closed rather than killed mid-query on redeploy.
+  app.enableShutdownHooks();
   // eslint-disable-next-line no-console
   console.log(`ProBooking API listening on :${port}`);
 }

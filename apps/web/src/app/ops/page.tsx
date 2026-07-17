@@ -8,7 +8,6 @@ import {
   verifyClinic,
   verifyProfessional,
   resolveHold,
-  setAuthToken,
   type CaseSummary,
   type PendingVerification,
   type MarketplaceMetrics,
@@ -47,7 +46,6 @@ export default function OpsPage() {
 
   const signOut = useCallback(() => {
     setToken(null);
-    setAuthToken(null);
     setMetrics(null);
     setPending([]);
     setCases([]);
