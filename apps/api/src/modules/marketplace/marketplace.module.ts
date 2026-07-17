@@ -6,6 +6,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { MarketplaceController } from "./marketplace.controller.js";
 import { NotificationsService } from "./notifications.service.js";
 import { MARKETPLACE_REPOSITORY, type MarketplaceRepository } from "./marketplace.types.js";
+import { MarketplaceSeedService } from "../../fixtures/marketplace-seed.service.js";
 
 /**
  * Selects the persistence backend at boot: Prisma/Postgres when DATABASE_URL is set,
@@ -30,6 +31,6 @@ const marketplaceRepositoryProvider = {
 @Module({
   imports: [OffersModule, BookingsModule, PaymentsModule, AuthModule],
   controllers: [MarketplaceController],
-  providers: [marketplaceRepositoryProvider, NotificationsService],
+  providers: [marketplaceRepositoryProvider, NotificationsService, MarketplaceSeedService],
 })
 export class MarketplaceModule {}
