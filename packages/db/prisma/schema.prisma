@@ -199,6 +199,8 @@ model Credential {
   validUntil     DateTime? @db.Timestamptz(3) // must remain valid through shift end (VER-04)
   lastCheckedAt  DateTime? @db.Timestamptz(3)
   docUri         String?
+
+  @@index([professionalId])
 }
 
 model InsuranceEvidence {
@@ -252,6 +254,7 @@ model Shift {
   booking       Booking?
 
   @@index([state, startsAt])
+  @@index([workspaceId])
 }
 
 model Application {
@@ -292,9 +295,13 @@ model Offer {
   fundingDueAt   DateTime? @db.Timestamptz(3) // set on acceptance (OFF-03: 30 min)
   booking        Booking?
 
-  // One active offer per shift (OFF-02): enforce a single non-terminal offer in
-  // the service layer + a partial unique index (add via migration).
+  // One active offer per shift (OFF-02). Enforced by the partial unique index
+  // "Offer_one_active_per_shift" (migration 20260717180000_concurrency_invariants) —
+  // Prisma cannot express a partial unique index, so it exists in SQL only. A service-layer
+  // read cannot enforce this: two concurrent sends both see "no active offer".
+  // Do NOT let `prisma migrate dev` drop it as drift; re-add it if a reset regenerates.
   @@index([shiftId, state])
+  @@index([professionalId])
 }
 
 model Booking {
@@ -322,6 +329,10 @@ model Booking {
   messages       Message[]
   attendance     AttendanceEvent[]
   review         Review[]
+
+  // FKs are not auto-indexed by Postgres; hasScheduleOverlap runs on the confirm hot path.
+  // The auto-accept sweep's partial index ("Booking_autoAccept_sweep") is SQL-only.
+  @@index([professionalId])
 }
 
 model Message {
@@ -349,6 +360,7 @@ model Review {
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
   @@unique([bookingId, authorId]) // one review per party (REV-02)
+  @@index([subjectId, publishedAt]) // aggregate rating lookup (REV-04)
 }
 
 // ----- Operations -----
@@ -371,6 +383,11 @@ model SupportCase {
   refId     String?
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  // One case per (ref, kind) — enforced by the partial unique index
+  // "SupportCase_ref_kind_key" (concurrency_invariants migration), since the columns are
+  // nullable and Prisma cannot express the WHERE clause.
+  @@index([refType, refId])
 }
 
 model RiskIncident {
@@ -432,6 +449,40 @@ model Notification {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([event, refId])
+  @@index([refType, refId])
+}
+
+enum ApprovalState {
+  Pending
+  Executed
+  Rejected
+}
+
+// §6.4 different-person approval. A high-value money action (a payment exception: an
+// out-of-flow refund or payout) is *proposed* by one authorized person and *executed* by a
+// different one. The two halves are separate requests, so the invariant is enforced by
+// stored state rather than by asking a single request to contain two people.
+//
+// PAY-06 still holds: staff never edit balances directly. Executing an approval writes an
+// immutable FinancialEvent through the same conservation checks as every other money path.
+model ApprovalRequest {
+  id            String        @id @default(cuid())
+  // The capability being exercised (e.g. finance.execute_refund) — the domain decides
+  // whether it needs a second person.
+  capability    String
+  refType       String // "Booking"
+  refId         String
+  amount        Int // integer satang
+  reason        String
+  state         ApprovalState @default(Pending)
+  initiatorId   String
+  initiatorRole String
+  executorId    String?
+  executorRole  String?
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  decidedAt     DateTime?     @db.Timestamptz(3)
+
+  @@index([state, createdAt])
   @@index([refType, refId])
 }
 

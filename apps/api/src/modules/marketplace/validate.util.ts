@@ -7,13 +7,15 @@ import { BadRequestException } from "@nestjs/common";
  * rather than downstream 500s or silently-wrong domain calls.
  */
 export interface FieldSpec {
-  type: "string" | "number" | "boolean";
+  /** `stringArray`: an array of strings — without it, arrays reached Prisma unvalidated. */
+  type: "string" | "number" | "boolean" | "stringArray";
   optional?: boolean;
   int?: boolean; // number must be an integer
   positive?: boolean; // number must be > 0
   min?: number; // number lower bound (inclusive)
   max?: number; // number upper bound (inclusive)
-  maxLen?: number; // string max length
+  maxLen?: number; // string max length, or max element count for stringArray
+  itemMaxLen?: number; // stringArray: max length of each element
   enum?: readonly string[]; // string must be one of these
 }
 
@@ -28,6 +30,24 @@ export function validateBody<T>(body: unknown, spec: Record<string, FieldSpec>):
     const v = b[key];
     if (v === undefined || v === null) {
       if (!s.optional) errors.push(`${key} is required`);
+      continue;
+    }
+    if (s.type === "stringArray") {
+      if (!Array.isArray(v)) {
+        errors.push(`${key} must be an array of strings`);
+        continue;
+      }
+      const arr = v as unknown[];
+      if (s.maxLen !== undefined && arr.length > s.maxLen) {
+        errors.push(`${key} must have at most ${s.maxLen} items`);
+      }
+      if (arr.some((item) => typeof item !== "string")) {
+        errors.push(`${key} must contain only strings`);
+      } else if (s.itemMaxLen !== undefined) {
+        if ((arr as string[]).some((item) => item.length > s.itemMaxLen!)) {
+          errors.push(`${key} items exceed ${s.itemMaxLen} chars`);
+        }
+      }
       continue;
     }
     if (typeof v !== s.type) {

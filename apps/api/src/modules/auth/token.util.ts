@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { devAuthEnabled } from "./dev-mode.util.js";
 
 /**
  * Minimal HS256 JWT — dependency-free (Phase 1). The session token carries the
@@ -10,8 +11,36 @@ export interface TokenPayload {
   exp: number; // unix seconds
 }
 
-const secret = (): string => process.env.JWT_SECRET ?? "dev-only";
+/**
+ * A hardcoded default secret is a published constant: anyone reading the source can mint
+ * an administrator token. There is no fallback here, and the check is NOT keyed on
+ * `NODE_ENV === "production"` — a staging/demo host with the var simply unset is exactly
+ * the case that guard misses.
+ *
+ * Under the explicit dev opt-in we derive an ephemeral per-process secret instead of a
+ * constant, so zero-config local dev still works while nothing guessable is ever signed
+ * with. Tokens do not survive an API restart in dev; that is the intended trade.
+ */
+const WEAK_SECRETS = new Set(["dev-only", "change-me-in-dev-only", "changeme", "secret"]);
+let ephemeralSecret: string | null = null;
+
+const secret = (): string => {
+  const configured = process.env.JWT_SECRET;
+  if (configured && !WEAK_SECRETS.has(configured)) return configured;
+  if (devAuthEnabled()) {
+    ephemeralSecret ??= randomBytes(32).toString("hex");
+    return ephemeralSecret;
+  }
+  throw new Error(
+    "JWT_SECRET must be set to a strong, non-default value (or set AUTH_DEV_MODE=true for local dev)",
+  );
+};
 const b64url = (input: Buffer | string): string => Buffer.from(input).toString("base64url");
+
+/** Boot-time check: surface a missing/weak secret as a refusal to start, not a 500 later. */
+export function assertSigningSecretConfigured(): void {
+  secret();
+}
 
 export function signToken(payload: Omit<TokenPayload, "exp">, ttlSeconds = 3600): string {
   const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));

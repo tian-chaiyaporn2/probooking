@@ -7,30 +7,49 @@ import {
   Post,
   UnauthorizedException,
 } from "@nestjs/common";
+import { Throttle, AUTH_THROTTLE } from "../throttle/throttle.guard.js";
 import { OtpService, OtpRateLimitError } from "./otp.service.js";
 import { signToken } from "./token.util.js";
+import { devAuthEnabled } from "./dev-mode.util.js";
 
-// Phase-0/1 staff mapping: phones that resolve to an internal platform role on login.
-// In production this comes from an admin-managed access list (§3), not a constant.
-const STAFF: Record<string, string> = {
-  "+66000000001": "operations",
-  "+66000000002": "finance",
-  "+66000000003": "administrator",
-};
+/**
+ * Phase-0/1 staff mapping: phones that resolve to an internal platform role on login.
+ * In production this comes from an admin-managed access list (§3), not a constant.
+ *
+ * Sourced from env so the phones are not a published constant in the repo: a reader of
+ * the source would otherwise know exactly which numbers to target for an admin session.
+ * Format: `STAFF_PHONES=+66...:operations,+66...:finance`.
+ */
+const INTERNAL_ROLES = ["operations", "finance", "administrator"];
 
-const INTERNAL_ROLES = new Set(["operations", "finance", "administrator"]);
+function parseStaffPhones(spec: string): Record<string, string> {
+  const staff: Record<string, string> = {};
+  for (const entry of spec.split(",").map((e) => e.trim()).filter(Boolean)) {
+    const idx = entry.lastIndexOf(":");
+    if (idx <= 0) continue;
+    const phone = entry.slice(0, idx).trim();
+    const role = entry.slice(idx + 1).trim();
+    if (phone && INTERNAL_ROLES.includes(role)) staff[phone] = role;
+  }
+  return staff;
+}
+
+const STAFF: Record<string, string> = parseStaffPhones(process.env.STAFF_PHONES ?? "");
 
 @Controller("auth")
 export class AuthController {
   constructor(private readonly otp: OtpService) {}
 
+  @Throttle(AUTH_THROTTLE)
   @Post("otp/request")
-  request(@Body() dto: { phone: string }) {
+  request(@Body() dto: { phone: string }): { sent: true; devCode?: string } {
     if (!dto.phone) throw new BadRequestException("phone required");
     try {
       const code = this.otp.request(dto.phone);
-      // devCode is returned only for the mock provider — remove when real SMS is wired.
-      return { sent: true, devCode: code };
+      // The code is a credential: it goes back to the caller ONLY under the explicit
+      // dev-mode opt-in (local dev + e2e, never production). Otherwise it leaves solely
+      // via the SMS partner, so requesting an OTP for someone else's phone is useless.
+      return devAuthEnabled() ? { sent: true, devCode: code } : { sent: true };
     } catch (e) {
       if (e instanceof OtpRateLimitError) {
         throw new HttpException(
@@ -42,6 +61,9 @@ export class AuthController {
     }
   }
 
+  // The brute-force guard burns a code after 5 wrong attempts, but nothing stopped an
+  // attacker cycling re-request -> 5 guesses indefinitely, or spraying many phones at once.
+  @Throttle(AUTH_THROTTLE)
   @Post("otp/verify")
   verify(@Body() dto: { phone: string; code: string }) {
     if (!this.otp.verify(dto.phone, dto.code)) {
@@ -49,15 +71,5 @@ export class AuthController {
     }
     const role = STAFF[dto.phone] ?? "user";
     return { token: signToken({ sub: dto.phone, role }), role };
-  }
-
-  /**
-   * Dev-only shortcut so the internal dashboards (and e2e) can obtain an
-   * operations/finance token without the full OTP + access-list flow. Remove in prod.
-   */
-  @Post("dev/token")
-  devToken(@Body() dto: { role: string }) {
-    if (!INTERNAL_ROLES.has(dto.role)) throw new BadRequestException("unknown internal role");
-    return { token: signToken({ sub: `dev:${dto.role}`, role: dto.role }), role: dto.role };
   }
 }

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { buildCheckout, conserves, satang, type Satang } from "@probook/domain";
+import { buildCheckout, conserves, satang, withinAllocation, type Satang } from "@probook/domain";
 
 /**
  * Payment orchestration (PAY-01..11). The provider is abstracted behind a port so
@@ -22,6 +22,19 @@ export class PaymentsService {
   assertConserved(input: Parameters<typeof conserves>[0]): void {
     if (!conserves(input)) {
       throw new Error("CONSERVATION_VIOLATION: captured funds do not equal allocations (PAY-07)");
+    }
+  }
+
+  /**
+   * PAY-08: no payout or refund may exceed the funds available for it. This wraps the
+   * domain predicate so every money command shares one definition of the cap — the rule
+   * is only worth having if the code that moves money actually calls it.
+   */
+  assertWithinAllocation(amount: Satang, available: Satang, what: string): void {
+    if (!withinAllocation(amount, available)) {
+      throw new Error(
+        `ALLOCATION_EXCEEDED: ${what} of ${amount} exceeds available ${available} (PAY-08)`,
+      );
     }
   }
 }

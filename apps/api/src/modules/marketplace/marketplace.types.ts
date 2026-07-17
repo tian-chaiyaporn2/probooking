@@ -7,6 +7,7 @@ import type {
   VerificationState,
   ShiftUrgency,
   RatingSummary,
+  Role,
 } from "@probook/domain";
 
 /** The offer view the flow works with (joins Shift fields for compensation/urgency/start). */
@@ -318,6 +319,53 @@ export interface ConfirmBookingResult {
 }
 
 /** Full booking view including money state, for the completion/payout phase. */
+/**
+ * The parties an authenticated caller acts as. A phone can be a professional, a member of
+ * one or more clinic workspaces, or both — so this is a set of hats, not a single role.
+ */
+export interface CallerIdentity {
+  userId: string | null;
+  /** The caller's own professional profile, if they registered as one. */
+  professionalId: string | null;
+  /** Clinic workspaces the caller belongs to, with the role they hold in each (§3). */
+  memberships: { workspaceId: string; role: Role }[];
+}
+
+/** §6.4: a money action proposed by one authorized person, executed by a different one. */
+export interface ApprovalRequestRecord {
+  id: string;
+  capability: string;
+  refType: string;
+  refId: string;
+  amount: number; // integer satang
+  reason: string;
+  state: "Pending" | "Executed" | "Rejected";
+  initiatorId: string;
+  initiatorRole: string;
+  executorId: string | null;
+  executorRole: string | null;
+  createdAt: number; // epoch ms UTC
+  decidedAt: number | null;
+}
+
+export interface CreateApprovalInput {
+  capability: string;
+  refType: string;
+  refId: string;
+  amount: number;
+  reason: string;
+  initiatorId: string;
+  initiatorRole: string;
+}
+
+export interface ExecuteApprovalInput {
+  approvalId: string;
+  executorId: string;
+  executorRole: string;
+  /** Dedupes the money event this approval writes (PAY-04). */
+  idempotencyKey: string;
+}
+
 export interface BookingDetail {
   id: string;
   offerId: string;
@@ -332,6 +380,13 @@ export interface BookingDetail {
   payoutState: PayoutState;
   paymentOrderId: string | null;
   heldAt: number | null; // VER-06 hold overlay (epoch ms UTC), or null
+  /**
+   * Scheduled shift window (epoch ms UTC). Carried on the booking so money decisions that
+   * depend on timing — the CAN-01/02 24h boundary above all — are computed from the
+   * scheduled shift rather than from a value the cancelling party supplies.
+   */
+  shiftStart: number;
+  shiftEnd: number;
 }
 
 export interface PayoutInput {
@@ -420,7 +475,43 @@ export interface MarketplaceRepository {
   getBookingByOffer(offerId: string): Promise<BookingRecord | null>;
 
   // --- Completion & payout ---
+  /**
+   * Resolve who the authenticated caller is, from the phone their token carries (§3).
+   *
+   * Authority is derived here, not read from the request: a token proves possession of a
+   * phone, and the platform decides what that phone may do. Endpoints previously took
+   * `actorRole` and party ids from the body, which made every authority check a
+   * self-certification.
+   */
+  resolveIdentity(phone: string): Promise<CallerIdentity>;
+
+  // ----- §6.4 dual control -----
+  /** Propose a money action. Writes no money — it only records the request. */
+  createApproval(input: CreateApprovalInput): Promise<ApprovalRequestRecord>;
+  getApproval(id: string): Promise<ApprovalRequestRecord | null>;
+  listPendingApprovals(): Promise<ApprovalRequestRecord[]>;
+  /**
+   * Execute a pending approval: mark it Executed and write its immutable Refund event, in
+   * one transaction. The Pending precondition is asserted as part of the write, so two
+   * approvers racing produce one execution rather than two refunds.
+   */
+  executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }>;
+
   getBooking(id: string): Promise<BookingDetail | null>;
+  /**
+   * CAN-03: did the professional actually arrive for this booking? Answered from the
+   * recorded attendance trail — arrival decides a 100% payout, so it must be an observed
+   * event, not a flag the cancelling party asserts.
+   */
+  hasArrived(bookingId: string): Promise<boolean>;
+  /** CAN-03: record the professional's arrival for a booking (idempotent). */
+  recordArrival(bookingId: string): Promise<boolean>;
+  /**
+   * CMP-03: the booking's auto-accept deadline (epoch ms UTC), or null if completion was
+   * never submitted. Lets the API enforce the deadline itself rather than trusting that the
+   * only caller is a correctly-filtered worker sweep.
+   */
+  getAutoAcceptDueAt(bookingId: string): Promise<number | null>;
   /** Professional submits completion (CMP-01): advances the booking to AwaitingCompletion. */
   markCompletion(id: string): Promise<BookingDetail | null>;
   /**

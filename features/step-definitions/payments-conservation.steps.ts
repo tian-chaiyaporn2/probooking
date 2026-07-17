@@ -119,16 +119,58 @@ Then("the payout is rejected", function (this: ProBookingWorld) {
   assert.equal(this.state.rejected, true);
 });
 
-Given("a high-value payout initiated by one Finance user", function (this: ProBookingWorld) {
+Given("a high-value payout initiated by one Finance user", async function (this: ProBookingWorld) {
+  // Drive the REAL approval store, not just the predicate: §6.4 is about persisted state
+  // (a request one person raises and a different one executes), so a scenario that only
+  // calls dualControlSatisfied() proves the predicate works, not that the rule is enforced.
+  this.state.store = newStore();
+  const seeded = await seedConfirmedBooking(this.state.store);
+  this.state.bookingId = seeded.bookingId;
   this.state.initiator = "finance-user-1";
+  this.state.approval = await this.state.store.createApproval({
+    capability: "finance.execute_refund",
+    refType: "Booking",
+    refId: seeded.bookingId,
+    amount: 100_000,
+    reason: "goodwill refund",
+    initiatorId: "finance-user-1",
+    initiatorRole: "finance",
+  });
 });
 
-Then("it cannot be executed by the same user alone", function (this: ProBookingWorld) {
-  // §6.4 different-person approval via the real domain rule.
+Then("it cannot be executed by the same user alone", async function (this: ProBookingWorld) {
+  // The domain rule refuses the initiator as their own approver...
+  const initiator = { id: "finance-user-1", role: "finance" as const };
+  assert.equal(dualControlSatisfied("finance.execute_refund", initiator, initiator), false);
+  // ...a second person with no finance authority is not an approver either...
   assert.equal(
-    dualControlSatisfied("finance.execute_payout", this.state.initiator, this.state.initiator),
+    dualControlSatisfied("finance.execute_refund", initiator, { id: "clinic-7", role: "clinic_owner" }),
     false,
   );
-  // And a genuinely different second approver satisfies it.
-  assert.equal(dualControlSatisfied("finance.execute_payout", this.state.initiator, "finance-user-2"), true);
+  // ...and the store itself rejects a self-approval, so the rule does not depend on every
+  // caller remembering to ask the predicate first.
+  await assert.rejects(
+    this.state.store.executeApproval({
+      approvalId: this.state.approval.id,
+      executorId: "finance-user-1",
+      executorRole: "finance",
+      idempotencyKey: `approval-refund:${this.state.approval.id}`,
+    }),
+  );
+
+  // A genuinely different authorized approver satisfies it and the refund executes once.
+  assert.equal(
+    dualControlSatisfied("finance.execute_refund", initiator, { id: "finance-user-2", role: "finance" }),
+    true,
+  );
+  const result = await this.state.store.executeApproval({
+    approvalId: this.state.approval.id,
+    executorId: "finance-user-2",
+    executorRole: "finance",
+    idempotencyKey: `approval-refund:${this.state.approval.id}`,
+  });
+  assert.equal(result.refund, 100_000);
+  const after = await this.state.store.getApproval(this.state.approval.id);
+  assert.equal(after?.state, "Executed");
+  assert.equal(after?.executorId, "finance-user-2");
 });

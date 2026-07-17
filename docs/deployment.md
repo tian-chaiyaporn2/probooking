@@ -89,13 +89,24 @@ even with perfect CORS. A public HTTPS tunnel side-steps that (public → public
 (In this environment `cloudflared` and `ngrok` didn't route / needed an account;
 `localhost.run` worked over SSH.)
 
-**Lock CORS to the Pages origin** (recommended for a shared demo): set in `.env`
+**Lock CORS to the Pages origin** (required for a shared demo): set in `.env`
 
 ```
 CORS_ORIGINS=https://tian-chaiyaporn2.github.io
 ```
 
-The API then rejects any other browser origin. Restart the API after changing it.
+The API then rejects any other *browser* origin, and refuses to boot without an allowlist
+unless `AUTH_DEV_MODE=true`. Restart the API after changing it.
+
+> If you also run the local web UI or the e2e suite, add `http://localhost:3000` to the
+> list — a Pages-only allowlist blocks every call from localhost, and the failure looks
+> like a broken app rather than a CORS rejection.
+
+**CORS is not a security control here.** It is enforced by browsers and means nothing to
+`curl`. The tunnel must therefore be pointed at an API that is *itself* safe to expose:
+`AUTH_DEV_MODE` off (so `/auth/dev/token` 404s and OTP codes are not returned) and a strong
+`JWT_SECRET`. `scripts/tunnel-deploy.sh` probes the running API and refuses to publish it
+otherwise, rather than trusting that it was configured correctly.
 
 ### Operational caveats
 - The tunnel URL is **ephemeral** — every tunnel restart is a new URL. Re-run
@@ -105,9 +116,11 @@ The API then rejects any other browser origin. Restart the API after changing it
   (i.e. just re-run `scripts/tunnel-deploy.sh`), which mints a new URL + redeploys.
 - The laptop, Postgres, API, and tunnel must all stay up; if any drops, the dashboards
   stop (the landing page still works).
-- It **exposes the demo API publicly**: with CORS locked, other sites can't call it
-  from a browser, but anyone with the tunnel URL can still hit it directly (e.g.
-  `/auth/dev/token`). Share the Pages link privately; fine for a throwaway demo.
+- It **exposes the demo API publicly** — against your real local Postgres. Anyone with the
+  URL can call it directly; CORS does not stop non-browser clients. The script's preflight
+  now blocks the worst case (a dev-mode API with an open token endpoint, which would hand
+  any caller an administrator session), but every endpoint's own authz is what protects the
+  data. Share the Pages link privately, and prefer a hosted API for anything real.
 
 ## Hosting the backend properly (durable, no laptop)
 

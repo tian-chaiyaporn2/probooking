@@ -1,4 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { randomInt } from "node:crypto";
+import { maskPhone } from "../marketplace/privacy.util.js";
 
 /**
  * OTP login (AUTH-01). Mock provider: the code is generated and "sent" (logged); in
@@ -30,10 +32,11 @@ export class OtpService {
       throw new OtpRateLimitError(OTP_MIN_INTERVAL_MS - (now - last));
     }
     this.lastRequestAt.set(phone, now);
-    // Deterministic in dev so the flow is testable; random + SMS in production.
-    const code = "123456";
+    // Cryptographically random, never guessable. randomInt is uniform (no modulo bias).
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
     this.codes.set(phone, { code, exp: now + 5 * 60 * 1000, attempts: 0 });
-    this.logger.log(`OTP for ${phone}: ${code}`);
+    // Never log the code or the raw phone — logs are not a secure channel (§7.3).
+    this.logger.log(`OTP issued for ${maskPhone(phone)}`);
     return code;
   }
 
@@ -47,7 +50,7 @@ export class OtpService {
     // Brute-force guard: burn the code after too many wrong attempts, forcing a re-request.
     if (++rec.attempts >= OTP_MAX_ATTEMPTS) {
       this.codes.delete(phone);
-      this.logger.warn(`OTP for ${phone} burned after ${OTP_MAX_ATTEMPTS} failed attempts`);
+      this.logger.warn(`OTP for ${maskPhone(phone)} burned after ${OTP_MAX_ATTEMPTS} failed attempts`);
     }
     return false;
   }

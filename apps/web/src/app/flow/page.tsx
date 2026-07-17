@@ -21,6 +21,7 @@ import {
   getRating,
   getDevToken,
   setAuthToken,
+  loginAs,
   formatThb,
   type Checkout,
   type Payout,
@@ -47,6 +48,9 @@ export default function FlowPage() {
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [professionalId, setProfessionalId] = useState<string | null>(null);
+  // The flow acts as two parties. Their tokens are held per-run, not module-globally: the
+  // API derives authority from whoever's token made the call, so mixing them up is a 403.
+  const [tokens, setTokens] = useState<{ clinic: string; pro: string } | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
   const [reviewsPublished, setReviewsPublished] = useState(false);
   const [rating, setRating] = useState<Rating | null>(null);
@@ -64,8 +68,14 @@ export default function FlowPage() {
     setPayout(null);
     setReviewsPublished(false);
     setRating(null);
+<<<<<<< HEAD
     const log = (key: StepKey, label: string, detail: string) =>
       setSteps((s) => [...s, { key, label, detail }]);
+=======
+    setTokens(null);
+    const log = (label: string, detail: string) =>
+      setSteps((s) => [...s, { label, detail }]);
+>>>>>>> origin/master
     try {
       const uniq = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
       const clinic = await registerClinic({
@@ -89,6 +99,7 @@ export default function FlowPage() {
       setProfessionalId(pro.id);
       log("verified", th.flow.steps.verified, th.flow.stepDetail.verified);
 
+<<<<<<< HEAD
       const shift = await postShift({ clinicWorkspaceId: clinic.id, compensation: 1_000_000 });
       log("shiftPosted", th.flow.steps.shiftPosted, th.flow.stepDetail.shiftPosted(shift.state));
 
@@ -107,6 +118,29 @@ export default function FlowPage() {
 
       const confirmed = await confirmOffer(offer.id, true);
       log("confirmed", th.flow.steps.confirmed, th.flow.stepDetail.confirmed(confirmed.booking.state));
+=======
+      // Each party logs in as themselves (OTP). Every action below is authorised against
+      // the caller's real identity — the clinic cannot accept on the professional's behalf,
+      // and neither can a stranger.
+      const clinicToken = await loginAs(`+66c${uniq}`);
+      const proToken = await loginAs(`+66p${uniq}`);
+      setTokens({ clinic: clinicToken, pro: proToken });
+
+      const shift = await postShift({ clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, clinicToken);
+      log("Shift posted", `open shift (${shift.state})`);
+
+      await applyToShift(shift.shiftId, pro.id, proToken);
+      log("Professional applied", "application submitted (non-binding)");
+
+      const offer = await offerToProfessional(shift.shiftId, pro.id, clinicToken);
+      log("Offer created", `state=${offer.state}, fee=${formatThb(offer.checkout.serviceFee)}`);
+
+      const accepted = await acceptOffer(offer.id, proToken);
+      log("Professional accepted", `state=${accepted.state} (soft hold, not a booking)`);
+
+      const confirmed = await confirmOffer(offer.id, clinicToken);
+      log("Booking confirmed", `state=${confirmed.booking.state}`);
+>>>>>>> origin/master
       setCheckout(confirmed.checkout);
       setBookingId(confirmed.booking.id);
     } catch (e) {
@@ -117,11 +151,17 @@ export default function FlowPage() {
   }
 
   async function runPayout() {
-    if (!bookingId) return;
+    if (!bookingId || !tokens) return;
     setPayingOut(true);
     try {
+<<<<<<< HEAD
       await completeBooking(bookingId);
       setPayout(await acceptCompletion(bookingId));
+=======
+      await completeBooking(bookingId, tokens.pro); // CMP-01: the professional submits
+      const result = await acceptCompletion(bookingId, tokens.clinic); // the clinic accepts + pays
+      setPayout(result);
+>>>>>>> origin/master
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -130,11 +170,18 @@ export default function FlowPage() {
   }
 
   async function runReviews() {
-    if (!bookingId || !professionalId) return;
+    if (!bookingId || !professionalId || !tokens) return;
     setReviewing(true);
     try {
+<<<<<<< HEAD
       await createReview(bookingId, { by: "professional", score: 5 });
       const r = await createReview(bookingId, { by: "clinic", score: 5 });
+=======
+      // Both parties review; the second submission publishes the pair (REV-03). Who is
+      // reviewing is derived from the token, so neither side can review as the other.
+      await createReview(bookingId, { score: 5 }, tokens.pro);
+      const r = await createReview(bookingId, { score: 5 }, tokens.clinic);
+>>>>>>> origin/master
       setReviewsPublished(r.published);
       setRating(await getRating(professionalId));
     } catch (e) {

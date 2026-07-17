@@ -46,6 +46,69 @@ describe("cancellation policy (CAN-01..05)", () => {
       cancellationOutcome({ actor: "clinic", reason: "partial_work", hoursBeforeStart: 1, arrived: true }),
     ).toEqual({ support: true });
   });
+
+  // Every CAN-05 reason routes to support regardless of actor/timing. Table-driven so a
+  // reason dropped from the disjunction fails here instead of silently auto-paying.
+  it.each(["force_majeure", "safety", "credential", "platform_or_provider_failure", "partial_work"] as const)(
+    "%s always routes to support, never a fraction (CAN-05)",
+    (reason) => {
+      for (const actor of ["clinic", "professional"] as const) {
+        for (const hoursBeforeStart of [48, 1, -2]) {
+          expect(cancellationOutcome({ actor, reason, hoursBeforeStart, arrived: false })).toEqual({
+            support: true,
+          });
+        }
+      }
+    },
+  );
+
+  it("the CAN-01 boundary is inclusive: exactly 24h -> 0%, just under -> 50%", () => {
+    expect(
+      cancellationOutcome({ actor: "clinic", reason: "ordinary", hoursBeforeStart: 24, arrived: false }),
+    ).toEqual({ fraction: 0 });
+    expect(
+      cancellationOutcome({ actor: "clinic", reason: "ordinary", hoursBeforeStart: 23.999, arrived: false }),
+    ).toEqual({ fraction: 0.5 });
+  });
+
+  it("arrival before the scheduled start still earns 100% (CAN-03)", () => {
+    // A professional who arrives early and is turned away has travelled and lost the slot;
+    // paying 50% because the clock had not struck the start time underpays them.
+    expect(
+      cancellationOutcome({
+        actor: "clinic",
+        reason: "ordinary",
+        hoursBeforeStart: 0.5,
+        arrived: true,
+      }),
+    ).toEqual({ fraction: 1 });
+  });
+
+  it("an unsubstantiated after-arrival claim does not pay 100% (CAN-03)", () => {
+    // reason says "after arrival" but no arrival was recorded -> ordinary timing rules.
+    expect(
+      cancellationOutcome({
+        actor: "clinic",
+        reason: "clinic_unavailable_after_arrival",
+        hoursBeforeStart: 5,
+        arrived: false,
+      }),
+    ).toEqual({ fraction: 0.5 });
+    expect(
+      cancellationOutcome({
+        actor: "clinic",
+        reason: "clinic_unavailable_after_arrival",
+        hoursBeforeStart: 48,
+        arrived: false,
+      }),
+    ).toEqual({ fraction: 0 });
+  });
+
+  it("a professional cancellation is 0% even after arrival (CAN-04 beats CAN-03)", () => {
+    expect(
+      cancellationOutcome({ actor: "professional", reason: "ordinary", hoursBeforeStart: 0, arrived: true }),
+    ).toEqual({ fraction: 0 });
+  });
 });
 
 describe("offer expiry (OFF-03)", () => {
