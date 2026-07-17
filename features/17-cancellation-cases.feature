@@ -21,7 +21,7 @@ Feature: Cancellation money mechanics — success/edge/error cases
   Scenario: Cancellation conserves captured funds across payout and refund
     Given a confirmed booking worth 1000000 satang compensation
     When it is cancelled at a 0.5 payable fraction
-    Then payout plus refund equals captured
+    Then payout plus refund equals captured from the cancel result and reconciliation
 
   Scenario: A second cancellation is idempotent
     Given a confirmed booking worth 1000000 satang compensation

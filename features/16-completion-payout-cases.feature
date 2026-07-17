@@ -7,7 +7,7 @@ Feature: Completion and payout — success/edge/error cases
     Given a confirmed booking worth 1000000 satang compensation
     When the professional completes and the clinic accepts completion
     Then the professional is paid the compensation
-    And captured funds conserve after payout
+    And captured funds conserve after payout from stored booking amounts
 
   Scenario: Edge — accepting completion twice pays out only once
     Given a confirmed booking worth 1000000 satang compensation
@@ -25,6 +25,7 @@ Feature: Completion and payout — success/edge/error cases
 
   Scenario: A credential hold blocks payout until Operations resolves it
     Given a confirmed booking worth 1000000 satang compensation
-    When Operations places a credential hold
-    Then the booking is marked held
+    When the professional marks completion and Operations places a credential hold
+    Then payout while held is rejected
     And resolving the hold clears it
+    And payout after resolve succeeds

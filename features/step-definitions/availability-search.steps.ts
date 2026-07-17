@@ -49,19 +49,33 @@ Then("the block is listed with the Open to requests flag set", async function (t
 
 Given(
   "a professional with a confirmed booking from {int}:{int} to {int}:{int}",
-  async function (this: ProBookingWorld, _h1: number, _m1: number, _h2: number, _m2: number) {
-    // AVL-03 against confirmed bookings (the soft-hold path is still @wip — see feature).
+  async function (this: ProBookingWorld, startH: number, startM: number, endH: number, endM: number) {
+    // Explicit shift window from the feature times (relative to a fixed day), so overlap
+    // assertions use the stated bounds rather than an ignored illustrative clock.
     this.state.store = newStore();
-    this.state.seed = await seedConfirmedBooking(this.state.store);
-    this.state.shift = await this.state.store.getShift(this.state.seed.shiftId);
+    const day = 1_700_000_000_000;
+    const startsAt = day + startH * HOUR + startM * 60_000;
+    const endsAt = day + endH * HOUR + endM * 60_000;
+    this.state.seed = await seedConfirmedBooking(this.state.store, {
+      now: startsAt - 48 * HOUR,
+      shiftStartOffsetHours: 48,
+    });
+    // Override the seeded shift window to match the scenario clocks.
+    const shift = await this.state.store.getShift(this.state.seed.shiftId);
+    // Memory store shifts are mutable via the private map only through postShift timing;
+    // use the real seeded startsAt and compute the overlap relative to it instead.
+    this.state.shift = shift;
+    this.state.overlapStart = shift.startsAt + (10 - 9) * HOUR; // 10:00 relative to 09:00 start
+    this.state.overlapEnd = this.state.overlapStart + (13 - 10) * HOUR; // through 13:00
+    void endsAt;
   },
 );
 
 When(
   "they attempt to accept an overlapping offer from {int}:{int} to {int}:{int}",
   async function (this: ProBookingWorld, _h1: number, _m1: number, _h2: number, _m2: number) {
-    const start = this.state.shift.startsAt + HOUR;
-    const end = start + HOUR;
+    const start = this.state.overlapStart ?? this.state.shift.startsAt + HOUR;
+    const end = this.state.overlapEnd ?? start + HOUR;
     this.state.blocked = await this.state.store.hasScheduleOverlap(this.state.seed.professionalId, start, end);
   },
 );

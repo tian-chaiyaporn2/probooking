@@ -36,6 +36,7 @@ export interface SeedOpts {
   urgency?: "standard" | "urgent";
   category?: string;
   shiftStartOffsetHours?: number;
+  insuranceRequired?: boolean;
 }
 
 /** Seed a confirmed booking in the store and return the ids/amounts. */
@@ -79,7 +80,7 @@ export async function seedConfirmedBooking(
     compensation,
     urgency: opts.urgency ?? "standard",
     shiftStart: now + (opts.shiftStartOffsetHours ?? 48) * HOUR,
-    insuranceRequired: false,
+    insuranceRequired: opts.insuranceRequired ?? false,
   });
   await store.applyToShift(shiftId, professionalId);
   const offer = await store.createOfferForShift({

@@ -9,6 +9,11 @@ Feature: Messaging and patient-data rules
     When the offer is confirmed into a booking
     Then contact details reveal both party phones
 
+  Scenario: Plain-text messages round-trip on a confirmed booking
+    Given a confirmed booking with a message thread
+    When a party posts a plain-text message
+    Then the thread lists that message body
+
   Scenario: Patient-identifiable content is discouraged and removable
     Given a message containing apparent patient-identifiable data
     Then the user is warned and the content can be reported and manually removed

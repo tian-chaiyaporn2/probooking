@@ -1,7 +1,7 @@
 import { Given, When, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
 import { containsProhibitedPatientData, buildCheckout, satang } from "@probook/domain";
-import { newStore, seedAwaitingPaymentOffer } from "../support/store.js";
+import { newStore, seedAwaitingPaymentOffer, seedConfirmedBooking } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
 /** Area 8 (§9.4-8): messaging visibility (MSG-02) and patient-data rules (§7.3). */
@@ -43,6 +43,27 @@ Then("contact details reveal both party phones", async function (this: ProBookin
   assert.ok(contact);
   assert.equal(contact.clinicPhone, this.state.offer.clinicPhone);
   assert.equal(contact.professionalPhone, this.state.offer.professionalPhone);
+});
+
+Given("a confirmed booking with a message thread", async function (this: ProBookingWorld) {
+  this.state.store = newStore();
+  this.state.seed = await seedConfirmedBooking(this.state.store);
+});
+
+When("a party posts a plain-text message", async function (this: ProBookingWorld) {
+  this.state.messageBody = "Shift details confirmed — arrive at reception";
+  this.state.message = await this.state.store.postMessage(
+    this.state.seed.bookingId,
+    this.state.seed.clinicId,
+    this.state.messageBody,
+  );
+});
+
+Then("the thread lists that message body", async function (this: ProBookingWorld) {
+  const messages = await this.state.store.listMessages(this.state.seed.bookingId);
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].body, this.state.messageBody);
+  assert.equal(messages[0].senderId, this.state.seed.clinicId);
 });
 
 Given("a message containing apparent patient-identifiable data", function (this: ProBookingWorld) {

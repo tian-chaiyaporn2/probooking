@@ -4,6 +4,8 @@ import {
   autoAcceptDueAt,
   completionReviewDueAt,
   cancellationOutcome,
+  payableFromFraction,
+  satang,
   type CancelOutcome,
 } from "@probook/domain";
 import { newStore, seedConfirmedBooking } from "../support/store.js";
@@ -47,6 +49,41 @@ Then("marking completion again leaves the deadline unchanged", async function (t
   assert.equal(secondDue, firstDue);
 });
 
+Given("a confirmed booking past its auto-accept deadline", async function (this: ProBookingWorld) {
+  this.state.store = newStore();
+  this.state.seed = await seedConfirmedBooking(this.state.store);
+  await this.state.store.markCompletion(this.state.seed.bookingId);
+  this.state.dueAt = await this.state.store.getAutoAcceptDueAt(this.state.seed.bookingId);
+  assert.ok(this.state.dueAt);
+  // The sweep fires once the deadline has passed — we assert payout once, then reject a retry.
+});
+
+When("auto-accept pays out the professional", async function (this: ProBookingWorld) {
+  this.state.payout = await this.state.store.recordPayout({
+    bookingId: this.state.seed.bookingId,
+    payoutAmount: this.state.seed.compensation,
+    idempotencyKey: `payout:${this.state.seed.bookingId}`,
+  });
+});
+
+Then("the booking is ServiceCompleted and Paid", async function (this: ProBookingWorld) {
+  assert.equal(this.state.payout.bookingState, "ServiceCompleted");
+  assert.equal(this.state.payout.payoutState, "Paid");
+  const booking = await this.state.store.getBooking(this.state.seed.bookingId);
+  assert.equal(booking.state, "ServiceCompleted");
+  assert.equal(booking.payoutState, "Paid");
+});
+
+Then("a second auto-accept payout is rejected", async function (this: ProBookingWorld) {
+  await assert.rejects(
+    this.state.store.recordPayout({
+      bookingId: this.state.seed.bookingId,
+      payoutAmount: this.state.seed.compensation,
+      idempotencyKey: `payout:${this.state.seed.bookingId}:retry`,
+    }),
+  );
+});
+
 Given("a confirmed booking past scheduled end with no completion submitted", async function (this: ProBookingWorld) {
   this.state.store = newStore();
   this.state.seed = await seedConfirmedBooking(this.state.store);
@@ -87,41 +124,24 @@ Then("flagging again returns the same case", async function (this: ProBookingWor
   assert.equal(again.id, this.state.case.id);
 });
 
-// ----- Area 9: auto-accept deadline predicate (CMP-03) -----
-Given("a professional submitted completion", function (this: ProBookingWorld) {
-  this.state.scheduledEnd = 1_700_000_000_000;
-  this.state.submittedAt = this.state.scheduledEnd + HOUR; // submitted an hour after end
+Given("a confirmed booking past the clinic completion-review deadline", async function (this: ProBookingWorld) {
+  this.state.store = newStore();
+  this.state.seed = await seedConfirmedBooking(this.state.store);
+  const booking = await this.state.store.getBooking(this.state.seed.bookingId);
+  this.state.due = completionReviewDueAt(booking.shiftEnd);
+  this.state.now = this.state.due + HOUR;
 });
 
-When("{int} hours pass from the later of scheduled end and submission", function (this: ProBookingWorld, hours: number) {
-  this.state.due = autoAcceptDueAt(this.state.scheduledEnd, this.state.submittedAt);
-  this.state.now = Math.max(this.state.scheduledEnd, this.state.submittedAt) + hours * HOUR;
-});
-
-When("the booking is not held or disputed", function (this: ProBookingWorld) {
-  this.state.held = false;
-});
-
-Then("completion is auto-accepted exactly once", function (this: ProBookingWorld) {
-  const accepted = this.state.now >= this.state.due && !this.state.held;
-  assert.equal(accepted, true);
-  // "Exactly once": a second sweep pass over an already-accepted booking is a no-op.
-  this.state.acceptCount = (this.state.acceptCount ?? 0) + 1;
-  assert.equal(this.state.acceptCount, 1);
-});
-
-Given("the professional did not submit completion", function (this: ProBookingWorld) {
-  this.state.submitted = false;
-  this.state.scheduledEnd = 1_700_000_000_000;
-});
-
-Given("the clinic has been inactive for {int} hours", function (this: ProBookingWorld, hours: number) {
-  this.state.now = this.state.scheduledEnd + hours * HOUR;
-});
-
-Then("Operations reviews the completion", function (this: ProBookingWorld) {
-  // CMP-04: 48h after scheduled end with no submission routes to Operations.
-  assert.equal(this.state.now >= completionReviewDueAt(this.state.scheduledEnd), true);
+Then("Operations may open a completion_review case", async function (this: ProBookingWorld) {
+  assert.ok(this.state.now >= this.state.due);
+  const opened = await this.state.store.createSupportCase(
+    this.state.seed.bookingId,
+    "completion_review",
+    "clinic inactivity past deadline",
+  );
+  const found = await this.state.store.findSupportCase(this.state.seed.bookingId, "completion_review");
+  assert.equal(found?.id, opened.id);
+  assert.equal(found?.state, "Open");
 });
 
 // ----- Area 10: cancellation compensation -----
@@ -165,3 +185,38 @@ Then("the outcome is resolved by support", function (this: ProBookingWorld) {
   const outcome = this.state.outcome as CancelOutcome;
   assert.deepEqual(outcome, { support: true });
 });
+
+Given("a confirmed booking ready for arrival", async function (this: ProBookingWorld) {
+  this.state.store = newStore();
+  this.state.seed = await seedConfirmedBooking(this.state.store);
+});
+
+When("the professional records arrival", async function (this: ProBookingWorld) {
+  const ok = await this.state.store.recordArrival(this.state.seed.bookingId);
+  assert.equal(ok, true);
+});
+
+Then("the booking shows arrived", async function (this: ProBookingWorld) {
+  assert.equal(await this.state.store.hasArrived(this.state.seed.bookingId), true);
+});
+
+Then(
+  "cancelling after arrival at full compensation conserves captured funds",
+  async function (this: ProBookingWorld) {
+    const s = this.state.seed;
+    const payable = payableFromFraction(satang(s.compensation), 1);
+    const refund = satang(s.captured - payable);
+    const result = await this.state.store.cancelBooking({
+      bookingId: s.bookingId,
+      payable,
+      refund,
+      payoutKey: `cancel-payout:${s.bookingId}`,
+      refundKey: `cancel-refund:${s.bookingId}`,
+    });
+    assert.equal(result.payable + result.refund, s.captured);
+    const report = await this.state.store.reconcile();
+    const row = report.rows.find((r: { bookingId: string }) => r.bookingId === s.bookingId);
+    assert.ok(row);
+    assert.equal(row.conserved, true);
+  },
+);

@@ -1,11 +1,6 @@
 import { Given, When, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
-import {
-  checkConfirmationEligibility,
-  effectiveOfferExpiry,
-  OFFER_TIMERS,
-  type ConfirmationContext,
-} from "@probook/domain";
+import { checkConfirmationEligibility, effectiveOfferExpiry, OFFER_TIMERS, type ConfirmationContext } from "@probook/domain";
 import { newStore, seedConfirmedBooking } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
@@ -81,21 +76,43 @@ Given(
   async function (this: ProBookingWorld) {
     this.state.store = newStore();
     this.state.seed = await seedConfirmedBooking(this.state.store);
+    const booking = await this.state.store.getBooking(this.state.seed.bookingId);
+    // Licence expires before shift end — VER-04/06 detection input.
+    this.state.expiredUntil = booking.shiftEnd - HOUR;
   },
 );
 
-When("the credential is detected as invalid", async function (this: ProBookingWorld) {
-  // VER-06: Operations places the booking on hold (overlay) when a credential fails.
-  await this.state.store.holdBooking(this.state.seed.bookingId, "credential_or_insurance_invalid");
+When(
+  "the licence expiry is recorded and Operations holds the booking",
+  async function (this: ProBookingWorld) {
+    await this.state.store.setLicenceValidUntil(this.state.seed.professionalId, this.state.expiredUntil);
+    await this.state.store.holdBooking(this.state.seed.bookingId, "credential_or_insurance_invalid");
+  },
+);
+
+Then("offer eligibility reports the licence does not cover the shift", async function (this: ProBookingWorld) {
+  const elig = await this.state.store.getOfferEligibility(this.state.seed.offerId);
+  assert.ok(elig);
+  assert.equal(elig.licenceValidThroughShiftEnd, false);
 });
 
 Given("a confirmed booking that requires insurance", async function (this: ProBookingWorld) {
   this.state.store = newStore();
-  this.state.seed = await seedConfirmedBooking(this.state.store);
+  this.state.seed = await seedConfirmedBooking(this.state.store, { insuranceRequired: true });
+  // Seed valid insurance at confirm time, then lapse it post-confirmation.
+  const booking = await this.state.store.getBooking(this.state.seed.bookingId);
+  await this.state.store.submitInsurance(this.state.seed.professionalId, booking.shiftEnd + HOUR);
+  await this.state.store.verifyInsurance(this.state.seed.professionalId);
 });
 
 When("the insurance becomes Expired before shift end", async function (this: ProBookingWorld) {
+  await this.state.store.expireInsurance(this.state.seed.professionalId);
   await this.state.store.holdBooking(this.state.seed.bookingId, "credential_or_insurance_invalid");
+});
+
+Then("insurance status is Expired", async function (this: ProBookingWorld) {
+  const ins = await this.state.store.getInsuranceStatus(this.state.seed.professionalId);
+  assert.equal(ins.state, "Expired");
 });
 
 Then("the booking is placed on Hold for Operations review", async function (this: ProBookingWorld) {

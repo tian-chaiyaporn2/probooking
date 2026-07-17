@@ -1,13 +1,15 @@
 import { Given, When, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
 import { can, advanceOffer, IllegalTransitionError, type Role } from "@probook/domain";
+import { newStore } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
 /**
- * Step definitions for area 4 (clinic authority & one active offer). These exercise
- * the pure domain directly (can/advanceOffer); other areas either call real domain
- * functions or drive the in-memory store via features/support/store.ts.
+ * Step definitions for area 4 (clinic authority) and soft-hold acceptance (OFF-04).
+ * Authority scenarios exercise can(); soft-hold acceptance drives the real store.
  */
+
+const HOUR = 60 * 60 * 1000;
 
 Given("a user with role {string}", function (this: ProBookingWorld, role: string) {
   this.state.role = role as Role;
@@ -34,18 +36,47 @@ Then("the action is forbidden", function (this: ProBookingWorld) {
   assert.notEqual(this.lastError, null);
 });
 
-When("acceptance is applied to the offer", function (this: ProBookingWorld) {
-  this.lastError = null;
-  try {
-    // OFF-04: acceptance -> AwaitingPayment (a soft hold), never straight to a booking.
-    this.state.offerState = advanceOffer("PendingResponse", "AwaitingPayment");
-  } catch (e) {
-    this.lastError = e;
-  }
+Given("a shift with a pending offer awaiting acceptance", async function (this: ProBookingWorld) {
+  this.state.store = newStore();
+  const clinic = await this.state.store.registerClinic({
+    branchName: "C", licenceNo: "L", address: "A", ownerPhone: "+66off1",
+  });
+  await this.state.store.verifyClinic(clinic.id);
+  const pro = await this.state.store.registerProfessional({
+    displayName: "D", profession: "physician", phone: "+66off2", payoutRef: "x",
+  });
+  await this.state.store.verifyProfessional(pro.id);
+  const now = 1_700_000_000_000;
+  const { shiftId } = await this.state.store.postShift({
+    clinicWorkspaceId: clinic.id, category: "general", compensation: 1_000_000,
+    urgency: "standard", shiftStart: now + 48 * HOUR, insuranceRequired: false,
+  });
+  await this.state.store.applyToShift(shiftId, pro.id);
+  const offer = await this.state.store.createOfferForShift({
+    shiftId, professionalId: pro.id, sentAt: now, expiresAt: now + 12 * HOUR,
+  });
+  this.state.offerId = offer.id;
+  this.state.shiftId = shiftId;
 });
 
-Then("the offer awaits payment rather than becoming a booking", function (this: ProBookingWorld) {
-  assert.equal(this.state.offerState, "AwaitingPayment");
+When("the professional accepts the offer into a soft hold", async function (this: ProBookingWorld) {
+  // OFF-04: acceptance -> AwaitingPayment (soft hold), never a booking.
+  this.state.offer = await this.state.store.setOfferState(
+    this.state.offerId,
+    "AwaitingPayment",
+    1_700_000_000_000 + HOUR,
+  );
+});
+
+Then("the offer awaits payment rather than becoming a booking", async function (this: ProBookingWorld) {
+  const offer = await this.state.store.getOffer(this.state.offerId);
+  assert.equal(offer.state, "AwaitingPayment");
+  assert.ok(offer.fundingDueAt);
+});
+
+Then("no booking exists for that offer", async function (this: ProBookingWorld) {
+  const booking = await this.state.store.getBookingByOffer(this.state.offerId);
+  assert.equal(booking, null);
 });
 
 Then("converting the offer before payment is rejected", function (this: ProBookingWorld) {

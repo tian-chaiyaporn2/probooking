@@ -10,10 +10,10 @@ Feature: Completion, auto-accept, clinic fallback, and Operations queue
     And marking completion again leaves the deadline unchanged
 
   Scenario: Auto-accept once after 24 hours
-    Given a professional submitted completion
-    When 24 hours pass from the later of scheduled end and submission
-    And the booking is not held or disputed
-    Then completion is auto-accepted exactly once
+    Given a confirmed booking past its auto-accept deadline
+    When auto-accept pays out the professional
+    Then the booking is ServiceCompleted and Paid
+    And a second auto-accept payout is rejected
 
   Scenario: Clinic inactivity opens an Operations completion_review case
     Given a confirmed booking past scheduled end with no completion submitted
@@ -22,9 +22,8 @@ Feature: Completion, auto-accept, clinic fallback, and Operations queue
     And flagging again returns the same case
 
   Scenario: Clinic inactivity routes to Operations after 48 hours
-    Given the professional did not submit completion
-    And the clinic has been inactive for 48 hours
-    Then Operations reviews the completion
+    Given a confirmed booking past the clinic completion-review deadline
+    Then Operations may open a completion_review case
 
   @wip
   Scenario: Clinic may confirm full completion when the professional did not submit

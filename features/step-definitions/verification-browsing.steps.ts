@@ -26,9 +26,32 @@ Then("they can browse restricted public content", function (this: ProBookingWorl
 });
 
 Then("they cannot apply, invite, offer, or pay", async function (this: ProBookingWorld) {
-  // AUTH-04: transacting requires a Verified account — the gate the store/API enforce.
+  // AUTH-04: transacting requires Verified — an unverified clinic cannot reach offer creation
+  // for a published shift (clinic must be verified to post; here we assert the verification gate).
   const verification = await this.state.store.clinicVerification(this.state.clinicId);
   assert.notEqual(verification, "Verified");
+  // Unverified clinic cannot post a shift that would unlock offer/pay flows either — the
+  // store still accepts postShift, but confirmation eligibility requires clinicVerified.
+  const { shiftId } = await this.state.store.postShift({
+    clinicWorkspaceId: this.state.clinicId,
+    category: "general",
+    compensation: 1_000_000,
+    urgency: "standard",
+    shiftStart: 1_700_000_000_000 + 48 * 60 * 60 * 1000,
+    insuranceRequired: false,
+  });
+  // Without a verified professional + clinic, createOffer is still creatable at store layer,
+  // but getOfferEligibility reports clinicVerified=false — the confirm gate AUTH-04 enforces.
+  const pro = await this.state.store.registerProfessional({
+    displayName: "D", profession: "physician", phone: "+66unv-pro", payoutRef: "x",
+  });
+  await this.state.store.verifyProfessional(pro.id);
+  await this.state.store.applyToShift(shiftId, pro.id);
+  const offer = await this.state.store.createOfferForShift({
+    shiftId, professionalId: pro.id, sentAt: 1, expiresAt: 2,
+  });
+  const elig = await this.state.store.getOfferEligibility(offer.id);
+  assert.equal(elig?.clinicVerified, false);
 });
 
 Given("a professional with a verified licence and a self-declared bio", async function (this: ProBookingWorld) {

@@ -90,9 +90,43 @@ Then("an aggregate rating is returned", function (this: ProBookingWorld) {
   assert.ok(this.state.rating.average >= 4);
 });
 
-Then("with only two published scores it remains hidden", function (this: ProBookingWorld) {
-  // Domain cold-start gate: two published scores → null (same rule the store uses).
-  assert.equal(aggregateRating([5, 4]), null);
+Then("with only two published scores it remains hidden", async function (this: ProBookingWorld) {
+  // Separate store with only two published scores on a different professional — cold-start gate.
+  const store = newStore();
+  const first = await seedConfirmedBooking(store);
+  await completeAndPay(store, first);
+  await store.createReview({
+    bookingId: first.bookingId,
+    authorId: first.clinicId,
+    subjectId: first.professionalId,
+    score: 5,
+    tags: [],
+  });
+  await store.createReview({
+    bookingId: first.bookingId,
+    authorId: first.professionalId,
+    subjectId: first.clinicId,
+    score: 4,
+    tags: [],
+  });
+  const second = await seedConfirmedBooking(store, { professionalId: first.professionalId });
+  await completeAndPay(store, second);
+  await store.createReview({
+    bookingId: second.bookingId,
+    authorId: second.clinicId,
+    subjectId: second.professionalId,
+    score: 4,
+    tags: [],
+  });
+  await store.createReview({
+    bookingId: second.bookingId,
+    authorId: second.professionalId,
+    subjectId: second.clinicId,
+    score: 5,
+    tags: [],
+  });
+  const rating = await store.getSubjectRating(first.professionalId);
+  assert.equal(rating, null); // REV-04: still below 3 published scores on the subject
 });
 
 Given("a related-party booking", function (this: ProBookingWorld) {

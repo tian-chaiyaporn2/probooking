@@ -39,10 +39,12 @@ stay out of the CI gate; stubs in `wip-pending.steps.ts` return pending.
 ## Coverage honesty
 
 Scenarios assert real store/domain outcomes wherever hooks exist (search filters,
-availability round-trip, contact reveal, auto-accept deadline stamp, Ops
-`completion_review` cases, rating cold-start via published reviews, conservation
-from stored booking amounts, OFF-03 expiry timers, LOC-02 satang checkout, REP-01
-history). Remaining `@wip` gaps need product work first: soft-hold overlap,
-open-to-requests matching, location/availability search filters, clinic-confirm
-without pro submit (CMP-04), overtime/shortened payable (CMP-05), PAY-10 refund
-split, and REV-05 related-party exclusion in the store.
+availability round-trip, invitations, contact reveal, message round-trip,
+auto-accept deadline + once-only payout, Ops `completion_review` cases, hold
+blocks payout until resolve, rating cold-start via published reviews, conservation
+from stored booking amounts and cancel reconcile, OFF-03/04 soft-hold + expiry
+timers, LOC-02 satang checkout, REP-01 history, REP-03 metrics, arrival evidence).
+Remaining `@wip` gaps need product work first: soft-hold overlap, open-to-requests
+matching, location/availability search filters, clinic-confirm without pro submit
+(CMP-04), overtime/shortened payable (CMP-05), PAY-10 refund split, and REV-05
+related-party exclusion in the store.
