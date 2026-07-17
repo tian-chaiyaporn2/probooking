@@ -8,6 +8,7 @@ import {
   DEFAULT_SERVICE_FEE_BPS,
 } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
+import { encryptField, decryptField } from "./field-crypto.js";
 
 /** Shape of the fields a terms snapshot freezes. Structural, so both Shift reads fit. */
 interface SnapshotableShift {
@@ -168,8 +169,11 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       const clinic = await tx.clinicWorkspace.create({
         data: {
           branchName: input.branchName,
-          licenceNo: input.licenceNo,
-          address: input.address,
+          // Encrypted at rest (§7.3): a DB dump yields ciphertext, not a clinic's licence
+          // number and street address. Neither is read back in any app flow, so there is no
+          // decrypt path to add — only the write is wrapped.
+          licenceNo: encryptField(input.licenceNo),
+          address: encryptField(input.address),
           verification: "Submitted",
         },
       });
@@ -1215,8 +1219,10 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord> {
-    const m = await prisma.message.create({ data: { bookingId, senderId, body } });
-    return { id: m.id, senderId: m.senderId, body: m.body, createdAt: m.createdAt.getTime() };
+    // Encrypted at rest: clinic<->professional threads may carry sensitive context. The
+    // patient-data filter already ran on the plaintext at the controller, before this.
+    const m = await prisma.message.create({ data: { bookingId, senderId, body: encryptField(body) } });
+    return { id: m.id, senderId: m.senderId, body, createdAt: m.createdAt.getTime() };
   }
 
   async listMessages(bookingId: string): Promise<MessageRecord[]> {
@@ -1224,7 +1230,12 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       where: { bookingId },
       orderBy: { createdAt: "asc" },
     });
-    return list.map((m) => ({ id: m.id, senderId: m.senderId, body: m.body, createdAt: m.createdAt.getTime() }));
+    return list.map((m) => ({
+      id: m.id,
+      senderId: m.senderId,
+      body: decryptField(m.body),
+      createdAt: m.createdAt.getTime(),
+    }));
   }
 
   async getBookingContact(bookingId: string): Promise<BookingContact | null> {
