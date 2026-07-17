@@ -62,3 +62,28 @@ NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com pnpm run deploy:pages
 
 Remember to set that API's `CORS_ORIGINS=https://tian-chaiyaporn2.github.io` and a
 real `JWT_SECRET` (the API refuses to boot in production without one).
+
+## Demo mode — public site against your LOCAL API (tunnel)
+
+For semi-private testing (a few people) without hosting the backend, expose the
+local API over a public HTTPS tunnel and point the Pages frontend at it.
+
+```bash
+# with the local API (:4000) + Postgres already running:
+bash scripts/tunnel-deploy.sh
+```
+
+It opens a `localhost.run` SSH tunnel (works where cloudflared/ngrok didn't in this
+environment), grabs the fresh `https://<id>.lhr.life` URL, rebuilds + redeploys the
+frontend with `NEXT_PUBLIC_API_BASE_URL` set to it, and keeps the tunnel alive.
+
+Why a tunnel is required: browsers block a **public** HTTPS page (github.io) from
+fetching **loopback** (`http://localhost`) via Private/Local Network Access — even
+with correct CORS. A public HTTPS tunnel side-steps that (public → public).
+
+Caveats:
+- The tunnel URL is **ephemeral** — every restart is a new URL, so re-run the script
+  (it redeploys automatically). The laptop, API, Postgres, and tunnel must stay up.
+- It **exposes the demo API publicly**: anyone with the URL can hit `/auth/dev/token`
+  and read the demo data. Share the Pages link privately; fine for a throwaway demo.
+- Manual equivalent: `NEXT_PUBLIC_API_BASE_URL=https://<id>.lhr.life pnpm run deploy:pages`.
