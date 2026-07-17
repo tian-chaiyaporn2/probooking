@@ -7,7 +7,7 @@ import { InMemoryMarketplaceStore } from "../modules/marketplace/marketplace.mem
 import { seedDemoFixtures } from "./demo-fixtures.js";
 
 /** Returns true when demo fixtures should load at API boot. */
-export function shouldSeedOnBoot(): boolean {
+function shouldSeedOnBoot(): boolean {
   if (process.env.SEED_ON_BOOT === "false") return false;
   // In-memory mode (no Postgres): seed by default so /ops and /finance have data.
   if (!process.env.DATABASE_URL) return true;

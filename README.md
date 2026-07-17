@@ -17,14 +17,13 @@ probook/
 ├─ apps/
 │  ├─ web/       Next.js marketplace + Ops/Finance dashboards (Thai UI, light/dark, responsive)
 │  ├─ api/       NestJS — controlled APIs (money, audit, auth/roles, state machines)
-│  ├─ worker/    polling sweeps — auto-accept, clinic-review, review-publish, reminders (§7.2)
-│  └─ ops/       design note for internal tools (ADM-02); UI implemented in apps/web
+│  └─ worker/    polling sweeps — auto-accept, clinic-review, review-publish, reminders (§7.2)
 ├─ packages/
 │  ├─ domain/    pure rules: money (satang), roles, states, policies, machines
 │  └─ db/        Prisma schema + client + migrations (PostgreSQL)
 ├─ features/     BDD (.feature) — the 14 acceptance areas from PRD §9.4
 ├─ e2e/          Playwright end-to-end tests (browser drives the live flow)
-└─ docs/         PRD, Rollout Plan, architecture, ADRs, traceability
+└─ docs/         PRD, Rollout Plan, architecture, ADRs, ops-tools note, traceability
 ```
 
 The Phase 0 booking flow (create offer → accept → confirm) lives in
@@ -48,7 +47,7 @@ See [`docs/adr/0001-stack.md`](docs/adr/0001-stack.md).
 ```bash
 nvm use
 pnpm install
-cp .env.example .env            # fill DATABASE_URL, REDIS_URL, provider keys (optional in dev)
+cp .env.example .env            # fill DATABASE_URL, provider keys (optional in dev)
 
 pnpm db:generate                # generate Prisma client
 pnpm build                      # build shared packages (domain, db) + apps — see ADR 0002

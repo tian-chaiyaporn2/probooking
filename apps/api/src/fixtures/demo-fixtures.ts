@@ -5,7 +5,7 @@ const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
 /** Stable demo phones — safe to re-run; registration rejects duplicates per store. */
-export const DEMO_PHONES = {
+const DEMO_PHONES = {
   clinicA: "+66910000001",
   clinicB: "+66910000002",
   clinicPending: "+66910000003",

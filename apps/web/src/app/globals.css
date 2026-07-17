@@ -176,8 +176,11 @@ img, svg { max-width: 100%; height: auto; }
 .btn--primary:hover:not(:disabled) { background: var(--primary-hover); }
 .btn--ghost { background: var(--surface); border-color: var(--line); color: var(--text); }
 .btn--ghost:hover:not(:disabled) { border-color: var(--muted); }
+.btn--subtle { background: transparent; border-color: transparent; color: var(--muted); }
+.btn--subtle:hover:not(:disabled) { color: var(--text); background: var(--surface-2, var(--surface)); }
 .btn--lg { min-height: 2.9rem; padding: 0 1.3rem; font-size: 1rem; }
 .btn--icon { padding: 0; width: 2.4rem; }
+.btn--busy { cursor: wait; }
 .btn svg { width: 1.05em; height: 1.05em; }
 .btn__spinner {
   width: 0.95em; height: 0.95em; border-radius: 50%; flex: none;

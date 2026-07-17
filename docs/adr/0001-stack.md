@@ -22,8 +22,9 @@ A **pnpm TypeScript monorepo**:
   API and worker, unit-tested without services.
 - **DB:** PostgreSQL via Prisma — strong relational integrity, transactions for atomic
   confirmation, easy immutable-event modelling; integer satang for money.
-- **Worker:** BullMQ on Redis — time-driven jobs (expiries, reminders, auto-accept,
-  daily reconciliation).
+- **Worker:** in-process polling sweeps (expiries, reminders, auto-accept, review
+  publish). No Redis required for Phase 0/1; a durable queue (e.g. BullMQ) remains an
+  option if a single polling worker outgrows the load.
 - **BDD:** cucumber-js over the 14 §9.4 areas.
 
 ## Consequences

@@ -7,7 +7,6 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@probook/domain"],
   // Static HTML export — the only thing GitHub Pages can host (no Node server).
   output: "export",
   images: { unoptimized: true }, // no Image Optimization server in a static export
