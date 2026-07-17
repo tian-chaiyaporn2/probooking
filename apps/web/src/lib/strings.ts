@@ -108,12 +108,10 @@ export const th = {
     phoneLabel: "หมายเลขโทรศัพท์ของเจ้าหน้าที่",
     sendCode: "ส่งรหัส OTP",
     codeLabel: "รหัส OTP",
-    codePlaceholder: "รหัส 6 หลัก",
     signIn: "เข้าสู่ระบบ",
     requestNewCode: "กลับไปขอรหัสใหม่",
     sendCodeError: "ส่งรหัส OTP ไม่สำเร็จ กรุณาลองอีกครั้ง",
     signInError: "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบรหัส OTP แล้วลองอีกครั้ง",
-    wrongRole: "บัญชีนี้ไม่มีสิทธิ์เข้าถึงหน้านี้",
     signOut: "ออกจากระบบ",
   },
   a11y: {

@@ -69,9 +69,11 @@ export default function FinancePage() {
   }, [token, load]);
 
   async function exportCsv() {
+    if (!token) return;
+    const auth = token;
     setExporting(true);
     try {
-      const csv = await fetchFinanceExport(token!);
+      const csv = await fetchFinanceExport(auth);
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;
@@ -104,11 +106,11 @@ export default function FinancePage() {
       header: th.finance.colConserved,
       render: (r) =>
         r.conserved ? (
-          <Badge variant="success">
+          <Badge tone="success">
             <CheckIcon /> {th.finance.conservedYes}
           </Badge>
         ) : (
-          <Badge variant="credential_hold">
+          <Badge tone="warn">
             <AlertIcon /> {th.finance.conservedNo}
           </Badge>
         ),

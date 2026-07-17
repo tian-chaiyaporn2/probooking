@@ -9,12 +9,22 @@ interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className
   busy?: boolean;
   icon?: ReactNode;
   children: ReactNode;
+  className?: string;
   "data-testid"?: string;
 }
 
 /** The one button. Variants × sizes, a busy spinner, and consistent focus/hover. */
-export function Button({ variant = "ghost", size = "md", busy, icon, children, disabled, ...rest }: Props) {
-  const cls = ["btn", `btn--${variant}`, size === "lg" ? "btn--lg" : "", busy ? "btn--busy" : ""]
+export function Button({
+  variant = "ghost",
+  size = "md",
+  busy,
+  icon,
+  children,
+  disabled,
+  className,
+  ...rest
+}: Props) {
+  const cls = ["btn", `btn--${variant}`, size === "lg" ? "btn--lg" : "", busy ? "btn--busy" : "", className]
     .filter(Boolean)
     .join(" ");
   return (

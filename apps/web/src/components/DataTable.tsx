@@ -17,8 +17,8 @@ interface Props<T> {
   loadingRows?: number;
   empty?: ReactNode;
   bodyTestid?: string;
-  /** Accessible name for the table (rendered as a visually-hidden caption). */
-  caption?: string;
+  /** Accessible name — required when the table should be keyboard-scrollable. */
+  caption: string;
 }
 
 /** Generic data table: right-alignable numeric columns, loading skeleton, empty state. */
@@ -35,7 +35,7 @@ export function DataTable<T>({
   return (
     <div className="table-scroll" tabIndex={0} role="region" aria-label={caption}>
       <table className="data-table">
-        {caption ? <caption className="sr-only">{caption}</caption> : null}
+        <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
             {columns.map((c) => (

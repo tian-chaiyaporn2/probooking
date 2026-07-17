@@ -13,7 +13,7 @@ const LINKS = [
   { href: "/flow", label: th.nav.flow },
 ] as const;
 
-/** Keep in sync with `--nav-drawer-max` in globals.css (tablet keeps the drawer). */
+/** Keep in sync with max-width: 959px drawer breakpoint in globals.css. */
 const DRAWER_MQ = "(min-width: 960px)";
 
 /**
@@ -33,6 +33,8 @@ export function AppHeader({ current }: { current?: string }) {
   useEffect(() => {
     if (!open) return;
     const drawer = drawerRef.current;
+    const main = document.getElementById("main");
+    if (main) main.inert = true;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
@@ -65,6 +67,7 @@ export function AppHeader({ current }: { current?: string }) {
     return () => {
       document.removeEventListener("keydown", onKey);
       root.style.overflow = prevOverflow;
+      if (main) main.inert = false;
       toggleRef.current?.focus();
     };
   }, [open]);
@@ -130,6 +133,8 @@ export function AppHeader({ current }: { current?: string }) {
             id={drawerId}
             className="app-nav--drawer"
             aria-label={th.a11y.primaryNav}
+            role="dialog"
+            aria-modal="true"
           >
             <div className="app-nav--drawer__top">
               <span className="app-nav--drawer__title">{th.a11y.primaryNav}</span>

@@ -1,16 +1,40 @@
 import type { ReactNode } from "react";
 
-/** Semantic pill. `variant` maps a domain kind to a restrained color. */
-export function Badge({ children, variant = "muted" }: { children: ReactNode; variant?: string }): ReactNode {
-  const cls =
-    variant === "clinic"
-      ? "badge--info"
+/** Visual tones only — pages map domain kinds onto these. */
+export type BadgeTone = "muted" | "info" | "accent" | "warn" | "success";
+
+const TONE_CLASS: Record<BadgeTone, string> = {
+  muted: "badge--muted",
+  info: "badge--info",
+  accent: "badge--accent",
+  warn: "badge--warn",
+  success: "badge--success",
+};
+
+/**
+ * Semantic pill. Prefer `tone` for visual styling.
+ * `variant` remains as a domain alias (clinic / professional / credential_hold) for call sites.
+ */
+export function Badge({
+  children,
+  tone,
+  variant,
+}: {
+  children: ReactNode;
+  tone?: BadgeTone;
+  /** @deprecated Prefer `tone`. Domain aliases kept for existing call sites. */
+  variant?: "clinic" | "professional" | "credential_hold" | BadgeTone | string;
+}): ReactNode {
+  const resolved: BadgeTone =
+    tone ??
+    (variant === "clinic"
+      ? "info"
       : variant === "professional"
-        ? "badge--accent"
-        : variant === "credential_hold"
-          ? "badge--warn"
-          : variant === "success"
-            ? "badge--success"
-            : "badge--muted";
-  return <span className={`badge ${cls}`}>{children}</span>;
+        ? "accent"
+        : variant === "credential_hold" || variant === "warn"
+          ? "warn"
+          : variant === "success" || variant === "info" || variant === "accent" || variant === "muted"
+            ? variant
+            : "muted");
+  return <span className={`badge ${TONE_CLASS[resolved]}`}>{children}</span>;
 }

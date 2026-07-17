@@ -55,9 +55,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       <div className="toast-viewport" role="region" aria-label={th.a11y.notifications}>
-        <div className="toast-stack" aria-live="assertive">
+        {/* Live regions alone announce — avoid nesting role=alert/status (double speak). */}
+        <div className="toast-stack" aria-live="assertive" aria-relevant="additions text">
           {errors.map((t) => (
-            <div key={t.id} className="toast toast--error" data-testid="toast-error" role="alert">
+            <div key={t.id} className="toast toast--error" data-testid="toast-error">
               <span className="toast__icon" aria-hidden>
                 <AlertIcon />
               </span>
@@ -68,9 +69,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             </div>
           ))}
         </div>
-        <div className="toast-stack" aria-live="polite">
+        <div className="toast-stack" aria-live="polite" aria-relevant="additions text">
           {successes.map((t) => (
-            <div key={t.id} className="toast toast--success" data-testid="toast-success" role="status">
+            <div key={t.id} className="toast toast--success" data-testid="toast-success">
               <span className="toast__icon" aria-hidden>
                 <CheckIcon />
               </span>

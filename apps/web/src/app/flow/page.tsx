@@ -116,7 +116,7 @@ export default function FlowPage() {
       setCheckout(confirmed.checkout);
       setBookingId(confirmed.booking.id);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(e instanceof Error ? e.message : "Flow failed");
     } finally {
       setRunning(false);
     }
@@ -130,7 +130,7 @@ export default function FlowPage() {
       const result = await acceptCompletion(bookingId, tokens.clinic); // the clinic accepts + pays
       setPayout(result);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(e instanceof Error ? e.message : "Payout failed");
     } finally {
       setPayingOut(false);
     }
@@ -147,7 +147,7 @@ export default function FlowPage() {
       setReviewsPublished(r.published);
       setRating(await getRating(professionalId)); // hasRating false until 3 reviews (REV-04)
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(e instanceof Error ? e.message : "Reviews failed");
     } finally {
       setReviewing(false);
     }
@@ -222,21 +222,22 @@ export default function FlowPage() {
             </div>
             {checkout && (
               <table className="checkout">
+                <caption className="sr-only">Checkout totals</caption>
                 <tbody>
                   <tr>
-                    <td>Compensation</td>
+                    <th scope="row">Compensation</th>
                     <td>{formatThb(checkout.compensation)}</td>
                   </tr>
                   <tr>
-                    <td>Service fee (12%)</td>
+                    <th scope="row">Service fee (12%)</th>
                     <td>{formatThb(checkout.serviceFee)}</td>
                   </tr>
                   <tr>
-                    <td>Tax</td>
+                    <th scope="row">Tax</th>
                     <td>{formatThb(checkout.tax)}</td>
                   </tr>
                   <tr className="checkout__total">
-                    <td>Total</td>
+                    <th scope="row">Total</th>
                     <td data-testid="checkout-total">{formatThb(checkout.total)}</td>
                   </tr>
                 </tbody>

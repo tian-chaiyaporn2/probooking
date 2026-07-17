@@ -103,10 +103,12 @@ export default function OpsPage() {
   }
 
   async function verify(kind: "clinic" | "professional", id: string) {
+    if (!token) return;
+    const auth = token;
     setBusy(true);
     try {
-      if (kind === "clinic") await verifyClinic(id, token!);
-      else await verifyProfessional(id, token!);
+      if (kind === "clinic") await verifyClinic(id, auth);
+      else await verifyProfessional(id, auth);
       await load();
       toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
     } catch (e) {
@@ -117,9 +119,11 @@ export default function OpsPage() {
   }
 
   async function resolve(bookingId: string) {
+    if (!token) return;
+    const auth = token;
     setBusy(true);
     try {
-      await resolveHold(bookingId, token!);
+      await resolveHold(bookingId, auth);
       await load();
       toast.success("ปลดการระงับแล้ว");
     } catch (e) {
@@ -256,7 +260,9 @@ export default function OpsPage() {
                   <span className="empty__title">{th.ops.emptyCases}</span>
                 </li>
               )}
-              {cases.map((c) => (
+              {cases.map((c) => {
+                const refId = c.refId;
+                return (
                 <li key={c.id} data-testid={`case-${c.id}`}>
                   <Badge variant={c.kind}>{th.ops.caseKind[c.kind] ?? c.kind}</Badge>
                   <span className="row__main">
@@ -265,18 +271,19 @@ export default function OpsPage() {
                       {c.subject ? (
                         <span className="muted">{th.ops.caseState[c.state] ?? c.state}</span>
                       ) : null}
-                      {c.refId && <code className="row__id">{c.refId.slice(0, 8)}…</code>}
+                      {refId && <code className="row__id">{refId.slice(0, 8)}…</code>}
                     </span>
                   </span>
-                  {c.kind === "credential_hold" && c.refId && (
+                  {c.kind === "credential_hold" && refId ? (
                     <span className="row__actions">
-                      <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(c.refId as string)}>
+                      <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(refId)}>
                         {th.ops.resolveHold}
                       </Button>
                     </span>
-                  )}
+                  ) : null}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
         </section>

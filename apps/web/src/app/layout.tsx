@@ -44,7 +44,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* Apply the saved theme before paint to avoid a flash of the wrong theme. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t;}}catch(e){}`,
+            // Resolve theme before paint so CSS only needs [data-theme], not duplicated media queries.
+            __html: `try{var t=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=(t==='dark'||t==='light')?t:(d?'dark':'light');}catch(e){}`,
           }}
         />
         <a className="skip-link" href="#main">
