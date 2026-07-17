@@ -1,6 +1,7 @@
 import { prisma } from "@probook/db";
 import {
   autoAcceptDueAt,
+  advanceBooking,
   advanceVerification,
   aggregateRating,
   ratingFromCounts,
@@ -765,11 +766,21 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     if (!existing) return null;
     // CMP-01: professional marks completion; booking -> AwaitingCompletion. Stamp the
     // auto-accept deadline (CMP-03): 24h after the later of shift end and submission.
+    // CMP-01 is idempotent: a resubmitted completion is one completion, and must not
+    // re-stamp the auto-accept deadline (that would let a professional push the clinic's
+    // review window out indefinitely by resubmitting).
+    if (existing.state === "AwaitingCompletion") return this.getBooking(id);
     const autoAcceptAt = new Date(autoAcceptDueAt(existing.shift.endsAt.getTime(), Date.now()));
-    await prisma.booking.update({
-      where: { id },
-      data: { state: "AwaitingCompletion", autoAcceptAt },
+    // Through the machine (§6.2), not around it — and as a conditional update, so the
+    // precondition holds against a concurrent cancel rather than being a stale read.
+    const next = advanceBooking(existing.state as BookingState, "AwaitingCompletion");
+    const claimed = await prisma.booking.updateMany({
+      where: { id, state: existing.state },
+      data: { state: next, autoAcceptAt },
     });
+    if (claimed.count !== 1) {
+      throw new ConflictError("booking changed concurrently; completion not recorded");
+    }
     await prisma.attendanceEvent.create({
       data: { bookingId: id, kind: "Completed", actorId: existing.professionalId },
     });

@@ -44,7 +44,7 @@ import type {
   CreateApprovalInput,
   ExecuteApprovalInput,
 } from "./marketplace.types.js";
-import { advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
+import { advanceBooking, advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
 import type { OfferState, VerificationState, RatingSummary, Role } from "@probook/domain";
 
@@ -500,7 +500,14 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async markCompletion(id: string): Promise<BookingDetail | null> {
     const detail = this.bookings.get(id);
     if (!detail) return null;
-    detail.state = "AwaitingCompletion";
+    // CMP-01 is idempotent: submitting completion twice is one completion, not an error.
+    // This used to be implicit — the store wrote the state directly, so a repeat was a
+    // harmless no-op. Routing through the machine made the second call illegal, which is
+    // the machine being right and the idempotency being unstated. State it.
+    if (detail.state === "AwaitingCompletion") return { ...detail };
+    // Through the machine, not around it: writing the state directly is what let the
+    // completion path drift out of §6.2's control entirely.
+    detail.state = advanceBooking(detail.state, "AwaitingCompletion");
     // Parity with the Prisma store: stamp the CMP-03 auto-accept deadline and record the
     // completion as attendance. Without the deadline, the auto-accept sweep had nothing to
     // select on in this store, so CMP-03 could not be exercised by the suites at all.

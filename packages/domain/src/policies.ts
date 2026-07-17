@@ -4,7 +4,7 @@
  * evaluated against the shift's scheduled start in UTC.
  */
 
-import { satang, type Satang } from "./money.js";
+import { assertNonNegative, satang, type Satang } from "./money.js";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -132,7 +132,13 @@ export function cancellationOutcome(input: {
   return { fraction: 0.5 }; // CAN-02: under 24h -> 50%
 }
 
-/** Payable amount given scheduled compensation and a numeric fraction. */
+/** Payable amount given scheduled compensation and a numeric fraction (0..1). */
 export function payableFromFraction(compensation: Satang, fraction: number): Satang {
+  // Both guards are cheap and this is the rounding step for every cancellation payout: a
+  // negative compensation or an out-of-range fraction here pays the wrong party.
+  assertNonNegative(compensation, "compensation");
+  if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) {
+    throw new RangeError(`Payable fraction must be between 0 and 1, got ${fraction}`);
+  }
   return satang(Math.round(compensation * fraction));
 }

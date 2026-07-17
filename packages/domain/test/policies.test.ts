@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { satang } from "../src/money.js";
 import {
   cancellationOutcome,
+  payableFromFraction,
   effectiveOfferExpiry,
   autoAcceptDueAt,
   completionReviewDueAt,
@@ -152,5 +154,21 @@ describe("urgent eligibility (URG-01)", () => {
   it("is not eligible beyond 72h or in the past", () => {
     expect(isUrgentEligible(URGENT_WINDOW + 1, 0)).toBe(false);
     expect(isUrgentEligible(-1, 0)).toBe(false);
+  });
+});
+
+describe("payableFromFraction guards (CAN-*)", () => {
+  it("rejects a negative compensation or an out-of-range fraction", () => {
+    expect(() => payableFromFraction(satang(-1), 0.5)).toThrow(RangeError);
+    expect(() => payableFromFraction(satang(100), 1.5)).toThrow(RangeError);
+    expect(() => payableFromFraction(satang(100), -0.5)).toThrow(RangeError);
+  });
+
+  it("rounds half-up, pinning the 1-satang tie-break direction", () => {
+    // This is the rounding step for every cancellation payout; the direction must not drift.
+    expect(payableFromFraction(satang(125_055), 0.5)).toBe(62_528); // 62,527.5 -> up
+    expect(payableFromFraction(satang(125_053), 0.5)).toBe(62_527); // 62,526.5 -> up
+    expect(payableFromFraction(satang(100), 1)).toBe(100);
+    expect(payableFromFraction(satang(100), 0)).toBe(0);
   });
 });
