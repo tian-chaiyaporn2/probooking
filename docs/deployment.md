@@ -1,4 +1,4 @@
-# Deployment
+# Deployment & running
 
 ## What deploys where
 
@@ -7,17 +7,40 @@ GitHub Pages serves **static files only**. This monorepo splits into:
 | Part | Can host on Pages? | Where it goes |
 |---|---|---|
 | `apps/web` (Next.js frontend) | ✅ yes — static export | GitHub Pages (`gh-pages` branch) |
-| `apps/api` (NestJS) | ❌ no — needs a Node server | a real host (Render/Railway/Fly/VM) |
+| `apps/api` (NestJS) | ❌ no — needs a Node server | a real host (Render/Railway/Fly/VM) or a local tunnel |
 | `packages/db` (Postgres) | ❌ no — needs a database | a managed Postgres |
 | `apps/worker` | ❌ no — long-running process | a worker host / cron |
 
-So the Pages deploy is **frontend-only**. The landing page (`/`) is fully static
-and works standalone. The `/ops`, `/finance`, and `/flow` dashboards call the API
-at `NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:4000`); on the live Pages
-site they will show a "failed to fetch" toast until an API is hosted somewhere and
-that URL is set at build time.
+So the Pages deploy is **frontend-only**. The landing page (`/`) is fully static and
+works standalone. The `/ops`, `/finance`, and `/flow` dashboards call the API at
+`NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:4000`, baked in at build time);
+without a reachable API they show a "failed to fetch" toast.
 
-## Pipeline (no GitHub Actions)
+## Running locally
+
+Prereq: PostgreSQL running locally (matching `DATABASE_URL` in `.env`).
+
+```bash
+pnpm install
+pnpm --filter @probook/db exec prisma migrate deploy   # apply migrations
+pnpm build:api                                          # build domain + db + api
+
+# API on :4000 (reads .env → Prisma/Postgres store)
+node apps/api/dist/main.js
+# Web on :3000 (Next dev; talks to the API at NEXT_PUBLIC_API_BASE_URL)
+pnpm --filter @probook/web dev
+# Worker sweeps (optional): auto-accept / reminders
+pnpm --filter @probook/worker start        # or: ... sweep:once
+```
+
+Then open **http://localhost:3000**. Local browser → `localhost:3000` → `localhost:4000`
+is same-origin-family, so the dashboards work fully (no CORS/tunnel needed).
+
+> Note: if you lock `CORS_ORIGINS` to only the Pages origin (see Demo mode), the local
+> web UI at `:3000` will be CORS-blocked. Add `http://localhost:3000` to the allowlist
+> if you want both.
+
+## Deploy pipeline (no GitHub Actions)
 
 We deploy from the command line to a `gh-pages` branch — GitHub Pages publishes that
 branch directly, with **no Actions minutes consumed**.
@@ -32,58 +55,68 @@ Under the hood (`scripts/deploy-web.sh`):
 2. `touch out/.nojekyll` so Pages serves the `_next/` folder verbatim.
 3. Force-push `out/` to the `gh-pages` branch of `origin`.
 
-Local dev and the Playwright e2e leave `NEXT_PUBLIC_BASE_PATH` unset, so they serve
-at the root and are unaffected by the base-path config.
+Local dev and the Playwright e2e leave `NEXT_PUBLIC_BASE_PATH` unset, so they serve at
+the root and are unaffected by the base-path config.
 
-## One-time setup
+### One-time setup (already done for this repo)
 
 ```bash
-# 1. Create the public repo and push the code
 gh repo create tian-chaiyaporn2/probooking --public --source=. --remote=origin --push
-
-# 2. Publish the first build
 pnpm run deploy:pages
-
-# 3. Point Pages at the gh-pages branch (Settings → Pages, or:)
 gh api --method POST repos/tian-chaiyaporn2/probooking/pages \
   --input - <<< '{"source":{"branch":"gh-pages","path":"/"}}'
 ```
 
 Live URL: **https://tian-chaiyaporn2.github.io/probooking/**
 
-## Hosting the backend later
-
-To make the dashboards work live, host `apps/api` + Postgres on any Node host, then
-rebuild the frontend with the API URL:
-
-```bash
-NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com pnpm run deploy:pages
-```
-
-Remember to set that API's `CORS_ORIGINS=https://tian-chaiyaporn2.github.io` and a
-real `JWT_SECRET` (the API refuses to boot in production without one).
-
 ## Demo mode — public site against your LOCAL API (tunnel)
 
-For semi-private testing (a few people) without hosting the backend, expose the
-local API over a public HTTPS tunnel and point the Pages frontend at it.
+For semi-private testing (a few people) without hosting the backend, expose the local
+API over a public HTTPS tunnel and point the Pages frontend at it. **One command:**
 
 ```bash
 # with the local API (:4000) + Postgres already running:
 bash scripts/tunnel-deploy.sh
 ```
 
-It opens a `localhost.run` SSH tunnel (works where cloudflared/ngrok didn't in this
-environment), grabs the fresh `https://<id>.lhr.life` URL, rebuilds + redeploys the
-frontend with `NEXT_PUBLIC_API_BASE_URL` set to it, and keeps the tunnel alive.
+It opens a `localhost.run` SSH tunnel, grabs the fresh `https://<id>.lhr.life` URL,
+rebuilds + redeploys the frontend with `NEXT_PUBLIC_API_BASE_URL` set to it, and holds
+the tunnel open. Keep that terminal running for the life of the demo.
 
-Why a tunnel is required: browsers block a **public** HTTPS page (github.io) from
-fetching **loopback** (`http://localhost`) via Private/Local Network Access — even
-with correct CORS. A public HTTPS tunnel side-steps that (public → public).
+**Why a tunnel is required:** browsers block a *public* HTTPS page (github.io) from
+fetching a *loopback* address (`http://localhost`) via Private/Local Network Access —
+even with perfect CORS. A public HTTPS tunnel side-steps that (public → public).
+(In this environment `cloudflared` and `ngrok` didn't route / needed an account;
+`localhost.run` worked over SSH.)
 
-Caveats:
-- The tunnel URL is **ephemeral** — every restart is a new URL, so re-run the script
-  (it redeploys automatically). The laptop, API, Postgres, and tunnel must stay up.
-- It **exposes the demo API publicly**: anyone with the URL can hit `/auth/dev/token`
-  and read the demo data. Share the Pages link privately; fine for a throwaway demo.
-- Manual equivalent: `NEXT_PUBLIC_API_BASE_URL=https://<id>.lhr.life pnpm run deploy:pages`.
+**Lock CORS to the Pages origin** (recommended for a shared demo): set in `.env`
+
+```
+CORS_ORIGINS=https://tian-chaiyaporn2.github.io
+```
+
+The API then rejects any other browser origin. Restart the API after changing it.
+
+### Operational caveats
+- The tunnel URL is **ephemeral** — every tunnel restart is a new URL. Re-run
+  `scripts/tunnel-deploy.sh` (it redeploys automatically). Manual equivalent:
+  `NEXT_PUBLIC_API_BASE_URL=https://<id>.lhr.life pnpm run deploy:pages`.
+- **Restarting the API breaks the `localhost.run` forward** → restart the tunnel too
+  (i.e. just re-run `scripts/tunnel-deploy.sh`), which mints a new URL + redeploys.
+- The laptop, Postgres, API, and tunnel must all stay up; if any drops, the dashboards
+  stop (the landing page still works).
+- It **exposes the demo API publicly**: with CORS locked, other sites can't call it
+  from a browser, but anyone with the tunnel URL can still hit it directly (e.g.
+  `/auth/dev/token`). Share the Pages link privately; fine for a throwaway demo.
+
+## Hosting the backend properly (durable, no laptop)
+
+For a stable demo that doesn't depend on your machine, host `apps/api` + Postgres on a
+Node host (Render/Railway/Fly/VM), then:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com pnpm run deploy:pages
+```
+
+On that host set `CORS_ORIGINS=https://tian-chaiyaporn2.github.io` and a real
+`JWT_SECRET` (the API refuses to boot in production without one — see `apps/api/main.ts`).

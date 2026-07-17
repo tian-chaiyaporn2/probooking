@@ -15,10 +15,10 @@ Current stage: **Phase 0 — Concierge Validation** (Bangkok + surrounding provi
 ```
 probook/
 ├─ apps/
-│  ├─ web/       Next.js responsive marketplace (clinics + professionals)
-│  ├─ api/       NestJS — controlled APIs (money, audit, state machines)
-│  ├─ worker/    BullMQ — expiries, reminders, auto-accept, reconciliation
-│  └─ ops/       internal low-code tools (Ops/Finance/Admin) — calls api only
+│  ├─ web/       Next.js marketplace + Ops/Finance dashboards (Thai UI, light/dark, responsive)
+│  ├─ api/       NestJS — controlled APIs (money, audit, auth/roles, state machines)
+│  ├─ worker/    polling sweeps — auto-accept, clinic-review, review-publish, reminders (§7.2)
+│  └─ ops/       design note for internal tools (ADM-02); UI implemented in apps/web
 ├─ packages/
 │  ├─ domain/    pure rules: money (satang), roles, states, policies, machines
 │  └─ db/        Prisma schema + client + migrations (PostgreSQL)
@@ -41,7 +41,7 @@ See [`docs/adr/0001-stack.md`](docs/adr/0001-stack.md).
 ## Prerequisites
 
 - Node ≥ 20.11 (`.nvmrc`), **pnpm** 9
-- PostgreSQL 15+ and Redis 7+ (for the worker) — or use the mock providers in dev
+- PostgreSQL 15+ (the Phase-1 worker uses a polling loop — no Redis required) — mock providers in dev
 
 ## Getting started
 
@@ -112,6 +112,22 @@ pnpm e2e                             # Playwright: builds API, boots API + web, 
 `pnpm e2e` starts both servers itself (see `playwright.config.ts`) and exercises
 create-offer → accept → confirm in a real browser, asserting the Confirmed booking
 and the 12% checkout total.
+
+## Deploy & live demo
+
+The frontend deploys to **GitHub Pages** (static export) with **no GitHub Actions** —
+`scripts/deploy-web.sh` force-pushes the build to a `gh-pages` branch:
+
+```bash
+pnpm run deploy:pages         # build static export → push gh-pages
+```
+
+Live: **https://tian-chaiyaporn2.github.io/probooking/** (the landing page is fully
+static; the dashboards need a reachable API).
+
+Pages can't host the API/DB/worker. For a semi-private demo against your **local** API,
+`scripts/tunnel-deploy.sh` opens an HTTPS tunnel and redeploys the frontend pointed at
+it. Full details, caveats, and the CORS lockdown: [`docs/deployment.md`](docs/deployment.md).
 
 ## Money, time, locale (non-negotiable)
 
