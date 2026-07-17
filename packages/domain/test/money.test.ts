@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { thb, satang, serviceFee, buildCheckout, conserves } from "../src/money.js";
+import { thb, satang, serviceFee, buildCheckout, conserves, withinAllocation } from "../src/money.js";
 
 describe("money (integer satang, LOC-02)", () => {
   it("converts THB to satang", () => {
@@ -13,6 +13,59 @@ describe("money (integer satang, LOC-02)", () => {
   it("computes the default 12% service fee (PAY-02, Decision #8)", () => {
     // 10,000 THB compensation -> 1,000,000 satang -> 12% = 120,000 satang
     expect(serviceFee(thb(10_000))).toBe(120_000);
+  });
+
+  it("rounds a fractional-satang fee half-up, deterministically (PAY-11)", () => {
+    // 10,000 satang divides exactly, so it cannot detect a rounding-mode change. These
+    // inputs do not: 125,055 * 0.12 = 15,006.6 -> 15,007 under round, 15,006 under floor.
+    // Reconciliation is only reproducible if this direction is pinned.
+    expect(serviceFee(satang(125_055))).toBe(15_007);
+    // Exact .5 tie -> away from zero (half-up), not banker's rounding to even.
+    expect(serviceFee(satang(125), 1200)).toBe(15); // 15.0 exactly
+    expect(serviceFee(satang(375), 1200)).toBe(45); // 45.0 exactly
+    expect(serviceFee(satang(21), 1200)).toBe(3); // 2.52 -> 3
+    expect(serviceFee(satang(125_054))).toBe(15_006); // 15,006.48 -> 15,006
+  });
+
+  it("keeps the checkout total equal to its own parts under rounding (PAY-02/07)", () => {
+    // The total must be the sum of the reported (rounded) parts, never a re-derivation —
+    // otherwise the customer is charged a total that its own breakdown contradicts.
+    const c = buildCheckout(satang(125_055), { tax: satang(7) });
+    expect(c.total).toBe(c.compensation + c.serviceFee + c.tax);
+    expect(
+      conserves({
+        captured: c.total,
+        protectedRemainder: c.compensation,
+        payout: satang(0),
+        fee: c.serviceFee,
+        tax: c.tax,
+        refunds: satang(0),
+        providerCosts: satang(0),
+        adjustments: satang(0),
+      }),
+    ).toBe(true);
+  });
+
+  it("detects an imbalance (PAY-07 must not be vacuous)", () => {
+    // The positive case alone would pass even if conserves() returned true unconditionally.
+    expect(
+      conserves({
+        captured: satang(560_000),
+        protectedRemainder: satang(0),
+        payout: satang(500_001), // one satang too much
+        fee: satang(60_000),
+        tax: satang(0),
+        refunds: satang(0),
+        providerCosts: satang(0),
+        adjustments: satang(0),
+      }),
+    ).toBe(false);
+  });
+
+  it("caps payouts at the available funds and rejects negatives (PAY-08)", () => {
+    expect(withinAllocation(satang(100), satang(100))).toBe(true); // boundary is inclusive
+    expect(withinAllocation(satang(101), satang(100))).toBe(false);
+    expect(withinAllocation(satang(-1), satang(100))).toBe(false);
   });
 
   it("builds a checkout that totals compensation + fee + tax (PAY-02)", () => {

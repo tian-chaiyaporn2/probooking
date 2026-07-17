@@ -1,8 +1,10 @@
 import { prisma } from "@probook/db";
 import { CLINIC_COMPLETION_REVIEW_AFTER } from "@probook/domain";
+import { workerAuthHeaders } from "../auth.js";
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:4000";
 const REVIEW_KIND = "completion_review";
+const BATCH = 500;
 
 export interface ReviewSweepResult {
   due: number;
@@ -25,6 +27,9 @@ export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSw
       shift: { endsAt: { lte: cutoff } },
     },
     select: { id: true },
+    // The candidate set here grows monotonically (a booking nobody completes stays
+    // Confirmed forever), so an unbounded fetch degrades every pass as history accumulates.
+    take: BATCH,
   });
   if (candidates.length === 0) return { due: 0, flagged: 0, failed: 0 };
 
@@ -44,9 +49,12 @@ export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSw
     try {
       const res = await fetch(`${API_BASE}/bookings/${booking.id}/flag-inactive`, {
         method: "POST",
+        headers: workerAuthHeaders(),
       });
       if (res.ok) {
         flagged++;
+      } else if (res.status === 409) {
+        continue; // a case already exists for this booking — the dedupe worked
       } else {
         failed++;
         console.error(`[clinic-review] ${booking.id} -> HTTP ${res.status}`);

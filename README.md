@@ -66,6 +66,18 @@ pnpm --filter @probook/web dev             # web on :3000  (/ and /flow)
 pnpm --filter @probook/worker start        # background worker (auto-accept sweep, CMP-03)
 ```
 
+**The API fails closed.** It refuses to boot without a strong `JWT_SECRET` and an explicit
+`CORS_ORIGINS`, unless `AUTH_DEV_MODE=true` — the local-dev opt-in that also exposes
+`POST /auth/dev/token` and returns OTP codes in responses. Both are a complete
+authentication bypass, both are forced off when `NODE_ENV=production` regardless of the
+flag, and neither belongs on anything reachable from the internet (the tunnel script
+refuses to publish an API with them on). `.env.example` documents the whole contract.
+
+Every mutating endpoint is authenticated. A token proves possession of a phone; **authority
+is derived from the identity graph** (professional profile / clinic membership), never from
+a role or party id in the request body. The `/flow` demo logs in as both parties over OTP to
+show this — a clinic cannot accept on the professional's behalf, and vice versa.
+
 The **worker** polls Postgres for bookings whose 24h auto-accept deadline has passed
 (`autoAcceptAt`) and are still `AwaitingCompletion`, then calls the API's
 `accept-completion` to finalize + pay out (CMP-03). It needs `DATABASE_URL` and a
@@ -115,8 +127,12 @@ and the 12% checkout total.
 
 ## Deploy & live demo
 
-The frontend deploys to **GitHub Pages** (static export) with **no GitHub Actions** —
-`scripts/deploy-web.sh` force-pushes the build to a `gh-pages` branch:
+CI (`.github/workflows/ci.yml`) runs typecheck, the domain suite, the BDD suite and the
+Playwright e2e against a real Postgres on every push and PR.
+
+The frontend deploys to **GitHub Pages** (static export) via `scripts/deploy-web.sh`, which
+force-pushes the build to a `gh-pages` branch (it refuses on a dirty tree, so the published
+site always matches the commit it claims):
 
 ```bash
 pnpm run deploy:pages         # build static export → push gh-pages

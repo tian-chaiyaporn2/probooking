@@ -1,6 +1,10 @@
 import { prisma } from "@probook/db";
+import { workerAuthHeaders } from "../auth.js";
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:4000";
+
+/** Bound each pass; a backlog drains across passes rather than in one unbounded query. */
+const BATCH = 500;
 
 export interface SweepResult {
   due: number;
@@ -29,6 +33,9 @@ export async function autoAcceptSweep(now: number): Promise<SweepResult> {
       heldAt: null, // VER-06: never auto-accept a held booking
     },
     select: { id: true },
+    // Bound the pass. The candidate set only shrinks as bookings are accepted, so a backlog
+    // drains across passes instead of pulling every row into memory at once.
+    take: BATCH,
   });
 
   let accepted = 0;
@@ -37,9 +44,14 @@ export async function autoAcceptSweep(now: number): Promise<SweepResult> {
     try {
       const res = await fetch(`${API_BASE}/bookings/${booking.id}/accept-completion`, {
         method: "POST",
+        headers: workerAuthHeaders(),
       });
       if (res.ok) {
         accepted++;
+      } else if (res.status === 409) {
+        // The clinic accepted, or a cancel won the race, between our read and this call.
+        // Not a failure: the booking is simply no longer ours to act on.
+        continue;
       } else {
         failed++;
         console.error(`[auto-accept] ${booking.id} -> HTTP ${res.status}`);
@@ -48,6 +60,10 @@ export async function autoAcceptSweep(now: number): Promise<SweepResult> {
       failed++;
       console.error(`[auto-accept] ${booking.id} failed: ${(e as Error).message}`);
     }
+  }
+  if (due.length === BATCH) {
+    // Say so rather than letting a truncated pass read as "that was all of them".
+    console.log(`[auto-accept] batch full (${BATCH}); more due bookings remain for the next pass`);
   }
   return { due: due.length, accepted, failed };
 }

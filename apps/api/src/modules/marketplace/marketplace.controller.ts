@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  ForbiddenException,
   Get,
   Header,
   Inject,
@@ -10,6 +11,7 @@ import {
   Param,
   Post,
   Query,
+  UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
 import { AuthGuard, Roles, CurrentUser } from "../auth/auth.guard.js";
@@ -26,8 +28,10 @@ import {
   isUrgentEligible,
   canLeaveReview,
   can,
+  dualControlSatisfied,
   satang,
   type ConfirmationContext,
+  type Capability,
   type Role,
   type ShiftUrgency,
   type CancelActor,
@@ -36,12 +40,14 @@ import {
 import { OffersService } from "../offers/offers.service.js";
 import { BookingsService } from "../bookings/bookings.service.js";
 import { PaymentsService } from "../payments/payments.service.js";
+import { MockPaymentProvider } from "../payments/payment.provider.js";
 import { NotificationsService } from "./notifications.service.js";
 import {
   MARKETPLACE_REPOSITORY,
   type MarketplaceRepository,
   type ShiftFilters,
   type ProfessionalFilters,
+  type CallerIdentity,
 } from "./marketplace.types.js";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -63,7 +69,6 @@ interface PostShiftDto {
   category?: string;
   urgency?: ShiftUrgency;
   insuranceRequired?: boolean;
-  actorRole?: Role;
   shiftStartInHours?: number;
 }
 
@@ -84,6 +89,7 @@ export class MarketplaceController {
     private readonly offers: OffersService,
     private readonly bookings: BookingsService,
     private readonly payments: PaymentsService,
+    private readonly paymentProvider: MockPaymentProvider,
     private readonly notifications: NotificationsService,
     @Inject(MARKETPLACE_REPOSITORY) private readonly repo: MarketplaceRepository,
   ) {}
@@ -144,11 +150,17 @@ export class MarketplaceController {
     return r;
   }
 
+  @UseGuards(AuthGuard)
   @Post("professionals/:id/insurance")
   async submitInsurance(
     @Param("id") professionalId: string,
     @Body() dto: { validUntilHours?: number },
+    @CurrentUser() user?: TokenPayload,
   ) {
+    // Only the professional themselves (or staff) may submit their insurance. Unguarded,
+    // this let anyone downgrade a rival's Verified insurance to Submitted and block every
+    // subsequent confirm on an insurance-required shift — a targeted denial of earnings.
+    await this.requireProfessional(user, professionalId);
     // PRO-01: optional insurance evidence (VER-05). validUntil relative for convenience.
     const validUntil = Date.now() + (dto.validUntilHours ?? 24 * 365) * HOUR_MS;
     return this.repo.submitInsurance(professionalId, validUntil);
@@ -220,13 +232,26 @@ export class MarketplaceController {
   }
 
   // ----- Booking messages (MSG-01/02) -----
+  @UseGuards(AuthGuard)
   @Post("bookings/:id/messages")
-  async postMessage(@Param("id") id: string, @Body() raw: { senderId: string; body: string }) {
+  async postMessage(
+    @Param("id") id: string,
+    @Body() raw: { body: string },
+    @CurrentUser() user?: TokenPayload,
+  ) {
     const dto = validateBody<typeof raw>(raw, {
-      senderId: { type: "string", maxLen: 64 },
       body: { type: "string", maxLen: 2000 },
     });
-    await this.requireBooking(id);
+    const booking = await this.requireBooking(id);
+    // Only the two parties may post, and the sender is the caller — `senderId` used to come
+    // from the body, so anyone could forge a message from either party into any booking.
+    const party = await this.partyInBooking(user, booking);
+    const senderId =
+      party === "professional"
+        ? booking.professionalId
+        : party === "clinic"
+          ? booking.clinicWorkspaceId
+          : (user?.sub ?? "staff");
     // MSG-01: plain text only, no attachments.
     const body = dto.body.trim();
     if (!body) throw new BadRequestException("message body required");
@@ -235,29 +260,35 @@ export class MarketplaceController {
     if (containsProhibitedPatientData(body)) {
       throw new BadRequestException("message appears to contain patient/personal identifiers; remove them (§7.3)");
     }
-    return this.repo.postMessage(id, dto.senderId, body);
+    return this.repo.postMessage(id, senderId, body);
   }
 
+  @UseGuards(AuthGuard)
   @Get("bookings/:id/messages")
-  async listMessages(@Param("id") id: string) {
-    await this.requireBooking(id);
+  async listMessages(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const booking = await this.requireBooking(id);
+    await this.partyInBooking(user, booking); // participants (or staff) only
     return { messages: await this.repo.listMessages(id) };
   }
 
+  @UseGuards(AuthGuard)
   @Get("bookings/:id/contact")
-  async bookingContact(@Param("id") id: string) {
-    // MSG-02: contact details appear after confirmation (a booking exists = confirmed).
-    await this.requireBooking(id);
+  async bookingContact(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    // MSG-02: contact details appear after confirmation (a booking exists = confirmed) — but
+    // only to the two parties. This returned both sides' real phone numbers to anyone holding
+    // a booking id, which is a PDPA exposure with no lawful basis.
+    const booking = await this.requireBooking(id);
+    await this.partyInBooking(user, booking);
     const contact = await this.repo.getBookingContact(id);
     return contact ?? { clinicPhone: null, professionalPhone: null };
   }
 
+  @UseGuards(AuthGuard)
   @Post("shifts")
-  async postShift(@Body() dto: PostShiftDto) {
-    const role: Role = dto.actorRole ?? "clinic_owner";
-    if (!can(role, "clinic.publish_shift")) {
-      throw new BadRequestException("only a clinic owner/admin may publish a shift");
-    }
+  async postShift(@Body() dto: PostShiftDto, @CurrentUser() user?: TokenPayload) {
+    // §3: authority comes from the caller's membership in THIS workspace, not from an
+    // `actorRole` field in the body that defaulted to "clinic_owner" when omitted.
+    await this.requireClinicAuthority(user, dto.clinicWorkspaceId, "clinic.publish_shift");
     // Validate money up front: a non-positive/non-integer compensation would otherwise
     // surface as a 500 from satang() at offer/confirm time (satang is integer-only).
     if (!Number.isInteger(dto.compensation) || dto.compensation <= 0) {
@@ -307,11 +338,14 @@ export class MarketplaceController {
   }
 
   // ----- Availability & professional search (AVL, SRC) -----
+  @UseGuards(AuthGuard)
   @Post("professionals/:id/availability")
   async addAvailability(
     @Param("id") professionalId: string,
     @Body() dto: { startsInHours?: number; durationHours?: number; openToRequests?: boolean },
+    @CurrentUser() user?: TokenPayload,
   ) {
+    await this.requireProfessional(user, professionalId);
     // AVL-01: one-off Available blocks. Kept relative (hours from now) for convenience.
     const now = Date.now();
     const startsAt = now + (dto.startsInHours ?? 24) * HOUR_MS;
@@ -338,9 +372,18 @@ export class MarketplaceController {
     return { professionals };
   }
 
+  @UseGuards(AuthGuard)
   @Post("shifts/:id/apply")
-  async apply(@Param("id") shiftId: string, @Body() raw: { professionalId: string }) {
+  async apply(
+    @Param("id") shiftId: string,
+    @Body() raw: { professionalId: string },
+    @CurrentUser() user?: TokenPayload,
+  ) {
     const dto = validateBody<typeof raw>(raw, { professionalId: { type: "string", maxLen: 64 } });
+    // A professional applies as themselves. Enrolling someone else as a candidate was the
+    // precondition that made the offer -> accept -> confirm chain reachable against a
+    // professional who never applied.
+    await this.requireProfessional(user, dto.professionalId);
     // APP-01: applications are non-binding and reserve neither party.
     await this.requireOpenShift(shiftId);
     try {
@@ -352,11 +395,19 @@ export class MarketplaceController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Post("shifts/:id/invite")
-  async invite(@Param("id") shiftId: string, @Body() raw: { professionalId: string }) {
+  async invite(
+    @Param("id") shiftId: string,
+    @Body() raw: { professionalId: string },
+    @CurrentUser() user?: TokenPayload,
+  ) {
     const dto = validateBody<typeof raw>(raw, { professionalId: { type: "string", maxLen: 64 } });
     // A professional can only be invited to a shift that is still open (consistency with apply/offer).
-    await this.requireOpenShift(shiftId);
+    const shift = await this.requireOpenShift(shiftId);
+    // Inviting is non-binding (APP-01), so clinic_staff may do it — but only for their own
+    // workspace's shift.
+    await this.requireClinicAuthority(user, shift.clinicWorkspaceId, "clinic.search_invite");
     try {
       const i = await this.repo.inviteToShift(shiftId, dto.professionalId);
       await this.notifications.sms(dto.professionalId, "invited", { type: "Shift", id: shiftId });
@@ -374,19 +425,18 @@ export class MarketplaceController {
     return { candidates: await this.repo.listShiftCandidates(shiftId) };
   }
 
+  @UseGuards(AuthGuard)
   @Post("shifts/:id/offer")
   async offerToProfessional(
     @Param("id") shiftId: string,
-    @Body() dto: { professionalId: string; actorRole?: Role },
+    @Body() dto: { professionalId: string },
+    @CurrentUser() user?: TokenPayload,
   ) {
-    const role: Role = dto.actorRole ?? "clinic_owner";
-    // OFF-01: only a clinic owner/admin may send a binding offer.
-    try {
-      this.offers.assertCanSendOffer(role);
-    } catch (e) {
-      throw new BadRequestException((e as Error).message);
-    }
     const shift = await this.requireOpenShift(shiftId);
+    // OFF-01: only a clinic owner/admin of THIS workspace may send a binding offer. The
+    // role now comes from the caller's membership; it used to be `dto.actorRole` defaulting
+    // to "clinic_owner", so the §3 prohibition on clinic_staff binding terms was decorative.
+    await this.requireClinicAuthority(user, shift.clinicWorkspaceId, "clinic.send_offer");
     // OFF-02: one active offer per shift.
     if (shift.hasActiveOffer) {
       throw new BadRequestException("shift already has an active offer (OFF-02)");
@@ -424,6 +474,106 @@ export class MarketplaceController {
   }
 
   // ----- Operations dashboard (ADM-01) -----
+  // ----- §6.4 dual control: payment exceptions -------------------------------------
+  //
+  // An out-of-flow refund is a high-value money action, so it needs two different
+  // authorized people (§3, §6.4). `requiresDualControl`/`dualControlSatisfied` existed in
+  // the domain with no caller at all — the rule was tested and unenforced. It is now a
+  // proposal that one person raises and a different one executes; the DB CHECK
+  // `ApprovalRequest_different_person` backs it up so no row can contradict the rule.
+
+  @UseGuards(AuthGuard)
+  @Roles("finance")
+  @Post("finance/refunds")
+  async proposeRefund(
+    @Body() raw: { bookingId: string; amount: number; reason: string },
+    @CurrentUser() user?: TokenPayload,
+  ) {
+    const dto = validateBody<typeof raw>(raw, {
+      bookingId: { type: "string", maxLen: 64 },
+      amount: { type: "number", int: true, positive: true },
+      reason: { type: "string", maxLen: 500 },
+    });
+    const booking = await this.requireBooking(dto.bookingId);
+    // PAY-08 at proposal time: refuse to record a request that could never be executed.
+    this.payments.assertWithinAllocation(
+      satang(dto.amount),
+      satang(booking.captured),
+      "refund",
+    );
+    const approval = await this.repo.createApproval({
+      capability: "finance.execute_refund",
+      refType: "Booking",
+      refId: dto.bookingId,
+      amount: dto.amount,
+      reason: dto.reason,
+      initiatorId: user?.sub ?? "unknown",
+      initiatorRole: user?.role ?? "unknown",
+    });
+    await this.audit(user, "propose_refund", "booking", dto.bookingId, {
+      approvalId: approval.id,
+      amount: dto.amount,
+    });
+    return { id: approval.id, state: approval.state, amount: approval.amount };
+  }
+
+  @UseGuards(AuthGuard)
+  @Roles("finance", "administrator")
+  @Get("finance/refunds")
+  async listPendingRefunds() {
+    return { pending: await this.repo.listPendingApprovals() };
+  }
+
+  // Only `finance` holds finance.execute_refund (§3). An administrator is a *different*
+  // person but not an authorized one, so admin is deliberately not an approver here —
+  // separation of duties is the point of the rule.
+  @UseGuards(AuthGuard)
+  @Roles("finance")
+  @Post("finance/refunds/:id/approve")
+  async approveRefund(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const approval = await this.repo.getApproval(id);
+    if (!approval) throw new NotFoundException("approval request not found");
+    if (approval.state !== "Pending") {
+      throw new ConflictException(`approval is ${approval.state}`);
+    }
+
+    // §6.4: the executor must be authorized AND a different person than the initiator. The
+    // domain owns both halves — checking only "ids differ" would let any second pair of
+    // hands approve a payout.
+    const executor = { id: user?.sub ?? "unknown", role: (user?.role ?? "unknown") as Role };
+    const initiator = { id: approval.initiatorId, role: approval.initiatorRole as Role };
+    if (!dualControlSatisfied(approval.capability as Capability, initiator, executor)) {
+      throw new ForbiddenException(
+        "§6.4: this action requires approval by a different authorized person",
+      );
+    }
+
+    const booking = await this.requireBooking(approval.refId);
+    this.payments.assertWithinAllocation(
+      satang(approval.amount),
+      satang(booking.captured),
+      "refund",
+    );
+
+    try {
+      const result = await this.repo.executeApproval({
+        approvalId: id,
+        executorId: executor.id,
+        executorRole: executor.role,
+        idempotencyKey: `approval-refund:${id}`,
+      });
+      await this.audit(user, "execute_refund", "booking", approval.refId, {
+        approvalId: id,
+        amount: approval.amount,
+        initiatorId: approval.initiatorId,
+      });
+      return { id, state: "Executed", ...result };
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictException("approval was already executed");
+      throw e;
+    }
+  }
+
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Get("ops/cases")
@@ -513,9 +663,13 @@ export class MarketplaceController {
     return lines.join("\n") + "\n";
   }
 
+  @UseGuards(AuthGuard)
   @Post("offers/:id/accept")
-  async accept(@Param("id") id: string) {
+  async accept(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const offer = await this.requireOffer(id);
+    // Only the professional the offer was made to may accept it. There was no check at all:
+    // any caller could accept on a stranger's behalf and bind them to a shift.
+    await this.requireProfessional(user, offer.professionalId);
     // OFF-04: acceptance -> AwaitingPayment (soft hold), never straight to a booking.
     let nextState;
     try {
@@ -530,15 +684,30 @@ export class MarketplaceController {
     return { id, state: nextState, fundingDueAt: updated?.fundingDueAt ?? fundingDueAt };
   }
 
+  @UseGuards(AuthGuard)
   @Post("offers/:id/confirm")
-  async confirm(@Param("id") id: string, @Body() body: { prefundingSucceeded?: boolean }) {
+  async confirm(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const offer = await this.requireOffer(id);
+    // Confirming captures the clinic's money (§3 "clinic.pay"), so only an owner/admin of
+    // the workspace that made the offer may do it.
+    await this.requireClinicAuthority(user, offer.clinicWorkspaceId, "clinic.pay");
 
     // Atomic + idempotent: one shift -> one booking (§6.4). If already booked, return it.
     const existing = await this.repo.getBookingByOffer(id);
     if (existing) {
       return { booking: existing, checkout: this.payments.checkout(satang(offer.compensation)) };
     }
+
+    const checkout = this.payments.checkout(satang(offer.compensation));
+
+    // BKG-01 durable prefunding: the API collects the funds and observes the result. This
+    // was previously read from the request body (defaulting to `true`), which let any
+    // caller book a real shift — obligating a real payout — without paying. The capture is
+    // keyed on the offer so a retried confirm re-uses the same provider transaction.
+    const capture = await this.paymentProvider.capture({
+      orderRef: `collection:${offer.id}`,
+      amount: checkout.total,
+    });
 
     // §6.3: read the real verification facts + schedule overlap for this offer.
     const eligibility = await this.repo.getOfferEligibility(id);
@@ -562,7 +731,7 @@ export class MarketplaceController {
       hasBlockingHold: false,
       hasScheduleOverlap: overlap,
       offerExpired: Date.now() > offer.expiresAt, // §6.3: late payment after expiry never books
-      durablePrefundingSucceeded: body?.prefundingSucceeded ?? true,
+      durablePrefundingSucceeded: capture.succeeded,
     };
 
     try {
@@ -572,11 +741,9 @@ export class MarketplaceController {
       // A concurrent confirm may have already booked this offer — the overlap check
       // then trips on that very booking. Return it idempotently instead of a 400.
       const won = await this.repo.getBookingByOffer(id);
-      if (won) return { booking: won, checkout: this.payments.checkout(satang(offer.compensation)) };
+      if (won) return { booking: won, checkout };
       throw new BadRequestException((e as Error).message);
     }
-
-    const checkout = this.payments.checkout(satang(offer.compensation));
 
     // PAY-07 conservation at confirmation: captured (total) equals the professional's
     // protected compensation + platform fee + tax; nothing is paid out or refunded yet.
@@ -606,6 +773,14 @@ export class MarketplaceController {
         captured: checkout.total,
         idempotencyKey: `collection:${offer.id}`,
       });
+      // §6.4: a privileged/money action must be attributable. Confirm captures funds and
+      // creates a payment obligation, yet wrote no audit record at all — only the ops/*
+      // verification endpoints did, so a payout or booking left no actor trail.
+      await this.audit(user, "confirm_booking", "booking", booking.id, {
+        offerId: offer.id,
+        captured: checkout.total,
+        paymentOrderId,
+      });
       // NOT-01: confirmation — email all critical events; SMS the confirmation too.
       await this.notifications.email(offer.professionalId, "confirmed", { type: "Booking", id: booking.id });
       await this.notifications.email(offer.clinicWorkspaceId, "confirmed", { type: "Booking", id: booking.id });
@@ -620,9 +795,26 @@ export class MarketplaceController {
     }
   }
 
-  @Post("bookings/:id/complete")
-  async complete(@Param("id") id: string) {
+  @UseGuards(AuthGuard)
+  @Post("bookings/:id/arrive")
+  async recordArrival(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const booking = await this.requireBooking(id);
+    await this.requireProfessional(user, booking.professionalId);
+    // CAN-03 evidence: arrival is what separates a 50% cancellation from a 100% one, so it
+    // is recorded as its own event on an active booking rather than asserted at cancel time.
+    if (booking.state !== "Confirmed" && booking.state !== "InProgress") {
+      throw new BadRequestException(`booking is ${booking.state}; cannot record arrival`);
+    }
+    await this.repo.recordArrival(id);
+    return { id, arrived: true };
+  }
+
+  @UseGuards(AuthGuard)
+  @Post("bookings/:id/complete")
+  async complete(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const booking = await this.requireBooking(id);
+    // CMP-01: the professional submits their own completion — it starts the payout clock.
+    await this.requireProfessional(user, booking.professionalId);
     // Idempotent: completion already submitted (or beyond).
     if (booking.state === "AwaitingCompletion" || booking.state === "ServiceCompleted") {
       return { id, state: booking.state };
@@ -646,9 +838,34 @@ export class MarketplaceController {
     }
   }
 
+  /**
+   * CMP-02/03: accept the professional's completion and release the payout.
+   *
+   * This moves real money, so it is authenticated. Callers: the clinic of record accepting
+   * early, Operations resolving a case, or the worker's auto-accept sweep once the 24h
+   * deadline passes. It was previously unauthenticated with no deadline check of its own —
+   * the 24h window lived only in the worker's WHERE clause, so anyone who knew a booking id
+   * could trigger the payout the moment completion was submitted.
+   */
+  @UseGuards(AuthGuard)
   @Post("bookings/:id/accept-completion")
-  async acceptCompletion(@Param("id") id: string) {
+  async acceptCompletion(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const booking = await this.requireBooking(id);
+    // Authority is NOT expressible with @Roles here: an ordinary party's token carries the
+    // role "user" — being a clinic owner is a fact about their membership, not their token.
+    // So the check is: the worker past the deadline, or staff, or an owner/admin of the
+    // clinic on this booking.
+    if (user?.role === "worker") {
+      // Defence in depth: the worker may only act once the booking's own deadline has
+      // passed. Keeping the time policy solely in the sweep's query means a bug — or a
+      // replayed call — pays out early with nothing to stop it.
+      const dueAt = await this.repo.getAutoAcceptDueAt(id);
+      if (dueAt === null || Date.now() < dueAt) {
+        throw new BadRequestException("auto-accept deadline has not passed for this booking");
+      }
+    } else {
+      await this.requireClinicAuthority(user, booking.clinicWorkspaceId, "clinic.confirm_completion");
+    }
     // Idempotent: already completed & paid out.
     if (booking.state === "ServiceCompleted") {
       return {
@@ -671,6 +888,13 @@ export class MarketplaceController {
       throw new BadRequestException((e as Error).message);
     }
 
+    // PAY-08: the payout may not exceed the funds actually captured for this booking.
+    this.payments.assertWithinAllocation(
+      satang(booking.compensation),
+      satang(booking.captured),
+      "payout",
+    );
+
     // PAY-07 conservation AFTER payout: protected is released to payout, so
     // captured == payout(compensation) + fee + tax.
     this.payments.assertConserved({
@@ -690,6 +914,10 @@ export class MarketplaceController {
         payoutAmount: booking.compensation,
         idempotencyKey: `payout:${id}`,
       });
+      await this.audit(user, "accept_completion_payout", "booking", id, {
+        payoutAmount: booking.compensation,
+        auto: user?.role === "worker",
+      });
       // NOT-01: payout initiated — email the professional.
       await this.notifications.email(booking.professionalId, "payout", { type: "Booking", id });
       return { id, ...result };
@@ -704,10 +932,18 @@ export class MarketplaceController {
           payoutAmount: current.compensation,
         };
       }
+      // A concurrent cancel won the claim instead: that is a real conflict, not a server
+      // fault. Surfacing it as 409 keeps the auto-accept sweep's logs honest about which
+      // bookings it actually paid.
+      if (isConflict(e)) {
+        throw new ConflictException("booking changed concurrently; payout not applied");
+      }
       throw e;
     }
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator", "worker")
   @Post("bookings/:id/flag-inactive")
   async flagInactive(@Param("id") id: string) {
     const booking = await this.requireBooking(id);
@@ -731,13 +967,19 @@ export class MarketplaceController {
     return { id, caseId: created.id, state: created.state, created: true };
   }
 
+  @UseGuards(AuthGuard)
   @Post("bookings/:id/cancel")
   async cancel(
     @Param("id") id: string,
-    @Body() raw: { actor: CancelActor; reason: CancelReason; hoursBeforeStart?: number; arrived?: boolean },
+    @Body() raw: { actor?: CancelActor; reason: CancelReason },
+    @CurrentUser() user?: TokenPayload,
   ) {
     const dto = validateBody<typeof raw>(raw, {
-      actor: { type: "string", enum: ["clinic", "professional"] },
+      // `actor` is accepted only from staff, who cancel on a party's behalf. For the parties
+      // themselves it is derived below — it decides who gets paid, so letting the canceller
+      // name it allowed a clinic to cancel as "clinic ... after arrival" and pay a
+      // professional 100% for a shift nobody worked, or as the professional to pay 0%.
+      actor: { type: "string", enum: ["clinic", "professional"], optional: true },
       reason: {
         type: "string",
         enum: [
@@ -750,8 +992,6 @@ export class MarketplaceController {
           "partial_work",
         ],
       },
-      hoursBeforeStart: { type: "number", optional: true, min: 0 },
-      arrived: { type: "boolean", optional: true },
     });
     const booking = await this.requireBooking(id);
     // Idempotent: a cancelled booking is terminal for this action.
@@ -759,13 +999,32 @@ export class MarketplaceController {
       return { id, outcome: "cancelled", bookingState: "Cancelled", alreadyCancelled: true };
     }
 
+    const party = await this.partyInBooking(user, booking);
+    if (party === "clinic") {
+      await this.requireClinicAuthority(user, booking.clinicWorkspaceId, "clinic.cancel_confirmed");
+    }
+    const actor: CancelActor =
+      party === "staff"
+        ? dto.actor ?? (() => {
+            throw new BadRequestException("staff must state which party is cancelling");
+          })()
+        : party;
+
+    // CAN-01/02 turn on how long before the shift the cancellation lands, and CAN-03 on
+    // whether the professional actually arrived. Both are facts the platform owns: they are
+    // read from the scheduled shift and the recorded attendance trail, never from the body.
+    // Taking them from the caller let a clinic cancel an hour out claiming 48 (paying 0%
+    // instead of 50%), or claim an arrival that never happened (paying 100%).
+    const hoursBeforeStart = (booking.shiftStart - Date.now()) / 3_600_000;
+    const arrived = await this.repo.hasArrived(id);
+
     // CAN-01..05: the domain decides the professional's payable fraction, or that the
     // case must be resolved by support.
     const outcome = cancellationOutcome({
-      actor: dto.actor,
+      actor,
       reason: dto.reason,
-      hoursBeforeStart: dto.hoursBeforeStart ?? 0,
-      arrived: dto.arrived ?? false,
+      hoursBeforeStart,
+      arrived,
     });
 
     if ("support" in outcome) {
@@ -790,6 +1049,11 @@ export class MarketplaceController {
     const payable = payableFromFraction(satang(booking.compensation), outcome.fraction);
     const refund = satang(booking.captured - payable);
 
+    // PAY-08: neither leg may exceed the captured funds. Both are derived here, so this is
+    // a guard against a bad compensation/captured pair reaching the ledger — not a formality.
+    this.payments.assertWithinAllocation(payable, satang(booking.captured), "cancellation payout");
+    this.payments.assertWithinAllocation(refund, satang(booking.captured), "cancellation refund");
+
     // PAY-07 conservation: captured == payout(payable) + refund. The platform fee is
     // waived on cancellation (refunded to the clinic as part of `refund`), so nothing
     // is retained as fee/tax; protected funds are fully released.
@@ -812,6 +1076,13 @@ export class MarketplaceController {
         payoutKey: `cancel-payout:${id}`,
         refundKey: `cancel-refund:${id}`,
       });
+      await this.audit(user, "cancel_booking", "booking", id, {
+        actor,
+        reason: dto.reason,
+        fraction: outcome.fraction,
+        payable,
+        refund,
+      });
       // NOT-01: cancellation — SMS both parties.
       await this.notifications.sms(booking.professionalId, "cancelled", { type: "Booking", id });
       await this.notifications.sms(booking.clinicWorkspaceId, "cancelled", { type: "Booking", id });
@@ -822,21 +1093,40 @@ export class MarketplaceController {
       if (current?.state === "Cancelled") {
         return { id, outcome: "cancelled", bookingState: "Cancelled", alreadyCancelled: true };
       }
+      // A concurrent accept-completion paid out first: the booking is no longer cancellable
+      // and no refund was written. 409, not 500 — nothing is broken, the race simply resolved
+      // the other way.
+      if (isConflict(e)) {
+        throw new ConflictException("booking changed concurrently; cancellation not applied");
+      }
       throw e;
     }
   }
 
+  @UseGuards(AuthGuard)
   @Post("bookings/:id/reviews")
   async createReview(
     @Param("id") id: string,
-    @Body() rawBody: { by: "clinic" | "professional"; score: number; tags?: string[]; text?: string },
+    @Body() rawBody: { by?: "clinic" | "professional"; score: number; tags?: string[]; text?: string },
+    @CurrentUser() user?: TokenPayload,
   ) {
     const dto = validateBody<typeof rawBody>(rawBody, {
-      by: { type: "string", enum: ["clinic", "professional"] },
+      // Derived from the caller below; only staff may state it. `by` used to be taken at face
+      // value, so a third party could post a 1-star review attributed to the clinic — and
+      // burn the real party's one review right via the unique constraint.
+      by: { type: "string", enum: ["clinic", "professional"], optional: true },
       score: { type: "number", int: true, min: 1, max: 5 },
       text: { type: "string", optional: true, maxLen: 2000 },
+      tags: { type: "stringArray", optional: true, maxLen: 10, itemMaxLen: 40 },
     });
     const booking = await this.requireBooking(id);
+    const party = await this.partyInBooking(user, booking);
+    const by: "clinic" | "professional" =
+      party === "staff"
+        ? dto.by ?? (() => {
+            throw new BadRequestException("staff must state which party is reviewing");
+          })()
+        : party;
     // REV-01/05: only a completed paid booking creates review rights (cancelled or
     // unfinished bookings never reach ServiceCompleted, so they earn no reputation).
     if (!canLeaveReview(booking.state)) {
@@ -849,8 +1139,8 @@ export class MarketplaceController {
       throw new BadRequestException("review appears to contain patient/personal identifiers; remove them (§7.3)");
     }
     // Author reviews the other party (clinic -> professional, or professional -> clinic).
-    const authorId = dto.by === "clinic" ? booking.clinicWorkspaceId : booking.professionalId;
-    const subjectId = dto.by === "clinic" ? booking.professionalId : booking.clinicWorkspaceId;
+    const authorId = by === "clinic" ? booking.clinicWorkspaceId : booking.professionalId;
+    const subjectId = by === "clinic" ? booking.professionalId : booking.clinicWorkspaceId;
     try {
       const r = await this.repo.createReview({
         bookingId: id,
@@ -945,6 +1235,71 @@ export class MarketplaceController {
       targetId,
       ...(details ? { details } : {}),
     });
+  }
+
+  // ----- Authority (§3) -----------------------------------------------------------
+  //
+  // A token proves possession of a phone; it does NOT carry what that phone may do. These
+  // helpers resolve the caller's real parties from the identity graph and check authority
+  // against them. Previously the controller read `actorRole` and party ids straight from the
+  // request body, so `can(role, capability)` was asking the attacker to grade their own work.
+
+  /** Internal platform staff act across tenants by design (Ops/Finance/Admin, §3). */
+  private isStaff(user?: TokenPayload): boolean {
+    return user?.role === "operations" || user?.role === "finance" || user?.role === "administrator";
+  }
+
+  private async identityOf(user?: TokenPayload): Promise<CallerIdentity> {
+    if (!user?.sub) throw new UnauthorizedException("authentication required");
+    return this.repo.resolveIdentity(user.sub);
+  }
+
+  /**
+   * The caller acting as this professional. Staff may act on a professional's behalf
+   * (support flows); anyone else must BE them.
+   */
+  private async requireProfessional(user: TokenPayload | undefined, professionalId: string) {
+    if (this.isStaff(user)) return;
+    const me = await this.identityOf(user);
+    if (me.professionalId !== professionalId) {
+      throw new ForbiddenException("not your professional profile");
+    }
+  }
+
+  /**
+   * The caller acting for this clinic workspace, with the authority the action needs.
+   * Membership decides the role (§3), so clinic_staff cannot bind terms or move money no
+   * matter what the request claims.
+   */
+  private async requireClinicAuthority(
+    user: TokenPayload | undefined,
+    workspaceId: string,
+    capability: Capability,
+  ): Promise<Role> {
+    if (this.isStaff(user)) return "administrator";
+    const me = await this.identityOf(user);
+    const membership = me.memberships.find((m) => m.workspaceId === workspaceId);
+    if (!membership) throw new ForbiddenException("not a member of this clinic workspace");
+    if (!can(membership.role, capability)) {
+      throw new ForbiddenException(`role ${membership.role} cannot ${capability}`);
+    }
+    return membership.role;
+  }
+
+  /**
+   * Which side of a booking the caller is on. Returns null for staff, who are neither party
+   * but may act on both. Used to derive the cancellation actor and review author rather than
+   * letting the caller declare which party they are.
+   */
+  private async partyInBooking(
+    user: TokenPayload | undefined,
+    booking: { clinicWorkspaceId: string; professionalId: string },
+  ): Promise<"clinic" | "professional" | "staff"> {
+    if (this.isStaff(user)) return "staff";
+    const me = await this.identityOf(user);
+    if (me.professionalId && me.professionalId === booking.professionalId) return "professional";
+    if (me.memberships.some((m) => m.workspaceId === booking.clinicWorkspaceId)) return "clinic";
+    throw new ForbiddenException("not a party to this booking");
   }
 
   private async requireOffer(id: string) {

@@ -23,7 +23,19 @@ export default defineConfig({
     {
       command: "node apps/api/dist/main.js",
       url: "http://localhost:4000/health",
-      env: { API_PORT: "4000" },
+      // Pin the API's environment rather than inheriting whatever the developer's .env
+      // happens to hold: a stale CORS_ORIGINS silently blocks every browser call, and an
+      // unset DATABASE_URL silently swaps the store implementation under the suite.
+      env: {
+        API_PORT: "4000",
+        NODE_ENV: "test",
+        AUTH_DEV_MODE: "true",
+        CORS_ORIGINS: "http://localhost:3000",
+        // Two distinct finance identities: §6.4 dual control needs a real second person,
+        // and /auth/dev/token mints only one identity per role (sub = "dev:finance").
+        // Exercises the real OTP + access-list login rather than the dev shortcut.
+        STAFF_PHONES: "+66900000001:finance,+66900000002:finance,+66900000003:administrator",
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

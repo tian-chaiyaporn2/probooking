@@ -39,10 +39,14 @@ import type {
   MarketplaceMetrics,
   AuditEntry,
   AuditRow,
+  CallerIdentity,
+  ApprovalRequestRecord,
+  CreateApprovalInput,
+  ExecuteApprovalInput,
 } from "./marketplace.types.js";
-import { advanceVerification, aggregateRating } from "@probook/domain";
+import { advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
-import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
+import type { OfferState, VerificationState, RatingSummary, Role } from "@probook/domain";
 
 interface MemReview {
   id: string;
@@ -86,7 +90,21 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly professionals = new Map<string, VerificationState>();
   private readonly professionalProfiles = new Map<string, { displayName: string; profession: string }>();
   private readonly usedPhones = new Set<string>(); // mirrors the Prisma User.phone unique constraint
+  // Identity graph, mirroring Prisma's User -> ProfessionalProfile / Membership relations.
+  private readonly users = new Map<string, string>(); // phone -> userId
+  private readonly professionalByPhone = new Map<string, string>(); // phone -> professionalId
+  private readonly membershipsByPhone = new Map<string, { workspaceId: string; role: Role }[]>();
   private readonly suspendedCredentials = new Set<string>();
+  private readonly arrivals = new Set<string>(); // bookingIds with a recorded arrival (CAN-03)
+  private readonly autoAcceptAt = new Map<string, number>(); // bookingId -> CMP-03 deadline
+  private readonly approvals = new Map<string, ApprovalRequestRecord>(); // §6.4 dual control
+  // Money ledger, mirroring Prisma's FinancialEvent rows. Without it `reconcile` returned
+  // hardcoded zeros, so "0 reconciliation exceptions" (PAY-11) was unconditionally true in
+  // every test run — it could not fail no matter what the money paths did.
+  private readonly events: { bookingId: string; type: "Collection" | "Payout" | "Refund"; amount: number; key: string }[] = [];
+  // phone directory, mirroring Prisma's User.phone -> party resolution (MSG-02).
+  private readonly clinicOwnerPhone = new Map<string, string>(); // workspaceId -> phone
+  private readonly professionalPhone = new Map<string, string>(); // professionalId -> phone
   private readonly reviews: MemReview[] = [];
   private readonly shifts = new Map<string, MemShift>();
   private readonly candidates: MemCandidate[] = [];
@@ -96,8 +114,18 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (this.usedPhones.has(input.ownerPhone)) throw new ConflictError("owner phone already registered");
     this.usedPhones.add(input.ownerPhone);
     const id = randomUUID();
+    const ownerUserId = randomUUID();
     this.clinics.set(id, "Submitted");
-    return { id, verification: "Submitted", ownerUserId: randomUUID() };
+    // Parity with Prisma's User + Membership graph: the owner's phone is how the caller is
+    // later recognised as this workspace's owner. Previously the phone was only added to a
+    // uniqueness Set and discarded, so identity could not be resolved in this store at all.
+    this.users.set(input.ownerPhone, ownerUserId);
+    this.membershipsByPhone.set(input.ownerPhone, [
+      ...(this.membershipsByPhone.get(input.ownerPhone) ?? []),
+      { workspaceId: id, role: "clinic_owner" },
+    ]);
+    this.clinicOwnerPhone.set(id, input.ownerPhone);
+    return { id, verification: "Submitted", ownerUserId };
   }
 
   async registerProfessional(input: RegisterProfessionalInput): Promise<EntityRef> {
@@ -106,7 +134,18 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const id = randomUUID();
     this.professionals.set(id, "Submitted");
     this.professionalProfiles.set(id, { displayName: input.displayName, profession: input.profession });
+    this.users.set(input.phone, randomUUID());
+    this.professionalByPhone.set(input.phone, id);
+    this.professionalPhone.set(id, input.phone);
     return { id, verification: "Submitted" };
+  }
+
+  async resolveIdentity(phone: string): Promise<CallerIdentity> {
+    return {
+      userId: this.users.get(phone) ?? null,
+      professionalId: this.professionalByPhone.get(phone) ?? null,
+      memberships: this.membershipsByPhone.get(phone) ?? [],
+    };
   }
 
   async verifyClinic(id: string): Promise<EntityRef | null> {
@@ -360,6 +399,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (this.bookingByOffer.has(input.offerId)) throw new ConflictError("booking already exists for this offer");
     const offer = this.offers.get(input.offerId);
     if (offer) offer.state = "Converted"; // atomic with the booking here by construction
+    const shift = this.shifts.get(input.shiftId);
+    const shiftStart = shift?.startsAt ?? offer?.shiftStart ?? 0;
     const detail: BookingDetail = {
       id: randomUUID(),
       offerId: input.offerId,
@@ -374,9 +415,12 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       payoutState: "NotEligible",
       paymentOrderId: randomUUID(),
       heldAt: null,
+      shiftStart,
+      shiftEnd: shiftStart + SHIFT_LEN_MS,
     };
     this.bookings.set(detail.id, detail);
     this.bookingByOffer.set(input.offerId, detail.id);
+    this.appendEvent(detail.id, "Collection", input.captured, input.idempotencyKey);
     return { booking: this.toRecord(detail), paymentOrderId: detail.paymentOrderId ?? randomUUID() };
   }
 
@@ -386,16 +430,87 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return detail ? this.toRecord(detail) : null;
   }
 
+  // ----- §6.4 dual control -----
+
+  async createApproval(input: CreateApprovalInput): Promise<ApprovalRequestRecord> {
+    const record: ApprovalRequestRecord = {
+      id: randomUUID(),
+      ...input,
+      state: "Pending",
+      executorId: null,
+      executorRole: null,
+      createdAt: Date.now(),
+      decidedAt: null,
+    };
+    this.approvals.set(record.id, record);
+    return { ...record };
+  }
+
+  async getApproval(id: string): Promise<ApprovalRequestRecord | null> {
+    const r = this.approvals.get(id);
+    return r ? { ...r } : null;
+  }
+
+  async listPendingApprovals(): Promise<ApprovalRequestRecord[]> {
+    return [...this.approvals.values()]
+      .filter((r) => r.state === "Pending")
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((r) => ({ ...r }));
+  }
+
+  async executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }> {
+    const req = this.approvals.get(input.approvalId);
+    if (!req) throw new Error("approval request not found");
+    // Parity with the Prisma conditional update: only a Pending request executes.
+    if (req.state !== "Pending") {
+      throw new ConflictError("approval request is no longer pending");
+    }
+    // Parity with the DB CHECK "ApprovalRequest_different_person" (§6.4).
+    if (req.initiatorId === input.executorId) {
+      throw new ConflictError("an approval cannot be executed by its initiator");
+    }
+    const booking = this.bookings.get(req.refId);
+    if (!booking) throw new Error("no payment allocation for booking");
+    req.state = "Executed";
+    req.executorId = input.executorId;
+    req.executorRole = input.executorRole;
+    req.decidedAt = Date.now();
+    this.appendEvent(req.refId, "Refund", req.amount, input.idempotencyKey);
+    return { refund: req.amount, bookingId: req.refId };
+  }
+
   async getBooking(id: string): Promise<BookingDetail | null> {
     const detail = this.bookings.get(id);
     return detail ? { ...detail } : null; // copy: callers must not mutate store state
+  }
+
+  async hasArrived(bookingId: string): Promise<boolean> {
+    // Parity with Prisma: a Completed booking implies arrival (CAN-03).
+    if (this.arrivals.has(bookingId)) return true;
+    const detail = this.bookings.get(bookingId);
+    return detail?.state === "AwaitingCompletion" || detail?.state === "ServiceCompleted";
+  }
+
+  async recordArrival(bookingId: string): Promise<boolean> {
+    if (!this.bookings.has(bookingId)) return false;
+    this.arrivals.add(bookingId); // idempotent: a Set, like the Prisma dedupe
+    return true;
   }
 
   async markCompletion(id: string): Promise<BookingDetail | null> {
     const detail = this.bookings.get(id);
     if (!detail) return null;
     detail.state = "AwaitingCompletion";
+    // Parity with the Prisma store: stamp the CMP-03 auto-accept deadline and record the
+    // completion as attendance. Without the deadline, the auto-accept sweep had nothing to
+    // select on in this store, so CMP-03 could not be exercised by the suites at all.
+    this.autoAcceptAt.set(id, autoAcceptDueAt(detail.shiftEnd, Date.now()));
+    this.arrivals.add(id);
     return { ...detail };
+  }
+
+  async getAutoAcceptDueAt(bookingId: string): Promise<number | null> {
+    return this.autoAcceptAt.get(bookingId) ?? null;
   }
 
   async recordPayout(input: PayoutInput): Promise<PayoutResult> {
@@ -405,6 +520,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (detail.payoutState === "Paid") throw new ConflictError("payout already recorded");
     detail.state = "ServiceCompleted";
     detail.payoutState = "Paid";
+    this.appendEvent(input.bookingId, "Payout", input.payoutAmount, input.idempotencyKey);
     return {
       bookingState: "ServiceCompleted",
       payoutState: "Paid",
@@ -502,9 +618,14 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async getBookingContact(bookingId: string): Promise<BookingContact | null> {
-    // In-memory keeps no phone directory; contact resolution is a DB-store concern.
-    if (!this.bookings.has(bookingId)) return null;
-    return { clinicPhone: null, professionalPhone: null };
+    // Parity with Prisma: resolve the two parties' real phones. This used to return nulls,
+    // so MSG-02 (and any regression that leaked or dropped a phone) was never exercised.
+    const b = this.bookings.get(bookingId);
+    if (!b) return null;
+    return {
+      clinicPhone: this.clinicOwnerPhone.get(b.clinicWorkspaceId) ?? null,
+      professionalPhone: this.professionalPhone.get(b.professionalId) ?? null,
+    };
   }
 
   async recordNotification(input: NotificationInput): Promise<void> {
@@ -528,8 +649,37 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async reconcile(): Promise<Reconciliation> {
-    // In-memory keeps no financial-event ledger; reconciliation is a DB-store concern.
-    return { rows: [], summary: { count: 0, captured: 0, payouts: 0, refunds: 0, exceptions: 0 } };
+    // PAY-11, computed from the recorded events — same shape as the Prisma store. Returning
+    // zeros here meant the finance dashboard and the e2e "zero exceptions" assertion were
+    // true by construction and could not detect a real imbalance.
+    const rows = [...this.bookings.values()].map((b) => {
+      const mine = this.events.filter((e) => e.bookingId === b.id);
+      const captured = mine.filter((e) => e.type === "Collection").reduce((t, e) => t + e.amount, 0);
+      const payouts = mine.filter((e) => e.type === "Payout").reduce((t, e) => t + e.amount, 0);
+      const refunds = mine.filter((e) => e.type === "Refund").reduce((t, e) => t + e.amount, 0);
+      // Undistributed = what the platform still holds: the fee/tax it keeps, plus anything
+      // not yet released. An order conserves when nothing has leaked out of it.
+      const undistributed = captured - payouts - refunds;
+      return {
+        paymentOrderId: b.paymentOrderId ?? b.id,
+        bookingId: b.id,
+        captured,
+        payouts,
+        refunds,
+        undistributed,
+        conserved: undistributed >= 0,
+      };
+    });
+    return {
+      rows,
+      summary: {
+        count: rows.length,
+        captured: rows.reduce((t, r) => t + r.captured, 0),
+        payouts: rows.reduce((t, r) => t + r.payouts, 0),
+        refunds: rows.reduce((t, r) => t + r.refunds, 0),
+        exceptions: rows.filter((r) => !r.conserved).length,
+      },
+    };
   }
 
   async listPartyBookings(party: "clinic" | "professional", id: string): Promise<BookingHistoryRow[]> {
@@ -643,6 +793,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const detail = this.bookings.get(bookingId);
     if (!detail) return null;
     detail.heldAt = null;
+    // Parity with Prisma: restart the CMP-03 clock from the resolution, so a long-held
+    // booking doesn't auto-accept on the next sweep with no clinic review window.
+    if (this.autoAcceptAt.has(bookingId)) {
+      this.autoAcceptAt.set(bookingId, autoAcceptDueAt(detail.shiftEnd, Date.now()));
+    }
     return { ...detail };
   }
 
@@ -653,6 +808,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (detail.state === "Cancelled") throw new ConflictError("booking already cancelled");
     detail.state = "Cancelled";
     detail.payoutState = input.payable > 0 ? "Paid" : "NotEligible";
+    if (input.payable > 0) this.appendEvent(input.bookingId, "Payout", input.payable, input.payoutKey);
+    this.appendEvent(input.bookingId, "Refund", input.refund, input.refundKey);
     return {
       bookingState: "Cancelled",
       payoutState: detail.payoutState,
@@ -660,6 +817,23 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       payable: input.payable,
       refund: input.refund,
     };
+  }
+
+  /**
+   * Append an immutable money event. Mirrors Prisma's FinancialEvent, including the
+   * `idempotencyKey` unique constraint (PAY-04) — a duplicate key must conflict here too,
+   * or the in-memory store would silently accept a double-spend the real one rejects.
+   */
+  private appendEvent(
+    bookingId: string,
+    type: "Collection" | "Payout" | "Refund",
+    amount: number,
+    key: string,
+  ): void {
+    if (this.events.some((e) => e.key === key)) {
+      throw new ConflictError(`financial event already recorded for key ${key}`);
+    }
+    this.events.push({ bookingId, type, amount, key });
   }
 
   private toRecord(d: BookingDetail): BookingRecord {

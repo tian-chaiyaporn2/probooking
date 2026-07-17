@@ -42,7 +42,20 @@ A pure **domain** package holds all business rules and is depended on by everyth
   identically by api and worker.
 - **Money commands are idempotent and amount-limited** (PAY-04/08). Every collection,
   refund, payout, reversal, adjustment is an immutable `FinancialEvent` with an
-  `idempotencyKey` unique constraint. Staff never edit balances (PAY-06).
+  `idempotencyKey` unique constraint, and the PAY-08 cap (`withinAllocation`) is asserted on
+  every payout/refund path. Staff never edit balances (PAY-06): a payment exception is a
+  proposal one authorized person raises and a **different** one executes (§6.4), which then
+  appends an event through the same conservation checks as any other money movement.
+  `FinancialEvent`, `AuditRecord` and `AttendanceEvent` are append-only **at the database**
+  (rejecting triggers), so history cannot be rewritten by any code path — a mistaken entry is
+  corrected by appending a compensating record.
+- **Authority is derived, never declared.** A session token proves possession of a phone
+  (OTP); what that phone may do is resolved from the identity graph — professional profile,
+  or clinic membership and its role (§3). Endpoints take no `actorRole`/party id from the
+  request body, so `can(role, capability)` is not a question the caller answers about itself.
+- **Facts that decide money are the platform's.** Whether funds were captured comes from the
+  provider port, not a request field; the cancellation actor comes from the caller, the
+  timing from the scheduled shift, and arrival from the attendance trail.
 - **Confirmation is atomic** (BKG-02): eligibility + prefunding + booking insert run in
   one transaction; a unique constraint on `Booking.shiftId` guarantees one shift → one
   booking even under concurrent acceptance.

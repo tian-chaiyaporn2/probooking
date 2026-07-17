@@ -1,5 +1,48 @@
 import { prisma } from "@probook/db";
-import { autoAcceptDueAt, advanceVerification, aggregateRating } from "@probook/domain";
+import {
+  autoAcceptDueAt,
+  advanceVerification,
+  aggregateRating,
+  DEFAULT_SERVICE_FEE_BPS,
+} from "@probook/domain";
+import { ConflictError } from "./errors.util.js";
+
+/** Shape of the fields a terms snapshot freezes. Structural, so both Shift reads fit. */
+interface SnapshotableShift {
+  id: string;
+  category: string;
+  scope: string;
+  urgency: string;
+  compensation: number;
+  insuranceRequired: boolean;
+  startsAt: Date;
+  endsAt: Date;
+}
+
+/**
+ * OFF-02/BKG-03: freeze what was actually agreed, at the moment it was agreed.
+ *
+ * The Shift row is mutable and `termsLocked` is only set after the offer is written, so
+ * reconstructing terms from the live shift later is not sound — a compensation dispute six
+ * months on needs the numbers as they stood. Stored as JSON so adding a term never
+ * rewrites history for existing rows.
+ */
+function buildTermsSnapshot(shift: SnapshotableShift, expiresAt: number) {
+  return {
+    version: 1,
+    shiftId: shift.id,
+    category: shift.category,
+    scope: shift.scope,
+    urgency: shift.urgency,
+    compensation: shift.compensation, // integer satang
+    insuranceRequired: shift.insuranceRequired,
+    startsAt: shift.startsAt.toISOString(),
+    endsAt: shift.endsAt.toISOString(),
+    serviceFeeBps: Number(process.env.SERVICE_FEE_BPS ?? DEFAULT_SERVICE_FEE_BPS),
+    offerExpiresAt: new Date(expiresAt).toISOString(),
+    capturedAt: new Date().toISOString(),
+  };
+}
 import type {
   OfferState,
   BookingState,
@@ -8,6 +51,7 @@ import type {
   VerificationState,
   ShiftUrgency,
   RatingSummary,
+  Role,
 } from "@probook/domain";
 import type {
   MarketplaceRepository,
@@ -49,9 +93,46 @@ import type {
   MarketplaceMetrics,
   AuditEntry,
   AuditRow,
+  CallerIdentity,
+  ApprovalRequestRecord,
+  CreateApprovalInput,
+  ExecuteApprovalInput,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
+
+/** Row -> port record. Timestamps are epoch ms UTC across the port (see AuditRow). */
+function toApproval(r: {
+  id: string;
+  capability: string;
+  refType: string;
+  refId: string;
+  amount: number;
+  reason: string;
+  state: string;
+  initiatorId: string;
+  initiatorRole: string;
+  executorId: string | null;
+  executorRole: string | null;
+  createdAt: Date;
+  decidedAt: Date | null;
+}): ApprovalRequestRecord {
+  return {
+    id: r.id,
+    capability: r.capability,
+    refType: r.refType,
+    refId: r.refId,
+    amount: r.amount,
+    reason: r.reason,
+    state: r.state as ApprovalRequestRecord["state"],
+    initiatorId: r.initiatorId,
+    initiatorRole: r.initiatorRole,
+    executorId: r.executorId,
+    executorRole: r.executorRole,
+    createdAt: r.createdAt.getTime(),
+    decidedAt: r.decidedAt ? r.decidedAt.getTime() : null,
+  };
+}
 
 type OfferWithShift = {
   id: string;
@@ -276,12 +357,17 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async createOfferForShift(input: CreateOfferForShiftInput): Promise<OfferRecord> {
     // Atomic: create the one binding offer, mark the applicant OfferSent, lock terms (SHF-04).
     const offer = await prisma.$transaction(async (tx) => {
+      const shift = await tx.shift.findUnique({ where: { id: input.shiftId } });
+      if (!shift) throw new Error("shift not found");
       const o = await tx.offer.create({
         data: {
           shiftId: input.shiftId,
           professionalId: input.professionalId,
           state: "PendingResponse",
-          termsSnapshot: {},
+          // OFF-02/BKG-03: an immutable record of exactly what was offered. This was `{}`,
+          // so the "immutable snapshot" a compensation dispute would rely on held nothing —
+          // and the Shift row it would otherwise be reconstructed from is mutable.
+          termsSnapshot: buildTermsSnapshot(shift, input.expiresAt),
           sentAt: new Date(input.sentAt),
           expiresAt: new Date(input.expiresAt),
         },
@@ -411,14 +497,26 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // Atomic (BKG-02): offer -> Converted + booking + Payment Protected money records
     // all commit together, or none do.
     return prisma.$transaction(async (tx) => {
-      await tx.offer.update({ where: { id: input.offerId }, data: { state: "Converted" } });
+      // OFF-03/§6.3: only an offer still awaiting payment converts. The caller checked this
+      // on a snapshot read taken before the eligibility round-trip; a withdrawal or expiry
+      // committing in between would otherwise be converted into a live booking anyway.
+      const converted = await tx.offer.updateMany({
+        where: { id: input.offerId, state: "AwaitingPayment" },
+        data: { state: "Converted" },
+      });
+      if (converted.count !== 1) {
+        throw new ConflictError("offer is no longer awaiting payment (concurrent update)");
+      }
+      const offer = await tx.offer.findUniqueOrThrow({ where: { id: input.offerId } });
       const booking = await tx.booking.create({
         data: {
           offerId: input.offerId,
           shiftId: input.shiftId,
           professionalId: input.professionalId,
           state: "Confirmed",
-          termsSnapshot: {},
+          // BKG-03: carry the offer's frozen terms forward verbatim. Re-deriving them from
+          // the shift here would silently record post-offer edits as what was agreed.
+          termsSnapshot: offer.termsSnapshot ?? {},
           feeSnapshot: input.allocation.serviceFee,
           taxSnapshot: input.allocation.tax,
         },
@@ -473,6 +571,87 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       : null;
   }
 
+  async resolveIdentity(phone: string): Promise<CallerIdentity> {
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      include: { professional: { select: { id: true } }, memberships: true },
+    });
+    if (!user) return { userId: null, professionalId: null, memberships: [] };
+    return {
+      userId: user.id,
+      professionalId: user.professional?.id ?? null,
+      memberships: user.memberships.map((m) => ({
+        workspaceId: m.workspaceId,
+        role: m.role as Role,
+      })),
+    };
+  }
+
+  // ----- §6.4 dual control -----
+
+  async createApproval(input: CreateApprovalInput): Promise<ApprovalRequestRecord> {
+    const r = await prisma.approvalRequest.create({ data: { ...input, state: "Pending" } });
+    return toApproval(r);
+  }
+
+  async getApproval(id: string): Promise<ApprovalRequestRecord | null> {
+    const r = await prisma.approvalRequest.findUnique({ where: { id } });
+    return r ? toApproval(r) : null;
+  }
+
+  async listPendingApprovals(): Promise<ApprovalRequestRecord[]> {
+    const rows = await prisma.approvalRequest.findMany({
+      where: { state: "Pending" },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    });
+    return rows.map(toApproval);
+  }
+
+  async executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }> {
+    return prisma.$transaction(async (tx) => {
+      const req = await tx.approvalRequest.findUnique({ where: { id: input.approvalId } });
+      if (!req) throw new Error("approval request not found");
+
+      // Claim the request as part of the write. Two approvers clicking at once would
+      // otherwise both read Pending and both write a refund event against one captured sum.
+      const claimed = await tx.approvalRequest.updateMany({
+        where: { id: input.approvalId, state: "Pending" },
+        data: {
+          state: "Executed",
+          executorId: input.executorId,
+          executorRole: input.executorRole,
+          decidedAt: new Date(),
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictError("approval request is no longer pending (concurrent update)");
+      }
+
+      const po = await tx.paymentOrder.findUnique({
+        where: { bookingId: req.refId },
+        include: { allocation: true },
+      });
+      if (!po?.allocation) throw new Error("no payment allocation for booking");
+
+      // PAY-05/06: the money moves as an immutable event, exactly like every other path —
+      // staff never edit a balance. PAY-04 idempotency is the unique key.
+      await tx.financialEvent.create({
+        data: {
+          paymentOrderId: po.id,
+          type: "Refund",
+          amount: req.amount,
+          idempotencyKey: input.idempotencyKey,
+        },
+      });
+      await tx.financialAllocation.update({
+        where: { paymentOrderId: po.id },
+        data: { refundState: "PartiallyRefunded" },
+      });
+      return { refund: req.amount, bookingId: req.refId };
+    });
+  }
+
   async getBooking(id: string): Promise<BookingDetail | null> {
     const b = await prisma.booking.findUnique({
       where: { id },
@@ -494,7 +673,36 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       payoutState: (alloc?.payoutState ?? "NotEligible") as PayoutState,
       paymentOrderId: b.paymentOrder?.id ?? null,
       heldAt: b.heldAt ? b.heldAt.getTime() : null,
+      shiftStart: b.shift.startsAt.getTime(),
+      shiftEnd: b.shift.endsAt.getTime(),
     };
+  }
+
+  async hasArrived(bookingId: string): Promise<boolean> {
+    // CAN-03 evidence: an Arrived (or Completed, which implies arrival) attendance event.
+    const count = await prisma.attendanceEvent.count({
+      where: { bookingId, kind: { in: ["Arrived", "Completed"] } },
+    });
+    return count > 0;
+  }
+
+  async recordArrival(bookingId: string): Promise<boolean> {
+    const b = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!b) return false;
+    const existing = await prisma.attendanceEvent.count({ where: { bookingId, kind: "Arrived" } });
+    if (existing > 0) return true; // idempotent: arriving twice is one arrival
+    await prisma.attendanceEvent.create({
+      data: { bookingId, kind: "Arrived", actorId: b.professionalId },
+    });
+    return true;
+  }
+
+  async getAutoAcceptDueAt(bookingId: string): Promise<number | null> {
+    const b = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { autoAcceptAt: true },
+    });
+    return b?.autoAcceptAt ? b.autoAcceptAt.getTime() : null;
   }
 
   async suspendCredential(professionalId: string): Promise<boolean> {
@@ -521,11 +729,19 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async resolveHold(bookingId: string): Promise<BookingDetail | null> {
-    const b = await prisma.booking.findUnique({ where: { id: bookingId } });
+    const b = await prisma.booking.findUnique({ where: { id: bookingId }, include: { shift: true } });
     if (!b) return null;
+    // CMP-03: restart the 24h auto-accept clock from the resolution, not from the original
+    // completion. A booking held for five days would otherwise have a deadline five days in
+    // the past, so the very next sweep (within 60s) would auto-accept and pay out — giving
+    // the clinic no window to contest a completion that was under investigation the whole time.
+    const autoAcceptAt =
+      b.autoAcceptAt !== null
+        ? new Date(autoAcceptDueAt(b.shift.endsAt.getTime(), Date.now()))
+        : null;
     await prisma.booking.update({
       where: { id: bookingId },
-      data: { heldAt: null, heldReason: null },
+      data: { heldAt: null, heldReason: null, autoAcceptAt },
     });
     return this.getBooking(bookingId);
   }
@@ -556,7 +772,18 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       if (!po?.allocation) {
         throw new Error("no payment allocation for booking");
       }
-      await tx.booking.update({ where: { id: input.bookingId }, data: { state: "ServiceCompleted" } });
+      // The caller checked `state === AwaitingCompletion` on a snapshot read outside this
+      // transaction. Under READ COMMITTED that check is stale by the time we write: a cancel
+      // committing in between would be silently overwritten here, and its refund plus this
+      // payout would both stand against one captured amount (PAY-08). Make the precondition
+      // part of the write, so exactly one of the two racers commits.
+      const claimed = await tx.booking.updateMany({
+        where: { id: input.bookingId, state: "AwaitingCompletion", heldAt: null },
+        data: { state: "ServiceCompleted" },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictError("booking is no longer awaiting completion (concurrent update)");
+      }
       await tx.financialAllocation.update({
         where: { paymentOrderId: po.id },
         data: { payoutState: "Paid" },
@@ -602,7 +829,16 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       });
       if (!po?.allocation) throw new Error("no payment allocation for booking");
 
-      await tx.booking.update({ where: { id: input.bookingId }, data: { state: "Cancelled" } });
+      // Same reasoning as recordPayout: the cancellable-state check happened outside this
+      // transaction, so re-assert it as part of the write. Without this, a cancel racing an
+      // accept-completion overwrites the payout's terminal state and both ledgers commit.
+      const claimed = await tx.booking.updateMany({
+        where: { id: input.bookingId, state: { in: ["Confirmed", "InProgress", "AwaitingCompletion"] } },
+        data: { state: "Cancelled" },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictError("booking is no longer cancellable (concurrent update)");
+      }
 
       if (input.payable > 0) {
         await tx.financialEvent.create({

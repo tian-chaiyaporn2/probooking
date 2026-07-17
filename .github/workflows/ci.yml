@@ -1,0 +1,108 @@
+name: CI
+
+# Nothing gated the deploy before this: `pnpm run deploy:pages` force-pushes to gh-pages,
+# so a broken build could ship without a single test having run.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The repository port has two implementations, swapped at boot by DATABASE_URL. Running
+    # the suite against only one lets them drift: every divergence is a bug the tests cannot
+    # see, and the in-memory store is what the suites used to exercise while Postgres is what
+    # production runs. Both must pass the same tests.
+    strategy:
+      fail-fast: false
+      matrix:
+        store: [postgres, memory]
+
+    # Postgres runs for both legs (the service is cheap); only the `postgres` leg points
+    # DATABASE_URL at it. The Prisma store is what production uses, so it must be tested.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: probook
+          POSTGRES_PASSWORD: probook
+          POSTGRES_DB: probook_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Empty for the `memory` leg: an unset DATABASE_URL is what selects the in-memory store.
+      DATABASE_URL: ${{ matrix.store == 'postgres' && 'postgresql://probook:probook@localhost:5432/probook_test?schema=public' || '' }}
+      # Explicit, not inherited from a developer's .env — a stale CORS_ORIGINS silently
+      # blocks every browser call in the e2e suite and the failure looks like a code bug.
+      CORS_ORIGINS: http://localhost:3000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
+      AUTH_DEV_MODE: "true"
+      JWT_SECRET: ci-only-not-a-real-secret-${{ github.run_id }}
+      NODE_ENV: test
+      TZ: UTC
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version:` — package.json's `packageManager` pins pnpm@9.12.0, and specifying
+      # both is an error. Letting the repo be the single source of truth also means CI and
+      # local dev cannot drift onto different pnpm versions.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Apply migrations
+        if: matrix.store == 'postgres'
+        # `migrate deploy`, not `migrate dev`: it fails on a broken migration instead of
+        # rewriting history, which is what we want CI to tell us about. Running it against a
+        # database that already has rows is also the only way to catch a migration that
+        # assumes an empty table.
+        run: pnpm --filter @probook/db exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://probook:probook@localhost:5432/probook_test?schema=public
+
+      - run: pnpm build
+
+      - run: pnpm -r typecheck
+
+      - name: Unit tests (domain)
+        run: pnpm --filter @probook/domain test
+
+      - name: BDD acceptance suite
+        run: pnpm test:bdd
+
+      - name: Install Playwright browser
+        run: pnpm e2e:install
+
+      - name: End-to-end (${{ matrix.store }} store)
+        run: pnpm exec playwright test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          # Per-leg name: matrix jobs cannot upload to the same artifact name.
+          name: playwright-report-${{ matrix.store }}
+          path: playwright-report/
+          retention-days: 7
