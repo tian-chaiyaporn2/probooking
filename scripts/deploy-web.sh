@@ -2,7 +2,7 @@
 #
 # Deploy the static web export to the `gh-pages` branch — no GitHub Actions.
 # GitHub Pages serves that branch as-is (`.nojekyll` skips Jekyll processing).
-# Run locally after committing:  pnpm deploy
+# Run locally after committing:  pnpm run deploy:pages
 #
 set -euo pipefail
 

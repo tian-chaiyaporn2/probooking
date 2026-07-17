@@ -23,7 +23,7 @@ We deploy from the command line to a `gh-pages` branch — GitHub Pages publishe
 branch directly, with **no Actions minutes consumed**.
 
 ```bash
-pnpm deploy          # builds the static export and force-pushes it to gh-pages
+pnpm run deploy:pages          # builds the static export and force-pushes it to gh-pages
 ```
 
 Under the hood (`scripts/deploy-web.sh`):
@@ -42,7 +42,7 @@ at the root and are unaffected by the base-path config.
 gh repo create tian-chaiyaporn2/probooking --public --source=. --remote=origin --push
 
 # 2. Publish the first build
-pnpm deploy
+pnpm run deploy:pages
 
 # 3. Point Pages at the gh-pages branch (Settings → Pages, or:)
 gh api --method POST repos/tian-chaiyaporn2/probooking/pages \
@@ -57,7 +57,7 @@ To make the dashboards work live, host `apps/api` + Postgres on any Node host, t
 rebuild the frontend with the API URL:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com pnpm deploy
+NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com pnpm run deploy:pages
 ```
 
 Remember to set that API's `CORS_ORIGINS=https://tian-chaiyaporn2.github.io` and a
