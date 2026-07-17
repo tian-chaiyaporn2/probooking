@@ -46,7 +46,7 @@ export function AppHeader({ current }: { current?: string }) {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="app-nav app-nav--desktop" aria-label="Primary">
+        <nav className="app-nav app-nav--desktop" aria-label={th.a11y.primaryNav}>
           {LINKS.map((l) => (
             <Link key={l.href} href={l.href} aria-current={current === l.href ? "page" : undefined}>
               {l.label}
@@ -59,7 +59,7 @@ export function AppHeader({ current }: { current?: string }) {
           <button
             type="button"
             className="nav-toggle"
-            aria-label={open ? "Close menu" : "Open menu"}
+            aria-label={open ? th.a11y.closeMenu : th.a11y.openMenu}
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
           >
@@ -71,8 +71,8 @@ export function AppHeader({ current }: { current?: string }) {
       {/* Mobile drawer */}
       {open && (
         <>
-          <button className="nav-backdrop" aria-label="Close menu" onClick={() => setOpen(false)} />
-          <nav className="app-nav--drawer" aria-label="Primary">
+          <button className="nav-backdrop" aria-label={th.a11y.closeMenu} onClick={() => setOpen(false)} />
+          <nav className="app-nav--drawer" aria-label={th.a11y.primaryNav}>
             {LINKS.map((l) => (
               <Link
                 key={l.href}

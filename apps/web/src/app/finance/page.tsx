@@ -16,7 +16,7 @@ import { DataTable, type Column } from "../../components/DataTable";
 import { RefreshIcon, DownloadIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
-import { th } from "../../lib/strings";
+import { th, getThaiErrorMessage } from "../../lib/strings";
 
 const MAX_ROWS = 25;
 
@@ -31,7 +31,7 @@ export default function FinancePage() {
     try {
       setData(await getReconciliation());
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -58,7 +58,7 @@ export default function FinancePage() {
       setTimeout(() => URL.revokeObjectURL(url), 0);
       toast.success("กำลังดาวน์โหลด finance-export.csv");
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e));
     }
   }
 
@@ -88,7 +88,7 @@ export default function FinancePage() {
     return (
       <>
         <AppHeader current="/finance" />
-        <StaffLogin surface="Finance" onToken={setToken} />
+        <StaffLogin surface="finance" onToken={setToken} />
       </>
     );
   }

@@ -14,10 +14,11 @@ async function loginAs(request: any, api: string, phone: string) {
 }
 
 /** Sign in through the dashboards' staff OTP form. Under AUTH_DEV_MODE the code is echoed
- * back, so filling the phone and clicking "Send code" completes the login in one step. */
+ * back, so filling the phone and clicking send completes the login in one step. The form is
+ * Thai (staffLogin strings), so the selectors match that copy. */
 async function staffUiLogin(page: any, phone: string) {
-  await page.getByLabel("Phone number").fill(phone);
-  await page.getByRole("button", { name: "Send code" }).click();
+  await page.getByLabel("หมายเลขโทรศัพท์ของเจ้าหน้าที่").fill(phone);
+  await page.getByRole("button", { name: "ส่งรหัส OTP" }).click();
 }
 
 /**
@@ -59,15 +60,15 @@ test("mobile nav collapses into a drawer that opens and closes", async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   // The desktop nav is hidden; a menu button stands in for it.
-  await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
-  await page.getByLabel("Open menu").click();
+  await expect(page.getByRole("navigation", { name: "เมนูหลัก" })).toBeHidden();
+  await page.getByLabel("เปิดเมนู").click();
   // Drawer is open; its links are now visible and Escape dismisses it.
-  const drawer = page.getByRole("navigation", { name: "Primary" });
+  const drawer = page.getByRole("navigation", { name: "เมนูหลัก" });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole("link", { name: "เดโม" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
-  await expect(page.getByLabel("Open menu")).toBeVisible();
+  await expect(page.getByLabel("เปิดเมนู")).toBeVisible();
 });
 
 test("booking flow confirms a booking with the correct checkout total", async ({ page }) => {
