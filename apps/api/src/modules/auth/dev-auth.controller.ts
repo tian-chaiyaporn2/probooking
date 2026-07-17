@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Post } from "@nestjs/common";
+import { Throttle, AUTH_THROTTLE } from "../throttle/throttle.guard.js";
 import { signToken } from "./token.util.js";
 
 const INTERNAL_ROLES = new Set(["operations", "finance", "administrator"]);
@@ -13,6 +14,7 @@ const INTERNAL_ROLES = new Set(["operations", "finance", "administrator"]);
  */
 @Controller("auth")
 export class DevAuthController {
+  @Throttle(AUTH_THROTTLE)
   @Post("dev/token")
   devToken(@Body() dto: { role: string }) {
     if (!INTERNAL_ROLES.has(dto.role)) throw new BadRequestException("unknown internal role");

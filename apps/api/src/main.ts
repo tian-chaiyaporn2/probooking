@@ -1,6 +1,8 @@
 import "./env.js"; // MUST be first: populates process.env before any module reads it
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import helmet from "helmet";
+import { json, urlencoded } from "express";
 import { AppModule } from "./app.module.js";
 import { devAuthEnabled } from "./modules/auth/dev-mode.util.js";
 import { assertSigningSecretConfigured } from "./modules/auth/token.util.js";
@@ -24,6 +26,17 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule);
+
+  // §7.3 security headers (HSTS, X-Content-Type-Options, Referrer-Policy, …). None were
+  // set on a service handling medical credentials and money. `contentSecurityPolicy` is
+  // left off: this process serves JSON only — the web app is a separate static origin, and
+  // a CSP here would protect nothing while being one more thing to get wrong.
+  app.use(helmet({ contentSecurityPolicy: false }));
+
+  // Explicit body limit. Express defaults to 100kb, which is fine — but relying on a
+  // framework default for a DoS control means it can vanish in an upgrade without notice.
+  app.use(json({ limit: "100kb" }));
+  app.use(urlencoded({ extended: false, limit: "100kb" }));
 
   // CORS: pin to an allowlist when CORS_ORIGINS is configured (comma-separated). Reflecting
   // every origin is a dev-only convenience, so it is tied to the explicit dev opt-in and

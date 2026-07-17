@@ -7,6 +7,7 @@ import {
   Post,
   UnauthorizedException,
 } from "@nestjs/common";
+import { Throttle, AUTH_THROTTLE } from "../throttle/throttle.guard.js";
 import { OtpService, OtpRateLimitError } from "./otp.service.js";
 import { signToken } from "./token.util.js";
 import { devAuthEnabled } from "./dev-mode.util.js";
@@ -39,6 +40,7 @@ const STAFF: Record<string, string> = parseStaffPhones(process.env.STAFF_PHONES 
 export class AuthController {
   constructor(private readonly otp: OtpService) {}
 
+  @Throttle(AUTH_THROTTLE)
   @Post("otp/request")
   request(@Body() dto: { phone: string }): { sent: true; devCode?: string } {
     if (!dto.phone) throw new BadRequestException("phone required");
@@ -59,6 +61,9 @@ export class AuthController {
     }
   }
 
+  // The brute-force guard burns a code after 5 wrong attempts, but nothing stopped an
+  // attacker cycling re-request -> 5 guesses indefinitely, or spraying many phones at once.
+  @Throttle(AUTH_THROTTLE)
   @Post("otp/verify")
   verify(@Body() dto: { phone: string; code: string }) {
     if (!this.otp.verify(dto.phone, dto.code)) {

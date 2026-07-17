@@ -35,6 +35,11 @@ export default defineConfig({
         // and /auth/dev/token mints only one identity per role (sub = "dev:finance").
         // Exercises the real OTP + access-list login rather than the dev shortcut.
         STAFF_PHONES: "+66900000001:finance,+66900000002:finance,+66900000003:administrator",
+        // The suite drives hundreds of calls from one IP, which is not what the rate limit
+        // is defending against. Raised, not disabled: the guard stays wired so a broken
+        // throttle config still fails here rather than in production.
+        THROTTLE_LIMIT: "100000",
+        THROTTLE_AUTH_LIMIT: "100000",
       },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
