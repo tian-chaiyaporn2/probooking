@@ -136,6 +136,10 @@ enum FinancialEventType {
 // ----- Identity & access -----
 model User {
   id           String       @id @default(cuid())
+  // Plaintext by design: this is the unique OTP login key, looked up by value, so it cannot
+  // take random-IV encryption. Encrypting it needs deterministic encryption or an HMAC blind
+  // index (deferred). Masked in logs meanwhile. Other sensitive columns (licenceNo, address,
+  // Message.body) are AES-256-GCM encrypted at the app layer — see field-crypto.ts.
   phone        String       @unique // Thai mobile OTP is primary login (AUTH-01)
   email        String?      @unique
   mfaEnabled   Boolean      @default(false)
@@ -149,8 +153,8 @@ model ClinicWorkspace {
   id           String            @id @default(cuid())
   // One Phase 1 workspace == one physical clinic branch (§3 rule).
   branchName   String
-  licenceNo    String
-  address      String
+  licenceNo    String // encrypted at rest (field-crypto), write-only from the app
+  address      String // encrypted at rest (field-crypto)
   billingData  Json?
   verification VerificationState @default(Draft)
   createdAt    DateTime          @default(now()) @db.Timestamptz(3)
@@ -340,7 +344,8 @@ model Message {
   booking   Booking  @relation(fields: [bookingId], references: [id])
   bookingId String
   senderId  String
-  // Plain text only; no attachments / real-time infra (MSG-01).
+  // Plain text only; no attachments / real-time infra (MSG-01). Encrypted at rest
+  // (field-crypto); the patient-data filter runs on the plaintext before it is stored.
   body      String
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 

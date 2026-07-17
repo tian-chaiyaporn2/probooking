@@ -6,6 +6,7 @@ import { json, urlencoded } from "express";
 import { AppModule } from "./app.module.js";
 import { devAuthEnabled } from "./modules/auth/dev-mode.util.js";
 import { assertSigningSecretConfigured } from "./modules/auth/token.util.js";
+import { assertFieldKeyConfigured } from "./modules/marketplace/field-crypto.js";
 
 async function bootstrap() {
   const isProd = process.env.NODE_ENV === "production";
@@ -14,6 +15,10 @@ async function bootstrap() {
   // Fail fast at boot rather than at the first signed request. `secret()` throws unless a
   // strong JWT_SECRET is configured or the explicit dev opt-in is on (§3).
   assertSigningSecretConfigured();
+
+  // Same for the field-encryption key: a missing key should refuse to boot, not surface as
+  // the first message send or clinic registration throwing (§7.3).
+  assertFieldKeyConfigured();
 
   // The dev-auth bypass (dev/token route + devCode in the OTP response) can never be on in
   // production — devAuthEnabled() already excludes it — but say so loudly when it IS on, so
