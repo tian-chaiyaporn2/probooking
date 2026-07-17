@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AppHeader } from "../../lib/AppHeader";
+import { AppHeader } from "../../components/AppHeader";
 import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
 import {
@@ -140,7 +140,7 @@ export default function FlowPage() {
     <AppHeader current="/flow" />
     <main className="page" style={{ maxWidth: 640 }}>
       <h1>ProBooking — booking flow</h1>
-      <p style={{ color: "#555" }}>
+      <p className="muted">
         Onboard and verify a clinic and professional, create a binding offer, accept it
         (soft hold), confirm the booking, complete it and pay out the professional, then
         leave reviews.
@@ -161,9 +161,10 @@ export default function FlowPage() {
       {bookingId && (
         <div
           data-testid="result"
-          style={{ marginTop: "1rem", padding: "1rem", border: "1px solid #0b6", borderRadius: 8 }}
+          className="card card--pad"
+          style={{ marginTop: "1rem", borderColor: "var(--primary)" }}
         >
-          <div data-testid="booking-status" style={{ fontWeight: 600, color: "#0a5" }}>
+          <div data-testid="booking-status" style={{ fontWeight: 600, color: "var(--success)" }}>
             Booking Confirmed
           </div>
           <div>Booking ID: <code data-testid="booking-id">{bookingId}</code></div>
@@ -188,7 +189,7 @@ export default function FlowPage() {
               </Button>
             ) : (
               <div data-testid="payout">
-                <span data-testid="payout-status" style={{ fontWeight: 600, color: "#0a5" }}>
+                <span data-testid="payout-status" style={{ fontWeight: 600, color: "var(--success)" }}>
                   Paid out
                 </span>{" "}
                 — <span data-testid="payout-amount">{formatThb(payout.payoutAmount)}</span> to the
@@ -205,11 +206,11 @@ export default function FlowPage() {
                 </Button>
               ) : (
                 <div data-testid="reviews">
-                  <span data-testid="reviews-status" style={{ fontWeight: 600, color: "#0a5" }}>
+                  <span data-testid="reviews-status" style={{ fontWeight: 600, color: "var(--success)" }}>
                     Reviews published
                   </span>
                   {rating && (
-                    <div data-testid="rating" style={{ color: "#555", marginTop: "0.25rem" }}>
+                    <div data-testid="rating" style={{ color: "var(--muted)", marginTop: "0.25rem" }}>
                       {rating.hasRating
                         ? `Professional rating: ${rating.average} (${rating.count} reviews)`
                         : "Professional rating: not shown yet (needs 3 reviews)"}

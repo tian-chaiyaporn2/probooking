@@ -19,6 +19,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="th">
       <body>
+        {/* Apply the saved theme before paint to avoid a flash of the wrong theme. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t;}}catch(e){}`,
+          }}
+        />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

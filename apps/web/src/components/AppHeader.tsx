@@ -1,4 +1,5 @@
-import { th } from "./strings";
+import { th } from "../lib/strings";
+import { ThemeToggle } from "./ThemeToggle";
 
 const LINKS = [
   { href: "/", label: th.nav.home },
@@ -7,7 +8,7 @@ const LINKS = [
   { href: "/flow", label: th.nav.flow },
 ] as const;
 
-/** Shared app shell header: brand + section nav, so each surface isn't an island. */
+/** Shared app shell header: brand + section nav + theme toggle. */
 export function AppHeader({ current }: { current?: string }) {
   return (
     <header className="app-header">
@@ -25,6 +26,7 @@ export function AppHeader({ current }: { current?: string }) {
             </a>
           ))}
         </nav>
+        <ThemeToggle />
       </div>
     </header>
   );

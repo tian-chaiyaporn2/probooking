@@ -14,8 +14,9 @@ import {
   type PendingVerification,
   type MarketplaceMetrics,
 } from "../../lib/api";
-import { AppHeader } from "../../lib/AppHeader";
-import { Stat, Badge } from "../../lib/ui";
+import { AppHeader } from "../../components/AppHeader";
+import { Stat } from "../../components/Stat";
+import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { RefreshIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";

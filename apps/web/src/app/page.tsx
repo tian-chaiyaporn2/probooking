@@ -1,5 +1,5 @@
-import { AppHeader } from "../lib/AppHeader";
-import { Badge } from "../lib/ui";
+import { AppHeader } from "../components/AppHeader";
+import { Badge } from "../components/Badge";
 import { th } from "../lib/strings";
 
 const CTAS = [

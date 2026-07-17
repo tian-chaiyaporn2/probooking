@@ -10,8 +10,8 @@ import {
   type Reconciliation,
   type ReconciliationRow,
 } from "../../lib/api";
-import { AppHeader } from "../../lib/AppHeader";
-import { Stat } from "../../lib/ui";
+import { AppHeader } from "../../components/AppHeader";
+import { Stat } from "../../components/Stat";
 import { Button } from "../../components/Button";
 import { DataTable, type Column } from "../../components/DataTable";
 import { RefreshIcon, DownloadIcon } from "../../components/icons";
