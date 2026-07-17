@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { requestOtp, verifyOtp } from "../lib/api";
+import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
 
 /**
@@ -21,7 +22,7 @@ export function StaffLogin({
   surface,
   onToken,
 }: {
-  surface: string;
+  surface: "operations" | "finance";
   onToken: (token: string) => void;
 }) {
   const [phone, setPhone] = useState("");
@@ -43,7 +44,7 @@ export function StaffLogin({
       }
       setStage("code"); // production: collect the SMS code
     } catch (e) {
-      setError((e as Error).message);
+      setError(getThaiErrorMessage(e, th.staffLogin.sendCodeError));
     } finally {
       setBusy(false);
     }
@@ -56,7 +57,7 @@ export function StaffLogin({
       const { token } = await verifyOtp(phone, code);
       onToken(token);
     } catch (e) {
-      setError((e as Error).message);
+      setError(getThaiErrorMessage(e, th.staffLogin.signInError));
     } finally {
       setBusy(false);
     }
@@ -64,9 +65,9 @@ export function StaffLogin({
 
   return (
     <div className="card card--pad" style={{ maxWidth: 380, margin: "2rem auto" }}>
-      <h2 style={{ marginTop: 0 }}>{surface} sign-in</h2>
+      <h2 style={{ marginTop: 0 }}>{th.staffLogin.title[surface]}</h2>
       <p className="muted" style={{ fontSize: "0.9rem" }}>
-        Staff sign in with the phone number on the access list. A one-time code is sent by SMS.
+        {th.staffLogin.description}
       </p>
       {stage === "phone" ? (
         <form
@@ -76,7 +77,7 @@ export function StaffLogin({
           }}
         >
           <input
-            aria-label="Phone number"
+            aria-label={th.staffLogin.phoneLabel}
             inputMode="tel"
             placeholder="+66…"
             value={phone}
@@ -84,7 +85,7 @@ export function StaffLogin({
             style={inputStyle}
           />
           <Button type="submit" variant="primary" busy={busy} disabled={!phone}>
-            Send code
+            {th.staffLogin.sendCode}
           </Button>
         </form>
       ) : (
@@ -95,16 +96,30 @@ export function StaffLogin({
           }}
         >
           <input
-            aria-label="One-time code"
+            aria-label={th.staffLogin.codeLabel}
             inputMode="numeric"
-            placeholder="6-digit code"
+            placeholder={th.staffLogin.codePlaceholder}
             value={code}
             onChange={(e) => setCode(e.target.value)}
             style={inputStyle}
           />
-          <Button type="submit" variant="primary" busy={busy} disabled={!code}>
-            Sign in
-          </Button>
+          <div className="actions">
+            <Button type="submit" variant="primary" busy={busy} disabled={!code}>
+              {th.staffLogin.signIn}
+            </Button>
+            <Button
+              type="button"
+              variant="subtle"
+              disabled={busy}
+              onClick={() => {
+                setCode("");
+                setError(null);
+                setStage("phone");
+              }}
+            >
+              {th.staffLogin.requestNewCode}
+            </Button>
+          </div>
         </form>
       )}
       {error && (

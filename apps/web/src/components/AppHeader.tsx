@@ -20,7 +20,7 @@ export function AppHeader({ current }: { current?: string }) {
           </span>
           {th.brand}
         </Link>
-        <nav className="app-nav" aria-label="Primary">
+        <nav className="app-nav" aria-label={th.a11y.primaryNav}>
           {LINKS.map((l) => (
             <Link key={l.href} href={l.href} aria-current={current === l.href ? "page" : undefined}>
               {l.label}

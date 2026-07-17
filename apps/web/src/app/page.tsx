@@ -9,8 +9,6 @@ const CTAS = [
   { href: "/finance", title: th.home.financeLink },
 ];
 
-const TRUST = ["ตรวจสอบแล้ว", "พร้อมทำงาน", "จองได้", "คุ้มครองการชำระเงิน"];
-
 export default function Home() {
   return (
     <>
@@ -23,7 +21,7 @@ export default function Home() {
             {th.home.description}
           </p>
           <div className="trust-row">
-            {TRUST.map((t) => (
+            {th.home.trustPillars.map((t) => (
               <Badge key={t} variant="success">
                 ✓ {t}
               </Badge>
@@ -34,13 +32,13 @@ export default function Home() {
         <section className="cta-grid">
           {CTAS.map((c) => (
             <Link key={c.href} href={c.href} className="cta-card" data-testid={`${c.href.slice(1) || "flow"}-link`}>
-              <div className="cta-card__title">{c.title.replace(/^→\s*/, "")}</div>
-              <span className="cta-card__arrow">เปิด →</span>
+              <div className="cta-card__title">{c.title}</div>
+              <span className="cta-card__arrow">{th.common.open}</span>
             </Link>
           ))}
         </section>
 
-        <footer className="footer">ProBooking · เฟส 0 · กรุงเทพฯ และปริมณฑล</footer>
+        <footer className="footer">{th.home.footer}</footer>
       </main>
     </>
   );

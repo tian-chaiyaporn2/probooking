@@ -14,10 +14,10 @@ async function loginAs(request: any, api: string, phone: string) {
 }
 
 /** Sign in through the dashboards' staff OTP form. Under AUTH_DEV_MODE the code is echoed
- * back, so filling the phone and clicking "Send code" completes the login in one step. */
+ * back, so filling the phone and clicking the send-code button completes login in one step. */
 async function staffUiLogin(page: any, phone: string) {
-  await page.getByLabel("Phone number").fill(phone);
-  await page.getByRole("button", { name: "Send code" }).click();
+  await page.getByLabel("หมายเลขโทรศัพท์ของเจ้าหน้าที่").fill(phone);
+  await page.getByRole("button", { name: "ส่งรหัส OTP" }).click();
 }
 
 /**

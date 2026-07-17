@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import type { Viewport } from "next";
 import { ToastProvider } from "../components/Toast";
+import { th } from "../lib/strings";
 import "./globals.css";
 
 export const metadata = {
-  title: "ProBooking",
-  description: "Verified. Available. Bookable. Payment Protected.",
+  title: th.brand,
+  description: th.home.metadataDescription,
 };
 
 // Responsive: opt every page into device-width scaling (no forced desktop layout on mobile).

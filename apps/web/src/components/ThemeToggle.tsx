@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { th } from "../lib/strings";
 import { SunIcon, MoonIcon } from "./icons";
 
 type Theme = "light" | "dark";
@@ -31,9 +32,9 @@ export function ThemeToggle() {
     <button
       className="btn btn--ghost btn--icon"
       onClick={toggle}
-      aria-label={isDark ? "สลับเป็นโหมดสว่าง" : "สลับเป็นโหมดมืด"}
+      aria-label={isDark ? th.a11y.switchToLight : th.a11y.switchToDark}
       aria-pressed={isDark}
-      title={isDark ? "โหมดสว่าง" : "โหมดมืด"}
+      title={isDark ? th.a11y.lightMode : th.a11y.darkMode}
     >
       {/* Render nothing until mounted to avoid a hydration/icon mismatch. */}
       {theme === null ? <span style={{ width: "1.05em" }} /> : isDark ? <SunIcon /> : <MoonIcon />}

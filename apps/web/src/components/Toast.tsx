@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { th } from "../lib/strings";
 import { AlertIcon, CheckIcon, CloseIcon } from "./icons";
 
 type ToastKind = "error" | "success";
@@ -50,14 +51,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="toast-viewport" role="region" aria-live="polite" aria-label="Notifications">
+      <div className="toast-viewport" role="region" aria-live="polite" aria-label={th.a11y.notifications}>
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast--${t.kind}`} data-testid={`toast-${t.kind}`} role="status">
             <span className="toast__icon" aria-hidden>
               {t.kind === "error" ? <AlertIcon /> : <CheckIcon />}
             </span>
             <span className="toast__msg">{t.message}</span>
-            <button className="toast__close" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
+            <button className="toast__close" aria-label={th.a11y.dismissNotification} onClick={() => dismiss(t.id)}>
               <CloseIcon />
             </button>
           </div>

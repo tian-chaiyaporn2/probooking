@@ -16,7 +16,7 @@ import { DataTable, type Column } from "../../components/DataTable";
 import { RefreshIcon, DownloadIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
-import { th } from "../../lib/strings";
+import { getThaiErrorMessage, th } from "../../lib/strings";
 
 const MAX_ROWS = 25;
 
@@ -31,7 +31,7 @@ export default function FinancePage() {
     try {
       setData(await getReconciliation());
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e, th.common.loadError));
     } finally {
       setLoading(false);
     }
@@ -56,9 +56,9 @@ export default function FinancePage() {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 0);
-      toast.success("กำลังดาวน์โหลด finance-export.csv");
+      toast.success(th.finance.exportStarted);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e, th.finance.exportError));
     }
   }
 
@@ -77,9 +77,11 @@ export default function FinancePage() {
       header: th.finance.colConserved,
       render: (r) =>
         r.conserved ? (
-          <span className="badge badge--success" aria-label="conserved">✓</span>
+          <span className="badge badge--success" aria-label={th.finance.reconciliationOk}>✓</span>
         ) : (
-          <span className="badge badge--warn" aria-label="exception">✗ {th.finance.exceptions}</span>
+          <span className="badge badge--warn" aria-label={th.finance.reconciliationIssue}>
+            ✗ {th.finance.reconciliationIssue}
+          </span>
         ),
     },
   ];
@@ -88,7 +90,7 @@ export default function FinancePage() {
     return (
       <>
         <AppHeader current="/finance" />
-        <StaffLogin surface="Finance" onToken={setToken} />
+        <StaffLogin surface="finance" onToken={setToken} />
       </>
     );
   }

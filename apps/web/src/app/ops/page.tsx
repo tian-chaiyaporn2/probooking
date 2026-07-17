@@ -20,7 +20,7 @@ import { Button } from "../../components/Button";
 import { RefreshIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
-import { th } from "../../lib/strings";
+import { getThaiErrorMessage, th } from "../../lib/strings";
 
 /**
  * Operations dashboard (ADM-01). Internal tool that calls controlled API actions:
@@ -42,7 +42,7 @@ export default function OpsPage() {
       setCases(c.cases);
       setMetrics(m);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e, th.common.loadError));
     } finally {
       setLoading(false);
     }
@@ -60,7 +60,7 @@ export default function OpsPage() {
     return (
       <>
         <AppHeader current="/ops" />
-        <StaffLogin surface="Operations" onToken={setToken} />
+        <StaffLogin surface="operations" onToken={setToken} />
       </>
     );
   }
@@ -71,9 +71,9 @@ export default function OpsPage() {
       if (kind === "clinic") await verifyClinic(id);
       else await verifyProfessional(id);
       await load();
-      toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
+      toast.success(th.ops.verified(kind));
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e, th.ops.verifyError));
     } finally {
       setBusy(false);
     }
@@ -84,9 +84,9 @@ export default function OpsPage() {
     try {
       await resolveHold(bookingId);
       await load();
-      toast.success("ปลดการระงับแล้ว");
+      toast.success(th.ops.holdResolved);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e, th.ops.resolveHoldError));
     } finally {
       setBusy(false);
     }
@@ -108,7 +108,10 @@ export default function OpsPage() {
             Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
           ) : (
             <>
-              <Stat label={th.ops.metricShifts} value={`${metrics.shifts.total} (${metrics.shifts.open})`} />
+              <Stat
+                label={th.ops.metricShifts}
+                value={th.ops.shiftsValue(metrics.shifts.total, metrics.shifts.open)}
+              />
               <Stat label={th.ops.metricBookings} value={String(metrics.bookings.total)} />
               <Stat label={th.ops.metricCompleted} value={String(metrics.bookings.completed)} />
               <Stat label={th.ops.metricHeld} value={String(metrics.bookings.held)} />
@@ -130,7 +133,7 @@ export default function OpsPage() {
             {!loading && pending.length === 0 && <li className="empty">{th.common.none}</li>}
             {pending.map((p) => (
               <li key={p.id} data-testid={`pending-${p.id}`}>
-                <Badge variant={p.kind}>{p.kind}</Badge>
+                <Badge variant={p.kind}>{th.ops.pendingKind(p.kind)}</Badge>
                 <span className="row__main">
                   {p.name} <code className="row__id">{p.id.slice(0, 8)}…</code>
                 </span>
@@ -152,9 +155,9 @@ export default function OpsPage() {
             {!loading && cases.length === 0 && <li className="empty">{th.common.none}</li>}
             {cases.map((c) => (
               <li key={c.id} data-testid={`case-${c.id}`}>
-                <Badge variant={c.kind}>{c.kind}</Badge>
+                <Badge variant={c.kind}>{th.ops.caseKind(c.kind)}</Badge>
                 <span className="row__main">
-                  <span className="muted">{c.state}</span>{" "}
+                  <span className="muted">{th.ops.caseState(c.state)}</span>{" "}
                   {c.refId && <code className="row__id">{c.refId.slice(0, 8)}…</code>}
                 </span>
                 {c.kind === "credential_hold" && c.refId && (
