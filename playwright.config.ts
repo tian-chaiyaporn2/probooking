@@ -23,7 +23,15 @@ export default defineConfig({
     {
       command: "node apps/api/dist/main.js",
       url: "http://localhost:4000/health",
-      env: { API_PORT: "4000" },
+      // Pin the API's environment rather than inheriting whatever the developer's .env
+      // happens to hold: a stale CORS_ORIGINS silently blocks every browser call, and an
+      // unset DATABASE_URL silently swaps the store implementation under the suite.
+      env: {
+        API_PORT: "4000",
+        NODE_ENV: "test",
+        AUTH_DEV_MODE: "true",
+        CORS_ORIGINS: "http://localhost:3000",
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

@@ -36,6 +36,7 @@ import {
 import { OffersService } from "../offers/offers.service.js";
 import { BookingsService } from "../bookings/bookings.service.js";
 import { PaymentsService } from "../payments/payments.service.js";
+import { MockPaymentProvider } from "../payments/payment.provider.js";
 import { NotificationsService } from "./notifications.service.js";
 import {
   MARKETPLACE_REPOSITORY,
@@ -84,6 +85,7 @@ export class MarketplaceController {
     private readonly offers: OffersService,
     private readonly bookings: BookingsService,
     private readonly payments: PaymentsService,
+    private readonly paymentProvider: MockPaymentProvider,
     private readonly notifications: NotificationsService,
     @Inject(MARKETPLACE_REPOSITORY) private readonly repo: MarketplaceRepository,
   ) {}
@@ -531,7 +533,7 @@ export class MarketplaceController {
   }
 
   @Post("offers/:id/confirm")
-  async confirm(@Param("id") id: string, @Body() body: { prefundingSucceeded?: boolean }) {
+  async confirm(@Param("id") id: string) {
     const offer = await this.requireOffer(id);
 
     // Atomic + idempotent: one shift -> one booking (§6.4). If already booked, return it.
@@ -539,6 +541,17 @@ export class MarketplaceController {
     if (existing) {
       return { booking: existing, checkout: this.payments.checkout(satang(offer.compensation)) };
     }
+
+    const checkout = this.payments.checkout(satang(offer.compensation));
+
+    // BKG-01 durable prefunding: the API collects the funds and observes the result. This
+    // was previously read from the request body (defaulting to `true`), which let any
+    // caller book a real shift — obligating a real payout — without paying. The capture is
+    // keyed on the offer so a retried confirm re-uses the same provider transaction.
+    const capture = await this.paymentProvider.capture({
+      orderRef: `collection:${offer.id}`,
+      amount: checkout.total,
+    });
 
     // §6.3: read the real verification facts + schedule overlap for this offer.
     const eligibility = await this.repo.getOfferEligibility(id);
@@ -562,7 +575,7 @@ export class MarketplaceController {
       hasBlockingHold: false,
       hasScheduleOverlap: overlap,
       offerExpired: Date.now() > offer.expiresAt, // §6.3: late payment after expiry never books
-      durablePrefundingSucceeded: body?.prefundingSucceeded ?? true,
+      durablePrefundingSucceeded: capture.succeeded,
     };
 
     try {
@@ -572,11 +585,9 @@ export class MarketplaceController {
       // A concurrent confirm may have already booked this offer — the overlap check
       // then trips on that very booking. Return it idempotently instead of a 400.
       const won = await this.repo.getBookingByOffer(id);
-      if (won) return { booking: won, checkout: this.payments.checkout(satang(offer.compensation)) };
+      if (won) return { booking: won, checkout };
       throw new BadRequestException((e as Error).message);
     }
-
-    const checkout = this.payments.checkout(satang(offer.compensation));
 
     // PAY-07 conservation at confirmation: captured (total) equals the professional's
     // protected compensation + platform fee + tax; nothing is paid out or refunded yet.
@@ -620,6 +631,18 @@ export class MarketplaceController {
     }
   }
 
+  @Post("bookings/:id/arrive")
+  async recordArrival(@Param("id") id: string) {
+    const booking = await this.requireBooking(id);
+    // CAN-03 evidence: arrival is what separates a 50% cancellation from a 100% one, so it
+    // is recorded as its own event on an active booking rather than asserted at cancel time.
+    if (booking.state !== "Confirmed" && booking.state !== "InProgress") {
+      throw new BadRequestException(`booking is ${booking.state}; cannot record arrival`);
+    }
+    await this.repo.recordArrival(id);
+    return { id, arrived: true };
+  }
+
   @Post("bookings/:id/complete")
   async complete(@Param("id") id: string) {
     const booking = await this.requireBooking(id);
@@ -646,9 +669,29 @@ export class MarketplaceController {
     }
   }
 
+  /**
+   * CMP-02/03: accept the professional's completion and release the payout.
+   *
+   * This moves real money, so it is authenticated. Callers: the clinic of record accepting
+   * early, Operations resolving a case, or the worker's auto-accept sweep once the 24h
+   * deadline passes. It was previously unauthenticated with no deadline check of its own —
+   * the 24h window lived only in the worker's WHERE clause, so anyone who knew a booking id
+   * could trigger the payout the moment completion was submitted.
+   */
+  @UseGuards(AuthGuard)
+  @Roles("clinic_owner", "operations", "administrator", "worker")
   @Post("bookings/:id/accept-completion")
-  async acceptCompletion(@Param("id") id: string) {
+  async acceptCompletion(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const booking = await this.requireBooking(id);
+    // Defence in depth: the worker may only act once the booking's own deadline has passed.
+    // Keeping the time policy solely in the sweep's query means a bug (or a replayed call)
+    // there pays out early with nothing to stop it.
+    if (user?.role === "worker") {
+      const dueAt = await this.repo.getAutoAcceptDueAt(id);
+      if (dueAt === null || Date.now() < dueAt) {
+        throw new BadRequestException("auto-accept deadline has not passed for this booking");
+      }
+    }
     // Idempotent: already completed & paid out.
     if (booking.state === "ServiceCompleted") {
       return {
@@ -670,6 +713,13 @@ export class MarketplaceController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
+
+    // PAY-08: the payout may not exceed the funds actually captured for this booking.
+    this.payments.assertWithinAllocation(
+      satang(booking.compensation),
+      satang(booking.captured),
+      "payout",
+    );
 
     // PAY-07 conservation AFTER payout: protected is released to payout, so
     // captured == payout(compensation) + fee + tax.
@@ -704,10 +754,18 @@ export class MarketplaceController {
           payoutAmount: current.compensation,
         };
       }
+      // A concurrent cancel won the claim instead: that is a real conflict, not a server
+      // fault. Surfacing it as 409 keeps the auto-accept sweep's logs honest about which
+      // bookings it actually paid.
+      if (isConflict(e)) {
+        throw new ConflictException("booking changed concurrently; payout not applied");
+      }
       throw e;
     }
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator", "worker")
   @Post("bookings/:id/flag-inactive")
   async flagInactive(@Param("id") id: string) {
     const booking = await this.requireBooking(id);
@@ -750,8 +808,6 @@ export class MarketplaceController {
           "partial_work",
         ],
       },
-      hoursBeforeStart: { type: "number", optional: true, min: 0 },
-      arrived: { type: "boolean", optional: true },
     });
     const booking = await this.requireBooking(id);
     // Idempotent: a cancelled booking is terminal for this action.
@@ -759,13 +815,21 @@ export class MarketplaceController {
       return { id, outcome: "cancelled", bookingState: "Cancelled", alreadyCancelled: true };
     }
 
+    // CAN-01/02 turn on how long before the shift the cancellation lands, and CAN-03 on
+    // whether the professional actually arrived. Both are facts the platform owns: they are
+    // read from the scheduled shift and the recorded attendance trail, never from the body.
+    // Taking them from the caller let a clinic cancel an hour out claiming 48 (paying 0%
+    // instead of 50%), or claim an arrival that never happened (paying 100%).
+    const hoursBeforeStart = (booking.shiftStart - Date.now()) / 3_600_000;
+    const arrived = await this.repo.hasArrived(id);
+
     // CAN-01..05: the domain decides the professional's payable fraction, or that the
     // case must be resolved by support.
     const outcome = cancellationOutcome({
       actor: dto.actor,
       reason: dto.reason,
-      hoursBeforeStart: dto.hoursBeforeStart ?? 0,
-      arrived: dto.arrived ?? false,
+      hoursBeforeStart,
+      arrived,
     });
 
     if ("support" in outcome) {
@@ -789,6 +853,11 @@ export class MarketplaceController {
 
     const payable = payableFromFraction(satang(booking.compensation), outcome.fraction);
     const refund = satang(booking.captured - payable);
+
+    // PAY-08: neither leg may exceed the captured funds. Both are derived here, so this is
+    // a guard against a bad compensation/captured pair reaching the ledger — not a formality.
+    this.payments.assertWithinAllocation(payable, satang(booking.captured), "cancellation payout");
+    this.payments.assertWithinAllocation(refund, satang(booking.captured), "cancellation refund");
 
     // PAY-07 conservation: captured == payout(payable) + refund. The platform fee is
     // waived on cancellation (refunded to the clinic as part of `refund`), so nothing
@@ -821,6 +890,12 @@ export class MarketplaceController {
       const current = await this.repo.getBooking(id);
       if (current?.state === "Cancelled") {
         return { id, outcome: "cancelled", bookingState: "Cancelled", alreadyCancelled: true };
+      }
+      // A concurrent accept-completion paid out first: the booking is no longer cancellable
+      // and no refund was written. 409, not 500 — nothing is broken, the race simply resolved
+      // the other way.
+      if (isConflict(e)) {
+        throw new ConflictException("booking changed concurrently; cancellation not applied");
       }
       throw e;
     }

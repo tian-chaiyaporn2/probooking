@@ -15,6 +15,17 @@ ORIGIN="$(git remote get-url origin)"
 SRC_COMMIT="$(git rev-parse --short HEAD)"
 OUT="$REPO_ROOT/apps/web/out"
 
+# The build runs against the WORKING TREE, but the deploy commit claims a SHA. With local
+# edits present, the published site is not reproducible from that commit — and the message
+# says otherwise. Refuse rather than ship something git cannot account for.
+if [ -n "$(git status --porcelain)" ]; then
+  echo "✗ Working tree is dirty. Commit or stash first — the deploy commit records $SRC_COMMIT," >&2
+  echo "  so publishing uncommitted changes would label the site with a commit that lacks them." >&2
+  echo "  Override with ALLOW_DIRTY_DEPLOY=1 if you know what you're doing." >&2
+  [ "${ALLOW_DIRTY_DEPLOY:-}" = "1" ] || exit 1
+  echo "  … ALLOW_DIRTY_DEPLOY=1 set; continuing." >&2
+fi
+
 echo "▶ Building static export (basePath=$BASE_PATH)…"
 NEXT_PUBLIC_BASE_PATH="$BASE_PATH" pnpm --filter @probook/web build
 

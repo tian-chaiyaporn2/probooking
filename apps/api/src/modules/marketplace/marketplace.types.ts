@@ -332,6 +332,13 @@ export interface BookingDetail {
   payoutState: PayoutState;
   paymentOrderId: string | null;
   heldAt: number | null; // VER-06 hold overlay (epoch ms UTC), or null
+  /**
+   * Scheduled shift window (epoch ms UTC). Carried on the booking so money decisions that
+   * depend on timing — the CAN-01/02 24h boundary above all — are computed from the
+   * scheduled shift rather than from a value the cancelling party supplies.
+   */
+  shiftStart: number;
+  shiftEnd: number;
 }
 
 export interface PayoutInput {
@@ -421,6 +428,20 @@ export interface MarketplaceRepository {
 
   // --- Completion & payout ---
   getBooking(id: string): Promise<BookingDetail | null>;
+  /**
+   * CAN-03: did the professional actually arrive for this booking? Answered from the
+   * recorded attendance trail — arrival decides a 100% payout, so it must be an observed
+   * event, not a flag the cancelling party asserts.
+   */
+  hasArrived(bookingId: string): Promise<boolean>;
+  /** CAN-03: record the professional's arrival for a booking (idempotent). */
+  recordArrival(bookingId: string): Promise<boolean>;
+  /**
+   * CMP-03: the booking's auto-accept deadline (epoch ms UTC), or null if completion was
+   * never submitted. Lets the API enforce the deadline itself rather than trusting that the
+   * only caller is a correctly-filtered worker sweep.
+   */
+  getAutoAcceptDueAt(bookingId: string): Promise<number | null>;
   /** Professional submits completion (CMP-01): advances the booking to AwaitingCompletion. */
   markCompletion(id: string): Promise<BookingDetail | null>;
   /**

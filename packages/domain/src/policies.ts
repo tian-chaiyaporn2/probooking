@@ -112,14 +112,24 @@ export function cancellationOutcome(input: {
   }
 
   // actor === "clinic"
-  if (reason === "clinic_unavailable_after_arrival" || (arrived && hoursBeforeStart <= 0)) {
-    // CAN-03: substantiated clinic unavailability after arrival -> default 100%, subject to support.
+  // CAN-03: substantiated clinic unavailability after arrival -> default 100%.
+  // Arrival is an EVENT, not a point on the clock: a professional who arrives early and is
+  // turned away has still travelled and lost the slot. Gating this on `hoursBeforeStart <= 0`
+  // silently paid them 50% for any arrival before the scheduled start. Conversely the
+  // reason alone is not enough — "after arrival" requires an arrival to have happened, or a
+  // clinic could claim 100% for a shift nobody turned up to.
+  if (arrived) {
     return { fraction: 1 };
   }
-  if (hoursBeforeStart >= 24) {
-    return { fraction: 0 }; // CAN-01
+  if (reason === "clinic_unavailable_after_arrival") {
+    // Reason asserts an arrival the attendance trail does not support: fall through to the
+    // ordinary timing rules rather than paying out on an unsubstantiated claim.
+    return hoursBeforeStart >= 24 ? { fraction: 0 } : { fraction: 0.5 };
   }
-  return { fraction: 0.5 }; // CAN-02: under 24h before valid arrival -> 50%
+  if (hoursBeforeStart >= 24) {
+    return { fraction: 0 }; // CAN-01: at least 24h before start -> 0%
+  }
+  return { fraction: 0.5 }; // CAN-02: under 24h -> 50%
 }
 
 /** Payable amount given scheduled compensation and a numeric fraction. */

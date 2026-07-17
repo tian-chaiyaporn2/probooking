@@ -40,7 +40,7 @@ import type {
   AuditEntry,
   AuditRow,
 } from "./marketplace.types.js";
-import { advanceVerification, aggregateRating } from "@probook/domain";
+import { advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
 import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
 
@@ -87,6 +87,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly professionalProfiles = new Map<string, { displayName: string; profession: string }>();
   private readonly usedPhones = new Set<string>(); // mirrors the Prisma User.phone unique constraint
   private readonly suspendedCredentials = new Set<string>();
+  private readonly arrivals = new Set<string>(); // bookingIds with a recorded arrival (CAN-03)
+  private readonly autoAcceptAt = new Map<string, number>(); // bookingId -> CMP-03 deadline
   private readonly reviews: MemReview[] = [];
   private readonly shifts = new Map<string, MemShift>();
   private readonly candidates: MemCandidate[] = [];
@@ -360,6 +362,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (this.bookingByOffer.has(input.offerId)) throw new ConflictError("booking already exists for this offer");
     const offer = this.offers.get(input.offerId);
     if (offer) offer.state = "Converted"; // atomic with the booking here by construction
+    const shift = this.shifts.get(input.shiftId);
+    const shiftStart = shift?.startsAt ?? offer?.shiftStart ?? 0;
     const detail: BookingDetail = {
       id: randomUUID(),
       offerId: input.offerId,
@@ -374,6 +378,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       payoutState: "NotEligible",
       paymentOrderId: randomUUID(),
       heldAt: null,
+      shiftStart,
+      shiftEnd: shiftStart + SHIFT_LEN_MS,
     };
     this.bookings.set(detail.id, detail);
     this.bookingByOffer.set(input.offerId, detail.id);
@@ -391,11 +397,33 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return detail ? { ...detail } : null; // copy: callers must not mutate store state
   }
 
+  async hasArrived(bookingId: string): Promise<boolean> {
+    // Parity with Prisma: a Completed booking implies arrival (CAN-03).
+    if (this.arrivals.has(bookingId)) return true;
+    const detail = this.bookings.get(bookingId);
+    return detail?.state === "AwaitingCompletion" || detail?.state === "ServiceCompleted";
+  }
+
+  async recordArrival(bookingId: string): Promise<boolean> {
+    if (!this.bookings.has(bookingId)) return false;
+    this.arrivals.add(bookingId); // idempotent: a Set, like the Prisma dedupe
+    return true;
+  }
+
   async markCompletion(id: string): Promise<BookingDetail | null> {
     const detail = this.bookings.get(id);
     if (!detail) return null;
     detail.state = "AwaitingCompletion";
+    // Parity with the Prisma store: stamp the CMP-03 auto-accept deadline and record the
+    // completion as attendance. Without the deadline, the auto-accept sweep had nothing to
+    // select on in this store, so CMP-03 could not be exercised by the suites at all.
+    this.autoAcceptAt.set(id, autoAcceptDueAt(detail.shiftEnd, Date.now()));
+    this.arrivals.add(id);
     return { ...detail };
+  }
+
+  async getAutoAcceptDueAt(bookingId: string): Promise<number | null> {
+    return this.autoAcceptAt.get(bookingId) ?? null;
   }
 
   async recordPayout(input: PayoutInput): Promise<PayoutResult> {
@@ -643,6 +671,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const detail = this.bookings.get(bookingId);
     if (!detail) return null;
     detail.heldAt = null;
+    // Parity with Prisma: restart the CMP-03 clock from the resolution, so a long-held
+    // booking doesn't auto-accept on the next sweep with no clinic review window.
+    if (this.autoAcceptAt.has(bookingId)) {
+      this.autoAcceptAt.set(bookingId, autoAcceptDueAt(detail.shiftEnd, Date.now()));
+    }
     return { ...detail };
   }
 

@@ -12,7 +12,12 @@ export type Role =
   | "professional"
   | "operations"
   | "finance"
-  | "administrator";
+  | "administrator"
+  // The background worker acting as itself (time-driven actions only, §7.2). It is a
+  // platform identity, not a person: it may trigger auto-accept once a deadline has passed
+  // and open Ops cases, and nothing else. Modelled as a role so those calls are
+  // authenticated and attributable rather than anonymous.
+  | "worker";
 
 /** Discrete privileged capabilities referenced across the codebase. */
 export type Capability =
@@ -32,6 +37,9 @@ export type Capability =
   | "pro.apply"
   | "pro.accept_offer"
   | "pro.mark_completion"
+  | "pro.cancel_booking" // CAN-04 prices this, so the role model must be able to express it
+  | "worker.auto_accept" // CMP-03, only once the booking's deadline has passed
+  | "worker.flag_inactive" // CMP-04
   | "ops.verify"
   | "ops.support_matching"
   | "ops.moderate_reviews"
@@ -72,6 +80,7 @@ const ROLE_CAPABILITIES: Record<Role, ReadonlySet<Capability>> = {
     "pro.apply",
     "pro.accept_offer",
     "pro.mark_completion",
+    "pro.cancel_booking",
     "message.send",
   ]),
   operations: new Set([
@@ -93,6 +102,9 @@ const ROLE_CAPABILITIES: Record<Role, ReadonlySet<Capability>> = {
     "admin.configure",
     "admin.exceptional_approval",
   ]),
+  // Deliberately minimal: the worker schedules, the API owns the money decision. It cannot
+  // pay out on demand — only ask the API to apply a deadline that has already passed.
+  worker: new Set(["worker.auto_accept", "worker.flag_inactive"]),
 };
 
 export function can(role: Role, capability: Capability): boolean {
