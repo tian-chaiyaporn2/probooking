@@ -10,6 +10,8 @@ const anuphan = Anuphan({
   weight: ["500", "600", "700"],
   variable: "--font-display",
   display: "swap",
+  adjustFontFallback: true,
+  preload: true,
 });
 
 const sarabun = Sarabun({
@@ -17,6 +19,8 @@ const sarabun = Sarabun({
   weight: ["400", "500", "600", "700"],
   variable: "--font-body",
   display: "swap",
+  adjustFontFallback: true,
+  preload: true,
 });
 
 export const metadata = {
