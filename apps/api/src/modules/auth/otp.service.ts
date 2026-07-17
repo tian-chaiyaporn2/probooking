@@ -18,16 +18,43 @@ export class OtpRateLimitError extends Error {
   }
 }
 
+/**
+ * State is in-process, like the ThrottleGuard's: correct for one instance, per-instance
+ * behind a load balancer — where the 30s interval and the single-use guarantee both weaken
+ * (a code becomes replayable against a second replica). `REDIS_URL` is already in the env
+ * for when that matters; this is a Phase-1 limitation, recorded rather than implied.
+ */
 @Injectable()
 export class OtpService {
   private readonly logger = new Logger("Otp");
   private readonly codes = new Map<string, { code: string; exp: number; attempts: number }>();
   private readonly lastRequestAt = new Map<string, number>();
+  private lastSweep = 0;
+
+  /**
+   * Drop expired codes and stale request timestamps. Neither map was ever pruned — an
+   * expired code was only removed if someone happened to attempt it — so spraying distinct
+   * phone numbers grew them until the process died. Swept lazily so a normal request pays
+   * nothing.
+   */
+  private sweep(now: number): void {
+    if (now - this.lastSweep < 60_000) return;
+    this.lastSweep = now;
+    for (const [phone, rec] of this.codes) {
+      if (rec.exp < now) this.codes.delete(phone);
+    }
+    for (const [phone, at] of this.lastRequestAt) {
+      if (now - at > OTP_MIN_INTERVAL_MS) this.lastRequestAt.delete(phone);
+    }
+  }
 
   request(phone: string): string {
-    // §7.3: throttle per phone to blunt SMS-bombing / enumeration.
-    const last = this.lastRequestAt.get(phone);
+    // §7.3: throttle per phone to blunt SMS-bombing / enumeration. (An IP-scoped limit is
+    // applied globally by ThrottleGuard; this one is per-phone, which an attacker rotating
+    // IPs cannot dodge.)
     const now = Date.now();
+    this.sweep(now);
+    const last = this.lastRequestAt.get(phone);
     if (last !== undefined && now - last < OTP_MIN_INTERVAL_MS) {
       throw new OtpRateLimitError(OTP_MIN_INTERVAL_MS - (now - last));
     }
