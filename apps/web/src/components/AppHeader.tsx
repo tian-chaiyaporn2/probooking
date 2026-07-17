@@ -13,30 +13,55 @@ const LINKS = [
   { href: "/flow", label: th.nav.flow },
 ] as const;
 
+/** Keep in sync with `--nav-drawer-max` in globals.css (tablet keeps the drawer). */
+const DRAWER_MQ = "(min-width: 960px)";
+
 /**
  * Shared app shell header: brand + section nav + theme toggle.
  *
- * On narrow screens the nav used to wrap onto its own row and push the theme toggle below
- * the brand — a two-row header that looked broken. It now collapses into a drawer behind a
- * menu button, which is closed on Escape, on backdrop tap, on resize to desktop, and on
- * navigation, and locks body scroll while open.
+ * On phone and tablet the nav collapses into a drawer behind a menu button. The drawer
+ * closes on Escape, backdrop tap, resize into the desktop band, and navigation; scroll
+ * is locked on <html> while open; Tab cycles inside the panel.
  */
 export function AppHeader({ current }: { current?: string }) {
   const [open, setOpen] = useState(false);
   const drawerId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
-  const firstLinkRef = useRef<HTMLAnchorElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const drawer = drawerRef.current;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (e.key !== "Tab" || !drawer) return;
+      const focusables = Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1);
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     document.addEventListener("keydown", onKey);
     // Lock scroll on <html> — locking body alone can shrink the fixed containing
     // block in WebKit/Blink and collapse the drawer to content height.
     const root = document.documentElement;
     const prevOverflow = root.style.overflow;
     root.style.overflow = "hidden";
-    firstLinkRef.current?.focus();
+    closeRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       root.style.overflow = prevOverflow;
@@ -47,7 +72,7 @@ export function AppHeader({ current }: { current?: string }) {
   // If the viewport grows into the desktop nav band, dismiss the drawer so it
   // cannot linger as an invisible overlay after orientation change.
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 769px)");
+    const mq = window.matchMedia(DRAWER_MQ);
     const onChange = () => {
       if (mq.matches) setOpen(false);
     };
@@ -96,19 +121,31 @@ export function AppHeader({ current }: { current?: string }) {
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile / tablet drawer */}
       {open && (
         <>
           <button className="nav-backdrop" aria-label={th.a11y.closeMenu} onClick={() => setOpen(false)} />
           <nav
+            ref={drawerRef}
             id={drawerId}
             className="app-nav--drawer"
             aria-label={th.a11y.primaryNav}
           >
-            {LINKS.map((l, i) => (
+            <div className="app-nav--drawer__top">
+              <span className="app-nav--drawer__title">{th.a11y.primaryNav}</span>
+              <button
+                ref={closeRef}
+                type="button"
+                className="nav-drawer-close"
+                aria-label={th.a11y.closeMenu}
+                onClick={() => setOpen(false)}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            {LINKS.map((l) => (
               <Link
                 key={l.href}
-                ref={i === 0 ? firstLinkRef : undefined}
                 href={l.href}
                 aria-current={current === l.href ? "page" : undefined}
                 onClick={() => setOpen(false)}
