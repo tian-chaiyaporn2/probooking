@@ -128,11 +128,12 @@ and the 12% checkout total.
 ## Deploy & live demo
 
 CI (`.github/workflows/ci.yml`) runs typecheck, the domain suite, the BDD suite and the
-Playwright e2e against a real Postgres on every push and PR.
+Playwright e2e against a real Postgres on every push and PR. On a green `master` push it
+also auto-deploys the frontend to **GitHub Pages** (`gh-pages` branch).
 
-The frontend deploys to **GitHub Pages** (static export) via `scripts/deploy-web.sh`, which
-force-pushes the build to a `gh-pages` branch (it refuses on a dirty tree, so the published
-site always matches the commit it claims):
+For a local / one-off publish (e.g. pointed at a tunnel API), `scripts/deploy-web.sh`
+force-pushes the same static export (it refuses on a dirty tree, so the published site
+always matches the commit it claims):
 
 ```bash
 pnpm run deploy:pages         # build static export → push gh-pages

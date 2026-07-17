@@ -40,20 +40,24 @@ is same-origin-family, so the dashboards work fully (no CORS/tunnel needed).
 > web UI at `:3000` will be CORS-blocked. Add `http://localhost:3000` to the allowlist
 > if you want both.
 
-## Deploy pipeline (no GitHub Actions)
+## Deploy pipeline
 
-We deploy from the command line to a `gh-pages` branch — GitHub Pages publishes that
-branch directly, with **no Actions minutes consumed**.
+**Automatic:** every push to `master` that passes CI (`.github/workflows/ci.yml`) runs a
+`deploy-pages` job: it builds the static export and force-publishes `apps/web/out` to the
+`gh-pages` branch. GitHub Pages serves that branch. PRs never deploy; you can also
+re-trigger via **Actions → CI → Run workflow** on `master`.
+
+**Manual** (local, or when you need a one-off with a custom `NEXT_PUBLIC_API_BASE_URL`):
 
 ```bash
 pnpm run deploy:pages          # builds the static export and force-pushes it to gh-pages
 ```
 
-Under the hood (`scripts/deploy-web.sh`):
+Under the hood (`scripts/deploy-web.sh`, and the same steps in CI):
 1. `NEXT_PUBLIC_BASE_PATH=/probooking next build` → static export in `apps/web/out`
    (the base path is required because the site is served under `/probooking/`).
 2. `touch out/.nojekyll` so Pages serves the `_next/` folder verbatim.
-3. Force-push `out/` to the `gh-pages` branch of `origin`.
+3. Force-publish `out/` to the `gh-pages` branch of `origin`.
 
 Local dev and the Playwright e2e leave `NEXT_PUBLIC_BASE_PATH` unset, so they serve at
 the root and are unaffected by the base-path config.
