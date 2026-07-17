@@ -64,7 +64,7 @@ When("the professional accepts the offer into a soft hold", async function (this
   this.state.offer = await this.state.store.setOfferState(
     this.state.offerId,
     "AwaitingPayment",
-    1_700_000_000_000 + HOUR,
+    { fundingDueAt: 1_700_000_000_000 + HOUR },
   );
 });
 

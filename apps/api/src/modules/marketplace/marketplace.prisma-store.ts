@@ -144,8 +144,11 @@ type OfferWithShift = {
   sentAt: Date;
   expiresAt: Date;
   fundingDueAt: Date | null;
+  termsSnapshot?: unknown;
   shift: { id: string; workspaceId: string; compensation: number; urgency: string; startsAt: Date };
 };
+
+const TWO_YEARS_MS = 2 * 365 * 24 * 60 * 60 * 1000;
 
 /**
  * Postgres-backed implementation via @probook/db (Prisma). Persists the real graph:
@@ -232,6 +235,12 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         where: { professionalId: id, kind: "licence" },
         data: { state: "Verified" },
       }),
+      // Fail-closed licence checks need a validity window. Newly verified pros with no
+      // recorded expiry get ~2 years so confirmation eligibility can evaluate them.
+      prisma.credential.updateMany({
+        where: { professionalId: id, kind: "licence", validUntil: null },
+        data: { validUntil: new Date(Date.now() + TWO_YEARS_MS) },
+      }),
       prisma.payoutAccount.updateMany({ where: { professionalId: id }, data: { verified: true } }),
     ]);
     return { id, verification: next };
@@ -262,11 +271,14 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         (i) => i.state === "Verified" && i.validUntil !== null && i.validUntil.getTime() >= shiftEnd,
       );
     // VER-04: the licence credential gates confirmation — a suspended or expired
-    // licence must block the booking even after the offer was accepted.
+    // licence must block the booking even after the offer was accepted. Fail closed:
+    // missing, unverified, or null-expiry licences are not valid through the shift.
     const licence = offer.professional.credentials.find((c) => c.kind === "licence");
     const professionalNotSuspended = licence?.state !== "Suspended";
     const licenceValidThroughShiftEnd =
-      !licence?.validUntil || licence.validUntil.getTime() >= shiftEnd;
+      licence?.state === "Verified" &&
+      licence.validUntil !== null &&
+      licence.validUntil.getTime() >= shiftEnd;
     return {
       clinicVerified: offer.shift.workspace.verification === "Verified",
       professionalVerified: offer.professional.verification === "Verified",
@@ -432,16 +444,31 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     }));
   }
 
-  async hasScheduleOverlap(professionalId: string, startsAt: number, endsAt: number): Promise<boolean> {
+  async hasScheduleOverlap(
+    professionalId: string,
+    startsAt: number,
+    endsAt: number,
+    opts?: { excludeOfferId?: string },
+  ): Promise<boolean> {
     // Overlap when an active booking's shift spans into [startsAt, endsAt).
-    const count = await prisma.booking.count({
+    const bookingCount = await prisma.booking.count({
       where: {
         professionalId,
         state: { in: ["Confirmed", "InProgress", "AwaitingCompletion"] },
         shift: { startsAt: { lt: new Date(endsAt) }, endsAt: { gt: new Date(startsAt) } },
       },
     });
-    return count > 0;
+    if (bookingCount > 0) return true;
+    // Soft holds (AwaitingPayment) also block the window — AVL-03 / §6.3.
+    const softHoldCount = await prisma.offer.count({
+      where: {
+        professionalId,
+        state: "AwaitingPayment",
+        ...(opts?.excludeOfferId ? { id: { not: opts.excludeOfferId } } : {}),
+        shift: { startsAt: { lt: new Date(endsAt) }, endsAt: { gt: new Date(startsAt) } },
+      },
+    });
+    return softHoldCount > 0;
   }
 
   async searchProfessionals(filters: ProfessionalFilters): Promise<ProfessionalSearchResult[]> {
@@ -513,16 +540,48 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     }));
   }
 
-  async setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null> {
+  async setOfferState(
+    id: string,
+    state: OfferState,
+    opts?: { fundingDueAt?: number; from?: OfferState },
+  ): Promise<OfferRecord | null> {
+    const data = {
+      state,
+      ...(opts?.fundingDueAt !== undefined ? { fundingDueAt: new Date(opts.fundingDueAt) } : {}),
+    };
+    if (opts?.from !== undefined) {
+      const claimed = await prisma.offer.updateMany({
+        where: { id, state: opts.from },
+        data,
+      });
+      if (claimed.count !== 1) return null;
+      const offer = await prisma.offer.findUnique({ where: { id }, include: { shift: true } });
+      return offer ? this.toRecord(offer as OfferWithShift) : null;
+    }
     const offer = await prisma.offer.update({
       where: { id },
-      data: {
-        state,
-        ...(fundingDueAt !== undefined ? { fundingDueAt: new Date(fundingDueAt) } : {}),
-      },
+      data,
       include: { shift: true },
     });
     return this.toRecord(offer as OfferWithShift);
+  }
+
+  async expireStaleOffers(now: number): Promise<number> {
+    const nowDate = new Date(now);
+    const [pending, awaiting] = await Promise.all([
+      prisma.offer.updateMany({
+        where: { state: "PendingResponse", expiresAt: { lte: nowDate } },
+        data: { state: "Expired" },
+      }),
+      prisma.offer.updateMany({
+        where: {
+          state: "AwaitingPayment",
+          OR: [{ fundingDueAt: { lte: nowDate } }, { fundingDueAt: null }],
+        },
+        data: { state: "Expired" },
+      }),
+    ]);
+    return pending.count + awaiting.count;
   }
 
   async confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult> {
@@ -666,6 +725,16 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       });
       if (!po?.allocation) throw new Error("no payment allocation for booking");
 
+      // PAY-08: remaining refundable headroom against prior Refund events.
+      const prior = await tx.financialEvent.aggregate({
+        where: { paymentOrderId: po.id, type: "Refund" },
+        _sum: { amount: true },
+      });
+      const remaining = po.captured - (prior._sum.amount ?? 0);
+      if (req.amount > remaining) {
+        throw new ConflictError("refund amount exceeds remaining refundable amount");
+      }
+
       // PAY-05/06: the money moves as an immutable event, exactly like every other path —
       // staff never edit a balance. PAY-04 idempotency is the unique key.
       await tx.financialEvent.create({
@@ -682,6 +751,32 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       });
       return { refund: req.amount, bookingId: req.refId };
     });
+  }
+
+  async sumRefunded(bookingId: string): Promise<number> {
+    const po = await prisma.paymentOrder.findUnique({
+      where: { bookingId },
+      select: { id: true },
+    });
+    if (!po) return 0;
+    const agg = await prisma.financialEvent.aggregate({
+      where: { paymentOrderId: po.id, type: "Refund" },
+      _sum: { amount: true },
+    });
+    return agg._sum.amount ?? 0;
+  }
+
+  async sumPaidOut(bookingId: string): Promise<number> {
+    const po = await prisma.paymentOrder.findUnique({
+      where: { bookingId },
+      select: { id: true },
+    });
+    if (!po) return 0;
+    const agg = await prisma.financialEvent.aggregate({
+      where: { paymentOrderId: po.id, type: "Payout" },
+      _sum: { amount: true },
+    });
+    return agg._sum.amount ?? 0;
   }
 
   async getBooking(id: string): Promise<BookingDetail | null> {
@@ -1272,13 +1367,23 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   private toRecord(o: OfferWithShift): OfferRecord {
+    const snap =
+      o.termsSnapshot && typeof o.termsSnapshot === "object"
+        ? (o.termsSnapshot as Record<string, unknown>)
+        : null;
+    const compensation =
+      snap && typeof snap.compensation === "number" ? snap.compensation : o.shift.compensation;
+    const urgency =
+      snap && typeof snap.urgency === "string"
+        ? (snap.urgency as ShiftUrgency)
+        : (o.shift.urgency as ShiftUrgency);
     return {
       id: o.id,
       shiftId: o.shift.id,
       clinicWorkspaceId: o.shift.workspaceId,
       professionalId: o.professionalId,
-      compensation: o.shift.compensation,
-      urgency: o.shift.urgency as ShiftUrgency,
+      compensation,
+      urgency,
       state: o.state as OfferState,
       sentAt: o.sentAt.getTime(),
       shiftStart: o.shift.startsAt.getTime(),

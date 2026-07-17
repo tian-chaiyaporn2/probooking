@@ -678,7 +678,7 @@ export class MarketplaceController {
       throw new BadRequestException((e as Error).message);
     }
     const { fundingDueAt } = this.offers.fundingWindow(Date.now());
-    const updated = await this.repo.setOfferState(id, nextState, fundingDueAt);
+    const updated = await this.repo.setOfferState(id, nextState, { fundingDueAt });
     // NOT-01: acceptance opens the funding window — tell the clinic payment is required.
     await this.notifications.sms(offer.clinicWorkspaceId, "payment_required", { type: "Offer", id });
     return { id, state: nextState, fundingDueAt: updated?.fundingDueAt ?? fundingDueAt };
