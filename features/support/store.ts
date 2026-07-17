@@ -98,7 +98,7 @@ export async function seedConfirmedBooking(
     sentAt: now,
     expiresAt: now + HOUR,
   });
-  await store.setOfferState(offer.id, "AwaitingPayment", now + HOUR);
+  await store.setOfferState(offer.id, "AwaitingPayment", { fundingDueAt: now + HOUR });
 
   const checkout = buildCheckout(satang(compensation));
   const { booking } = await store.confirmBooking({
@@ -168,7 +168,7 @@ export async function seedAwaitingPaymentOffer(
     expiresAt: now + HOUR,
   });
   const fundingDueAt = now + HOUR;
-  await store.setOfferState(offer.id, "AwaitingPayment", fundingDueAt);
+  await store.setOfferState(offer.id, "AwaitingPayment", { fundingDueAt });
 
   return {
     clinicId: clinic.id,

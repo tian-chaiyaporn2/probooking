@@ -198,7 +198,7 @@ export async function seedDemoFixtures(
     sentAt: now,
     expiresAt: now + 2 * HOUR,
   });
-  await store.setOfferState(awaitingOffer.id, "AwaitingPayment", now + HOUR);
+  await store.setOfferState(awaitingOffer.id, "AwaitingPayment", { fundingDueAt: now + HOUR });
 
   // --- PendingResponse offer (OFF-01, not yet accepted) ---
   const pendingShift = await store.postShift({
@@ -251,7 +251,7 @@ export async function seedDemoFixtures(
     sentAt: now - 5 * DAY,
     expiresAt: now - 5 * DAY + HOUR,
   });
-  await store.setOfferState(completedOffer.id, "AwaitingPayment", now - 5 * DAY + HOUR);
+  await store.setOfferState(completedOffer.id, "AwaitingPayment", { fundingDueAt: now - 5 * DAY + HOUR });
   const completed = await confirmFromOffer(store, completedOffer.id, 1_000_000);
   await store.markCompletion(completed.booking.id);
   await store.recordPayout({
@@ -291,7 +291,7 @@ export async function seedDemoFixtures(
     sentAt: now - HOUR,
     expiresAt: now + HOUR,
   });
-  await store.setOfferState(msgOffer.id, "AwaitingPayment", now + HOUR);
+  await store.setOfferState(msgOffer.id, "AwaitingPayment", { fundingDueAt: now + HOUR });
   const confirmedWithMessages = await confirmFromOffer(store, msgOffer.id, 900_000);
   await store.postMessage(confirmedWithMessages.booking.id, clinicB.id, "สวัสดีครับ พร้อมเริ่มงานตามเวลา");
   await store.postMessage(confirmedWithMessages.booking.id, somchai.id, "ครับ พร้อมครับ");
@@ -312,7 +312,7 @@ export async function seedDemoFixtures(
     sentAt: now - 3 * DAY,
     expiresAt: now - 3 * DAY + HOUR,
   });
-  await store.setOfferState(awaitOffer.id, "AwaitingPayment", now - 3 * DAY + HOUR);
+  await store.setOfferState(awaitOffer.id, "AwaitingPayment", { fundingDueAt: now - 3 * DAY + HOUR });
   const awaitingCompletion = await confirmFromOffer(store, awaitOffer.id, 750_000);
   await store.markCompletion(awaitingCompletion.booking.id);
 
@@ -332,7 +332,7 @@ export async function seedDemoFixtures(
     sentAt: now - 2 * HOUR,
     expiresAt: now + 2 * HOUR,
   });
-  await store.setOfferState(heldOffer.id, "AwaitingPayment", now + HOUR);
+  await store.setOfferState(heldOffer.id, "AwaitingPayment", { fundingDueAt: now + HOUR });
   const held = await confirmFromOffer(store, heldOffer.id, 850_000);
   await store.holdBooking(held.booking.id, "credential_or_insurance_invalid");
   await store.createSupportCase(held.booking.id, "credential_hold", "Credential review required");
@@ -353,7 +353,7 @@ export async function seedDemoFixtures(
     sentAt: now - 4 * DAY,
     expiresAt: now - 4 * DAY + HOUR,
   });
-  await store.setOfferState(cancelOffer.id, "AwaitingPayment", now - 4 * DAY + HOUR);
+  await store.setOfferState(cancelOffer.id, "AwaitingPayment", { fundingDueAt: now - 4 * DAY + HOUR });
   const cancelled = await confirmFromOffer(store, cancelOffer.id, 600_000);
   const cancelCheckout = buildCheckout(satang(600_000));
   await store.cancelBooking({
@@ -380,7 +380,7 @@ export async function seedDemoFixtures(
     sentAt: now - 2 * DAY,
     expiresAt: now - 2 * DAY + HOUR,
   });
-  await store.setOfferState(partialOffer.id, "AwaitingPayment", now - 2 * DAY + HOUR);
+  await store.setOfferState(partialOffer.id, "AwaitingPayment", { fundingDueAt: now - 2 * DAY + HOUR });
   const partialCancel = await confirmFromOffer(store, partialOffer.id, 1_000_000);
   const partialCheckout = buildCheckout(satang(1_000_000));
   const partialPayable = 500_000; // 50% of compensation
@@ -408,7 +408,7 @@ export async function seedDemoFixtures(
     sentAt: now - DAY,
     expiresAt: now + DAY,
   });
-  await store.setOfferState(supportOffer.id, "AwaitingPayment", now + HOUR);
+  await store.setOfferState(supportOffer.id, "AwaitingPayment", { fundingDueAt: now + HOUR });
   const supportBooking = await confirmFromOffer(store, supportOffer.id, 550_000);
   await store.createSupportCase(
     supportBooking.booking.id,
@@ -432,7 +432,7 @@ export async function seedDemoFixtures(
     sentAt: now - 6 * DAY,
     expiresAt: now - 6 * DAY + HOUR,
   });
-  await store.setOfferState(reviewOffer.id, "AwaitingPayment", now - 6 * DAY + HOUR);
+  await store.setOfferState(reviewOffer.id, "AwaitingPayment", { fundingDueAt: now - 6 * DAY + HOUR });
   const completionReview = await confirmFromOffer(store, reviewOffer.id, 720_000);
   await store.createSupportCase(
     completionReview.booking.id,
@@ -456,7 +456,7 @@ export async function seedDemoFixtures(
     sentAt: now - 2 * DAY,
     expiresAt: now - 2 * DAY + HOUR,
   });
-  await store.setOfferState(reminderOffer.id, "AwaitingPayment", now - 2 * DAY + HOUR);
+  await store.setOfferState(reminderOffer.id, "AwaitingPayment", { fundingDueAt: now - 2 * DAY + HOUR });
   const reminderDue = await confirmFromOffer(store, reminderOffer.id, 680_000);
 
   // --- AwaitingCompletion past auto-accept deadline (CMP-03 worker target) ---
@@ -475,7 +475,7 @@ export async function seedDemoFixtures(
     sentAt: now - 5 * DAY,
     expiresAt: now - 5 * DAY + HOUR,
   });
-  await store.setOfferState(overdueOffer.id, "AwaitingPayment", now - 5 * DAY + HOUR);
+  await store.setOfferState(overdueOffer.id, "AwaitingPayment", { fundingDueAt: now - 5 * DAY + HOUR });
   const awaitingCompletionOverdue = await confirmFromOffer(store, overdueOffer.id, 640_000);
   await store.markCompletion(awaitingCompletionOverdue.booking.id);
 
@@ -495,7 +495,7 @@ export async function seedDemoFixtures(
     sentAt: now - 10 * DAY,
     expiresAt: now - 10 * DAY + HOUR,
   });
-  await store.setOfferState(unpubOffer.id, "AwaitingPayment", now - 10 * DAY + HOUR);
+  await store.setOfferState(unpubOffer.id, "AwaitingPayment", { fundingDueAt: now - 10 * DAY + HOUR });
   const unpublishedReview = await confirmFromOffer(store, unpubOffer.id, 480_000);
   await store.markCompletion(unpublishedReview.booking.id);
   await store.recordPayout({
@@ -529,7 +529,7 @@ export async function seedDemoFixtures(
       sentAt: now - (12 + i) * DAY,
       expiresAt: now - (12 + i) * DAY + HOUR,
     });
-    await store.setOfferState(extraOffer.id, "AwaitingPayment", now - (12 + i) * DAY + HOUR);
+    await store.setOfferState(extraOffer.id, "AwaitingPayment", { fundingDueAt: now - (12 + i) * DAY + HOUR });
     const extra = await confirmFromOffer(store, extraOffer.id, 500_000);
     await store.markCompletion(extra.booking.id);
     await store.recordPayout({

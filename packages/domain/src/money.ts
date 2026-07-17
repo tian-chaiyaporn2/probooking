@@ -47,7 +47,8 @@ export function addSatang(...values: Satang[]): Satang {
  * Pure predicate so the API and the acceptance spec share one definition.
  */
 export function withinAllocation(amount: Satang, available: Satang): boolean {
-  return amount >= 0 && amount <= available;
+  // A negative `available` is corrupt state — never treat it as headroom for a payout/refund.
+  return amount >= 0 && available >= 0 && amount <= available;
 }
 
 /** Default clinic-paid service fee: 12% of professional compensation (PAY-02, Decision #8). */
@@ -112,6 +113,18 @@ export interface Conservation {
 }
 
 export function conserves(c: Conservation): boolean {
+  // Legs other than `adjustments` (signed by design) must be non-negative or a buggy
+  // caller can "balance" while moving money the wrong way.
+  if (
+    c.protectedRemainder < 0 ||
+    c.payout < 0 ||
+    c.fee < 0 ||
+    c.tax < 0 ||
+    c.refunds < 0 ||
+    c.providerCosts < 0
+  ) {
+    return false;
+  }
   const outflow = addSatang(
     c.protectedRemainder,
     c.payout,

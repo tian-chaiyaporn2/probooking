@@ -19,6 +19,9 @@ export interface ExpireOffersResult {
  *
  * Pure state (no money) → write Prisma directly, same shape as reviewPublish. Domain
  * `advanceOffer` validates the transition; races that already left the active set are skipped.
+ *
+ * Prefer per-row updates over a bulk `updateMany` that treats `fundingDueAt: null` as
+ * already due — that would expire AwaitingPayment offers that have not yet stamped a window.
  */
 export async function expireOffersSweep(now: number): Promise<ExpireOffersResult> {
   const at = new Date(now);

@@ -97,7 +97,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly membershipsByPhone = new Map<string, { workspaceId: string; role: Role }[]>();
   private readonly suspendedCredentials = new Set<string>();
   // professionalId -> licence expiry (epoch ms), mirroring Prisma's Credential.validUntil.
-  // Absent = no expiry recorded, which Prisma treats as valid (`!licence?.validUntil`).
+  // Absent = not verified / no licence window — fail-closed at confirmation.
   private readonly licenceValidUntil = new Map<string, number>();
   private readonly arrivals = new Set<string>(); // bookingIds with a recorded arrival (CAN-03)
   private readonly autoAcceptAt = new Map<string, number>(); // bookingId -> CMP-03 deadline
@@ -175,9 +175,15 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async verifyProfessional(id: string): Promise<EntityRef | null> {
     const current = this.professionals.get(id);
     if (current === undefined) return null;
-    if (current === "Verified") return { id, verification: "Verified" }; // idempotent
+    // Fail-closed licence checks need a window; stamp 2 years so verified pros pass.
+    const licenceUntil = Date.now() + 2 * 365 * 24 * 60 * 60 * 1000;
+    if (current === "Verified") {
+      if (!this.licenceValidUntil.has(id)) this.licenceValidUntil.set(id, licenceUntil);
+      return { id, verification: "Verified" }; // idempotent
+    }
     const next = advanceVerification(current, "Verified");
     this.professionals.set(id, next);
+    this.licenceValidUntil.set(id, licenceUntil);
     return { id, verification: next };
   }
 
@@ -342,13 +348,25 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       .map((b) => ({ id: b.id, startsAt: b.startsAt, endsAt: b.endsAt, openToRequests: b.openToRequests }));
   }
 
-  async hasScheduleOverlap(professionalId: string, startsAt: number, endsAt: number): Promise<boolean> {
+  async hasScheduleOverlap(
+    professionalId: string,
+    startsAt: number,
+    endsAt: number,
+    opts?: { excludeOfferId?: string },
+  ): Promise<boolean> {
     for (const b of this.bookings.values()) {
       if (b.professionalId !== professionalId) continue;
       if (b.state !== "Confirmed" && b.state !== "InProgress" && b.state !== "AwaitingCompletion") continue;
       const shift = this.shifts.get(b.shiftId);
       if (!shift) continue;
       if (shift.startsAt < endsAt && shift.startsAt + SHIFT_LEN_MS > startsAt) return true;
+    }
+    // Soft hold: AwaitingPayment offers block the same window (AVL-03 / §6.3).
+    for (const o of this.offers.values()) {
+      if (o.professionalId !== professionalId) continue;
+      if (o.state !== "AwaitingPayment") continue;
+      if (opts?.excludeOfferId && o.id === opts.excludeOfferId) continue;
+      if (o.shiftStart < endsAt && o.shiftStart + SHIFT_LEN_MS > startsAt) return true;
     }
     return false;
   }
@@ -405,12 +423,35 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       }));
   }
 
-  async setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null> {
+  async setOfferState(
+    id: string,
+    state: OfferState,
+    opts?: { fundingDueAt?: number; from?: OfferState },
+  ): Promise<OfferRecord | null> {
     const offer = this.offers.get(id);
     if (!offer) return null;
+    if (opts?.from !== undefined && offer.state !== opts.from) return null;
     offer.state = state;
-    if (fundingDueAt !== undefined) offer.fundingDueAt = fundingDueAt;
+    if (opts?.fundingDueAt !== undefined) offer.fundingDueAt = opts.fundingDueAt;
     return offer;
+  }
+
+  async expireStaleOffers(now: number): Promise<number> {
+    let count = 0;
+    for (const o of this.offers.values()) {
+      if (o.state === "PendingResponse" && o.expiresAt <= now) {
+        o.state = "Expired";
+        count++;
+      } else if (
+        o.state === "AwaitingPayment" &&
+        o.fundingDueAt !== null &&
+        o.fundingDueAt <= now
+      ) {
+        o.state = "Expired";
+        count++;
+      }
+    }
+    return count;
   }
 
   async confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult> {
@@ -418,7 +459,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     // confirm for the same offer must conflict, not fabricate a second booking.
     if (this.bookingByOffer.has(input.offerId)) throw new ConflictError("booking already exists for this offer");
     const offer = this.offers.get(input.offerId);
-    if (offer) offer.state = "Converted"; // atomic with the booking here by construction
+    // OFF-03/§6.3 parity with Prisma: only an offer still awaiting payment converts.
+    if (!offer || offer.state !== "AwaitingPayment") {
+      throw new ConflictError("offer is no longer awaiting payment (concurrent update)");
+    }
+    offer.state = "Converted"; // atomic with the booking here by construction
     const shift = this.shifts.get(input.shiftId);
     const shiftStart = shift?.startsAt ?? offer?.shiftStart ?? 0;
     const detail: BookingDetail = {
@@ -490,15 +535,14 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       throw new ConflictError("an approval cannot be executed by its initiator");
     }
     const booking = this.bookings.get(req.refId);
-    if (!booking) throw new Error("no payment allocation for booking");
+    if (!booking) throw new Error("no payment allocation for booking");    // PAY-08: refund must not exceed remaining refundable headroom.
     const alreadyRefunded = this.events
       .filter((e) => e.bookingId === req.refId && e.type === "Refund")
       .reduce((s, e) => s + e.amount, 0);
     if (alreadyRefunded + req.amount > booking.captured) {
       throw new ConflictError(
         `ALLOCATION_EXCEEDED: refund of ${req.amount} exceeds remaining ${booking.captured - alreadyRefunded}`,
-      );
-    }
+      );    }
     req.state = "Executed";
     req.executorId = input.executorId;
     req.executorRole = input.executorRole;
@@ -506,7 +550,6 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     this.appendEvent(req.refId, "Refund", req.amount, input.idempotencyKey);
     return { refund: req.amount, bookingId: req.refId };
   }
-
   async refundAvailable(bookingId: string): Promise<number> {
     const booking = this.bookings.get(bookingId);
     if (!booking) return 0;
@@ -522,6 +565,18 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       )
       .reduce((s, a) => s + a.amount, 0);
     return Math.max(0, booking.captured - refunded - pending);
+  }
+
+  async sumRefunded(bookingId: string): Promise<number> {
+    return this.events
+      .filter((e) => e.bookingId === bookingId && e.type === "Refund")
+      .reduce((t, e) => t + e.amount, 0);
+  }
+
+  async sumPaidOut(bookingId: string): Promise<number> {
+    return this.events
+      .filter((e) => e.bookingId === bookingId && e.type === "Payout")
+      .reduce((t, e) => t + e.amount, 0);
   }
 
   async getBooking(id: string): Promise<BookingDetail | null> {
@@ -643,9 +698,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const suspended = this.suspendedCredentials.has(id);
     const rating = await this.getSubjectRating(id);
     const ins = this.insurance.get(id);
-    // The in-memory store keeps no explicit licence row: derive its state from
-    // verification + suspension (no expiry is tracked, so validUntil is null).
+    // Derive licence state from verification + suspension; validUntil from the map.
     const licenceState = suspended ? "Suspended" : verification === "Verified" ? "Verified" : "Submitted";
+    const validUntil = this.licenceValidUntil.get(id) ?? null;
     return {
       id,
       selfDeclared: {
@@ -655,7 +710,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       },
       verified: {
         identityVerified: verification === "Verified",
-        licence: { state: licenceState, validUntil: null },
+        licence: { state: licenceState, validUntil },
         insurance: ins ? { state: ins.state, validUntil: ins.validUntil } : null,
         rating: rating ? { count: rating.count, average: rating.average } : null,
       },
@@ -677,10 +732,10 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       .map((m) => ({ id: m.id, senderId: m.senderId, body: m.body, createdAt: m.createdAt }));
   }
 
-  /** VER-04 parity with Prisma: no recorded expiry means valid; otherwise it must cover the shift. */
+  /** VER-04 fail-closed: a licence window must be recorded and cover the shift end. */
   private licenceValidThrough(professionalId: string, shiftEnd: number): boolean {
     const until = this.licenceValidUntil.get(professionalId);
-    return until === undefined || until >= shiftEnd;
+    return until !== undefined && until >= shiftEnd;
   }
 
   /** Test/ops seam mirroring Prisma's Credential.validUntil, so VER-04 expiry is reachable. */

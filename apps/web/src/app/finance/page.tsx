@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getReconciliation,
   fetchFinanceExport,
@@ -22,28 +22,48 @@ const MAX_ROWS = 25;
 /** Finance dashboard (ADM-01, PAY-11): reconciles each payment order against captured funds. */
 export default function FinancePage() {
   const [data, setData] = useState<Reconciliation | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const toast = useToast();
+  const loadSeq = useRef(0);
 
-  const load = useCallback(async (auth: string) => {
+  const signOut = useCallback(() => {
+    setToken(null);
+    setData(null);
+    setLoadError(null);
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!token) return;
+    const seq = ++loadSeq.current;
+    setLoading(true);
+    setLoadError(null);
     try {
-      setData(await getReconciliation(auth));
+      const next = await getReconciliation(token);
+      if (seq !== loadSeq.current) return;
+      setData(next);
     } catch (e) {
-      toast.error(getThaiErrorMessage(e));
+      if (seq !== loadSeq.current) return;
+      const msg = getThaiErrorMessage(e);
+      setLoadError(msg);
+      toast.error(msg);
+      const raw = e instanceof Error ? e.message.toLowerCase() : "";
+      if (raw.includes("403") || raw.includes("401") || raw.includes("forbidden") || raw.includes("authentication")) {
+        signOut();
+      }
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [toast]);
+  }, [token, toast, signOut]);
 
   useEffect(() => {
-    if (token) void load(token);
+    if (token) void load();
   }, [token, load]);
 
   async function exportCsv() {
-    if (!token) return;
     try {
-      const csv = await fetchFinanceExport(token);
+      const csv = await fetchFinanceExport(token!);
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;
@@ -97,19 +117,28 @@ export default function FinancePage() {
         <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
           <h1 style={{ margin: 0 }}>{th.finance.title}</h1>
           <div className="actions">
-            <Button data-testid="refresh" onClick={() => void load(token)} icon={<RefreshIcon />}>
+            <Button data-testid="refresh" onClick={() => void load()} icon={<RefreshIcon />}>
               {th.common.refresh}
             </Button>
             <Button data-testid="export-csv" variant="primary" onClick={() => void exportCsv()} icon={<DownloadIcon />}>
               {th.finance.exportCsv}
             </Button>
+            <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
+              {th.staffLogin.signOut}
+            </Button>
           </div>
         </div>
 
+        {loadError && !s && (
+          <p role="alert" style={{ color: "var(--danger)" }}>
+            {loadError}
+          </p>
+        )}
+
         <div className="stat-grid" data-testid="fin-summary">
-          {loading || !s ? (
+          {loading && !s ? (
             Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
-          ) : (
+          ) : s ? (
             <>
               <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
               <Stat label={th.finance.captured} value={formatThb(s.captured)} />
@@ -122,7 +151,7 @@ export default function FinancePage() {
                 tone={s.exceptions === 0 ? "success" : "danger"}
               />
             </>
-          )}
+          ) : null}
         </div>
 
         <div style={{ marginTop: "var(--s5)" }}>
