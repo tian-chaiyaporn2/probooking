@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { th } from "../lib/strings";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -13,17 +14,17 @@ export function AppHeader({ current }: { current?: string }) {
   return (
     <header className="app-header">
       <div className="app-header__inner">
-        <a className="brand" href="/">
+        <Link className="brand" href="/">
           <span className="brand__mark" aria-hidden>
             P
           </span>
           {th.brand}
-        </a>
+        </Link>
         <nav className="app-nav" aria-label="Primary">
           {LINKS.map((l) => (
-            <a key={l.href} href={l.href} aria-current={current === l.href ? "page" : undefined}>
+            <Link key={l.href} href={l.href} aria-current={current === l.href ? "page" : undefined}>
               {l.label}
-            </a>
+            </Link>
           ))}
         </nav>
         <ThemeToggle />

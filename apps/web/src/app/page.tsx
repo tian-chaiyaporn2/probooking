@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppHeader } from "../components/AppHeader";
 import { Badge } from "../components/Badge";
 import { th } from "../lib/strings";
@@ -32,10 +33,10 @@ export default function Home() {
 
         <section className="cta-grid">
           {CTAS.map((c) => (
-            <a key={c.href} href={c.href} className="cta-card" data-testid={`${c.href.slice(1) || "flow"}-link`}>
+            <Link key={c.href} href={c.href} className="cta-card" data-testid={`${c.href.slice(1) || "flow"}-link`}>
               <div className="cta-card__title">{c.title.replace(/^→\s*/, "")}</div>
               <span className="cta-card__arrow">เปิด →</span>
-            </a>
+            </Link>
           ))}
         </section>
 

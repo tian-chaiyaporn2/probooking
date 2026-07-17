@@ -21,7 +21,8 @@
     "db:generate": "pnpm --filter @probook/db generate",
     "db:migrate": "pnpm --filter @probook/db migrate",
     "db:studio": "pnpm --filter @probook/db studio",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "deploy": "bash scripts/deploy-web.sh"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^11.0.1",
