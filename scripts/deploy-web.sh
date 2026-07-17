@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 #
-# Deploy the static web export to the `gh-pages` branch — no GitHub Actions.
+# Deploy the static web export to the `gh-pages` branch.
 # GitHub Pages serves that branch as-is (`.nojekyll` skips Jekyll processing).
-# Run locally after committing:  pnpm run deploy:pages
+#
+# Prefer CI auto-deploy on master (see .github/workflows/ci.yml). Use this script
+# locally for one-offs (e.g. NEXT_PUBLIC_API_BASE_URL=… for a tunnel demo):
+#   pnpm run deploy:pages
 #
 set -euo pipefail
 

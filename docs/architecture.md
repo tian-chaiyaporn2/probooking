@@ -28,7 +28,7 @@ A pure **domain** package holds all business rules and is depended on by everyth
                                      │
                           ┌──────────┴──────────┐
                           │  worker (polling)    │  expiries, reminders,
-                          │  Postgres sweeps     │  auto-accept, reconciliation
+                          │  no Redis required   │  auto-accept, reconciliation
                           └──────────┬───────────┘
                                      │
         integrations (ports): payment partner · SMS · email · verification · doc storage
@@ -128,8 +128,8 @@ stamps `Booking.autoAcceptAt` = `autoAcceptDueAt(shiftEnd, now)` (24h after the 
 of shift end and submission). `apps/worker` polls for bookings past that deadline still
 in `AwaitingCompletion` and triggers the API's controlled `accept-completion` — so the
 worker schedules, the API owns the money action (no duplicated payout logic). A polling
-sweep keeps it Redis-free for Phase 0/1; it can become a BullMQ repeatable job at scale
-without changing the job. Time comparisons use UTC on both sides (Prisma reads/writes
+sweep keeps it Redis-free for Phase 0/1; it can become a durable repeatable job at scale
+(e.g. BullMQ) without changing the job. Time comparisons use UTC on both sides (Prisma reads/writes
 UTC), and all timestamp columns are `timestamptz` (`@db.Timestamptz(3)`) so external
 writers can't introduce a tz skew. The migration that converted them interprets the
 pre-existing naive values `AT TIME ZONE 'UTC'` (Prisma had stored UTC), preserving each

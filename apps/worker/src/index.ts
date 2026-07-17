@@ -7,8 +7,9 @@ import { reminderSweep } from "./jobs/reminders.js";
 import { expireOffersSweep } from "./jobs/expireOffers.js";
 
 /**
- * ProBooking worker. Runs time-driven jobs (§7.2): offer expiry (OFF-03), CMP-03
- * auto-accept, CMP-04 clinic-inactivity review, review publish, and reminders.
+ * ProBooking worker. Runs time-driven jobs (§7.2): offer expiry (OFF-03), auto-accept
+ * (CMP-03), clinic completion review (CMP-04), review publish (REV-03), and shift
+ * reminders (NOT-01).
  * A polling loop keeps the worker runnable without Redis; for scale these would become
  * durable repeatable jobs (e.g. BullMQ) without changing the job logic.
  *

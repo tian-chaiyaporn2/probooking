@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { Reflector } from "@nestjs/core";
 import { UnauthorizedException, ForbiddenException } from "@nestjs/common";
+import type { TokenRevocationService } from "../src/modules/auth/token-revocation.service.js";
+import type { StaffDirectory } from "../src/modules/auth/staff-directory.js";
 
 process.env.AUTH_DEV_MODE = "true";
 process.env.NODE_ENV = "test";
@@ -44,7 +46,10 @@ function guardWith(metaByKey: Record<string, unknown> = {}) {
   const reflector = {
     getAllAndOverride: (key: string) => metaByKey[key],
   } as unknown as Reflector;
-  return new AuthGuard(reflector);
+  // Master added revocation + live staff re-validation; stub as no-ops for these unit tests.
+  const revocations = { isRevoked: () => false } as unknown as TokenRevocationService;
+  const staff = { roleFor: () => undefined } as unknown as StaffDirectory;
+  return new AuthGuard(reflector, revocations, staff);
 }
 
 describe("AuthGuard (fail-closed + @Public)", () => {
@@ -70,7 +75,8 @@ describe("AuthGuard (fail-closed + @Public)", () => {
     const guard = guardWith({ [ROLES_KEY]: ["operations"] });
     const userTok = signToken({ sub: "+66000", role: "user" });
     expect(() => guard.canActivate(new Ctx(`Bearer ${userTok}`) as never)).toThrow(ForbiddenException);
-    const opsTok = signToken({ sub: "ops", role: "operations" });
+    // `dev:` subjects skip the live staff-directory re-check (AUTH_DEV_MODE mint path).
+    const opsTok = signToken({ sub: "dev:operations", role: "operations" });
     expect(guard.canActivate(new Ctx(`Bearer ${opsTok}`) as never)).toBe(true);
   });
 });

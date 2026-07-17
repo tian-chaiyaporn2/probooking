@@ -42,10 +42,6 @@ export function addSatang(...values: Satang[]): Satang {
   return satang(values.reduce((sum, v) => sum + v, 0));
 }
 
-export function subSatang(a: Satang, b: Satang): Satang {
-  return satang(a - b);
-}
-
 /**
  * PAY-08: a payout/refund may not exceed the funds available for it (nor go negative).
  * Pure predicate so the API and the acceptance spec share one definition.

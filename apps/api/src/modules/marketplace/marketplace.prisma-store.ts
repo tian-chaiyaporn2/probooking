@@ -8,7 +8,7 @@ import {
   DEFAULT_SERVICE_FEE_BPS,
 } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
-import { encryptField, decryptField } from "./field-crypto.js";
+import { encryptField, decryptField, blindIndex } from "./field-crypto.js";
 
 /** Shape of the fields a terms snapshot freezes. Structural, so both Shift reads fit. */
 interface SnapshotableShift {
@@ -165,7 +165,10 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // registered" for a clinic that does not exist. The user is locked out with no
     // self-service recovery, which is the worst kind of half-registration.
     return prisma.$transaction(async (tx) => {
-      const owner = await tx.user.create({ data: { phone: input.ownerPhone } });
+      const owner = await tx.user.create({
+        // Phone encrypted at rest; the blind index carries lookup + uniqueness.
+        data: { phone: encryptField(input.ownerPhone), phoneHash: blindIndex(input.ownerPhone) },
+      });
       const clinic = await tx.clinicWorkspace.create({
         data: {
           branchName: input.branchName,
@@ -190,7 +193,9 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // resolves to an identity with no professionalId, so they could authenticate and then
     // be refused every action they tried.
     return prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { phone: input.phone } });
+      const user = await tx.user.create({
+        data: { phone: encryptField(input.phone), phoneHash: blindIndex(input.phone) },
+      });
       const profile = await tx.professionalProfile.create({
         data: {
           userId: user.id,
@@ -613,7 +618,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
 
   async resolveIdentity(phone: string): Promise<CallerIdentity> {
     const user = await prisma.user.findUnique({
-      where: { phone },
+      where: { phoneHash: blindIndex(phone) },
       include: { professional: { select: { id: true } }, memberships: true },
     });
     if (!user) return { userId: null, professionalId: null, memberships: [] };
@@ -1262,8 +1267,10 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     });
     if (!b) return null;
     return {
-      clinicPhone: b.shift.workspace.memberships[0]?.user.phone ?? null,
-      professionalPhone: b.professional.user.phone,
+      clinicPhone: b.shift.workspace.memberships[0]?.user.phone
+        ? decryptField(b.shift.workspace.memberships[0].user.phone)
+        : null,
+      professionalPhone: decryptField(b.professional.user.phone),
     };
   }
 

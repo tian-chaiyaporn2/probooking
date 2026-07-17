@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   encryptField,
   decryptField,
+  blindIndex,
   resetFieldKeyCache,
 } from "../src/modules/marketplace/field-crypto.js";
 
@@ -56,5 +57,22 @@ describe("field-crypto (§7.3 encryption at rest)", () => {
     process.env.FIELD_ENCRYPTION_KEY = "tooshort";
     resetFieldKeyCache();
     expect(() => encryptField("x")).toThrow(/32 bytes/);
+  });
+
+  it("blind index is deterministic, so a phone can be looked up while stored encrypted", () => {
+    // Encryption uses a fresh IV each time (not queryable); the blind index is stable, which
+    // is why lookup + uniqueness on User.phone move to it.
+    expect(blindIndex("+66812345678")).toBe(blindIndex("+66812345678"));
+    expect(blindIndex("+66812345678")).not.toBe(blindIndex("+66899999999"));
+    expect(encryptField("+66812345678")).not.toBe(encryptField("+66812345678")); // random IV
+  });
+
+  it("blind index does not reveal the value and changes with the key", () => {
+    const idx = blindIndex("+66812345678");
+    expect(idx).not.toContain("66812345678");
+    expect(idx).toMatch(/^[0-9a-f]{64}$/); // HMAC-SHA256 hex
+    process.env.FIELD_ENCRYPTION_KEY = "b".repeat(64);
+    resetFieldKeyCache();
+    expect(blindIndex("+66812345678")).not.toBe(idx); // keyed, not a plain SHA
   });
 });

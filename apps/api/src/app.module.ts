@@ -8,9 +8,8 @@ import { ThrottleGuard } from "./modules/throttle/throttle.guard.js";
 
 /**
  * Bounded contexts (PRD §7.1 data groups). MarketplaceModule composes offers,
- * bookings, and payments into the Phase 0 booking flow. Additional modules to add
- * as scaffold grows: auth (AUTH-*), verification (VER-*), shifts (SHF-*),
- * messaging (MSG), completion (CMP), reviews (REV), cases (SUP), admin/ops (ADM).
+ * bookings, payments, auth, verification, shifts, messaging, completion, reviews,
+ * cases, and ops/finance into the Phase 0/1 controlled API surface.
  */
 @Module({
   imports: [HealthModule, AuthModule, MarketplaceModule],

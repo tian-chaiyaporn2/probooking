@@ -17,14 +17,13 @@ probook/
 ├─ apps/
 │  ├─ web/       Next.js marketplace + Ops/Finance dashboards (Thai UI, light/dark, responsive)
 │  ├─ api/       NestJS — controlled APIs (money, audit, auth/roles, state machines)
-│  ├─ worker/    polling sweeps — auto-accept, clinic-review, review-publish, reminders (§7.2)
-│  └─ ops/       design note for internal tools (ADM-02); UI implemented in apps/web
+│  └─ worker/    polling sweeps — auto-accept, clinic-review, review-publish, reminders (§7.2)
 ├─ packages/
 │  ├─ domain/    pure rules: money (satang), roles, states, policies, machines
 │  └─ db/        Prisma schema + client + migrations (PostgreSQL)
 ├─ features/     BDD (.feature) — the 14 acceptance areas from PRD §9.4
 ├─ e2e/          Playwright end-to-end tests (browser drives the live flow)
-└─ docs/         PRD, Rollout Plan, architecture, ADRs, traceability
+└─ docs/         PRD, Rollout Plan, architecture, ADRs, ops-tools note, traceability
 ```
 
 The Phase 0 booking flow (create offer → accept → confirm) lives in
@@ -48,7 +47,7 @@ See [`docs/adr/0001-stack.md`](docs/adr/0001-stack.md).
 ```bash
 nvm use
 pnpm install
-cp .env.example .env            # fill DATABASE_URL, REDIS_URL, provider keys (optional in dev)
+cp .env.example .env            # fill DATABASE_URL, provider keys (optional in dev)
 
 pnpm db:generate                # generate Prisma client
 pnpm build                      # build shared packages (domain, db) + apps — see ADR 0002
@@ -128,11 +127,12 @@ and the 12% checkout total.
 ## Deploy & live demo
 
 CI (`.github/workflows/ci.yml`) runs typecheck, the domain suite, the BDD suite and the
-Playwright e2e against a real Postgres on every push and PR.
+Playwright e2e against a real Postgres on every push and PR. On a green `master` push it
+also auto-deploys the frontend to **GitHub Pages** (`gh-pages` branch).
 
-The frontend deploys to **GitHub Pages** (static export) via `scripts/deploy-web.sh`, which
-force-pushes the build to a `gh-pages` branch (it refuses on a dirty tree, so the published
-site always matches the commit it claims):
+For a local / one-off publish (e.g. pointed at a tunnel API), `scripts/deploy-web.sh`
+force-pushes the same static export (it refuses on a dirty tree, so the published site
+always matches the commit it claims):
 
 ```bash
 pnpm run deploy:pages         # build static export → push gh-pages

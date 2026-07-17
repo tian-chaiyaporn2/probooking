@@ -10,10 +10,8 @@ import {
 /**
  * Offer service (OFF-01..04). Demonstrates how the API composes the pure domain:
  * authority check (OFF-01), one-active-offer + snapshot (OFF-02), timer (OFF-03),
- * and acceptance -> soft hold, not a booking (OFF-04).
- *
- * Persistence (@probook/db) and payment orchestration are wired in as the scaffold
- * grows; this keeps the decision logic explicit and unit-testable.
+ * and acceptance -> soft hold, not a booking (OFF-04). Marketplace persistence and
+ * payment orchestration live in MarketplaceController / MarketplaceRepository.
  */
 @Injectable()
 export class OffersService {

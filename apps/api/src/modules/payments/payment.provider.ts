@@ -9,13 +9,13 @@ import type { Satang } from "@probook/domain";
  * job to establish whether funds were actually collected — that fact must never be an
  * input supplied by the caller who benefits from the answer being "yes".
  */
-export interface CaptureRequest {
+interface CaptureRequest {
   /** Stable reference for the money being collected; doubles as the provider idempotency key. */
   orderRef: string;
   amount: Satang;
 }
 
-export type CaptureResult =
+type CaptureResult =
   | { succeeded: true; providerRef: string }
   | { succeeded: false; reason: string };
 
