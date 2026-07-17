@@ -3,6 +3,7 @@ import {
   autoAcceptDueAt,
   advanceVerification,
   aggregateRating,
+  ratingFromCounts,
   DEFAULT_SERVICE_FEE_BPS,
 } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
@@ -435,18 +436,31 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       select: { id: true, displayName: true, profession: true, specialty: true },
       take: 50,
     });
-    const results: ProfessionalSearchResult[] = [];
-    for (const p of pros) {
-      const rating = await this.getSubjectRating(p.id);
-      results.push({
+    if (pros.length === 0) return [];
+
+    // One grouped query for every result's rating, not one query per result. This was a
+    // 51-round-trip N+1 on a search endpoint, and each of those trips scanned Review
+    // unindexed — so search cost grew with the whole review table, per result.
+    const grouped = await prisma.review.groupBy({
+      by: ["subjectId"],
+      where: { subjectId: { in: pros.map((p) => p.id) }, publishedAt: { not: null } },
+      _count: { score: true },
+      _avg: { score: true },
+    });
+    const ratings = new Map(grouped.map((g) => [g.subjectId, g]));
+
+    return pros.map((p) => {
+      const g = ratings.get(p.id);
+      // REV-04's cold-start floor (>= 3 published reviews) stays a domain decision.
+      const summary = g ? ratingFromCounts(g._count.score, g._avg.score ?? 0) : null;
+      return {
         id: p.id,
         displayName: p.displayName,
         profession: p.profession,
         specialty: p.specialty,
-        rating: rating ? rating.average : null,
-      });
-    }
-    return results;
+        rating: summary ? summary.average : null,
+      };
+    });
   }
 
   async listOpenShifts(filters?: ShiftFilters): Promise<OpenShift[]> {
@@ -968,8 +982,47 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     }));
   }
 
+  /**
+   * REP-03 money totals via SQL aggregates.
+   *
+   * getMetrics used to call `reconcile()`, which loads every payment order and every
+   * financial event ever written into memory — on each dashboard hit. The dashboard needs
+   * four numbers, not the rows: at 500k orders that was hundreds of MB per request, and it
+   * would take booking confirmation down with it. Exception semantics are kept identical to
+   * `reconcile` (an order leaks when payouts + refunds exceed captured, PAY-08).
+   */
+  private async moneyTotals(): Promise<{
+    captured: number;
+    payouts: number;
+    refunds: number;
+    exceptions: number;
+  }> {
+    const [captured, byType, leaks] = await Promise.all([
+      prisma.paymentOrder.aggregate({ _sum: { captured: true } }),
+      prisma.financialEvent.groupBy({ by: ["type"], _sum: { amount: true } }),
+      // Per-order aggregate: only rows where funds out exceed captured are returned, so the
+      // result set is the exceptions themselves — normally empty — not the whole ledger.
+      prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT count(*)::bigint AS count FROM (
+          SELECT po."id"
+          FROM "PaymentOrder" po
+          LEFT JOIN "FinancialEvent" fe ON fe."paymentOrderId" = po."id"
+          GROUP BY po."id", po."captured"
+          HAVING COALESCE(SUM(CASE WHEN fe."type" IN ('Payout','Refund') THEN fe."amount" ELSE 0 END), 0) > po."captured"
+        ) leaking
+      `,
+    ]);
+    const sumOf = (t: string) => byType.find((r) => r.type === t)?._sum.amount ?? 0;
+    return {
+      captured: captured._sum.captured ?? 0,
+      payouts: sumOf("Payout"),
+      refunds: sumOf("Refund"),
+      exceptions: Number(leaks[0]?.count ?? 0),
+    };
+  }
+
   async getMetrics(): Promise<MarketplaceMetrics> {
-    // REP-03: core counts + money totals. Reuses reconcile for conserved money math.
+    // REP-03: core counts + money totals (aggregated in SQL, not by loading the ledger).
     const [
       shiftsTotal,
       shiftsOpen,
@@ -981,7 +1034,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       cancelled,
       held,
       casesOpen,
-      recon,
+      money,
     ] = await Promise.all([
       prisma.shift.count(),
       prisma.shift.count({ where: { state: "Published" } }),
@@ -993,7 +1046,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       prisma.booking.count({ where: { state: "Cancelled" } }),
       prisma.booking.count({ where: { heldAt: { not: null } } }),
       prisma.supportCase.count({ where: { state: { not: "Resolved" } } }),
-      this.reconcile(),
+      this.moneyTotals(),
     ]);
     return {
       shifts: { total: shiftsTotal, open: shiftsOpen },
@@ -1001,10 +1054,10 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       bookings: { total: bookingsTotal, confirmed, awaitingCompletion, completed, cancelled, held },
       cases: { open: casesOpen },
       money: {
-        captured: recon.summary.captured,
-        paidOut: recon.summary.payouts,
-        refunded: recon.summary.refunds,
-        reconciliationExceptions: recon.summary.exceptions,
+        captured: money.captured,
+        paidOut: money.payouts,
+        refunded: money.refunds,
+        reconciliationExceptions: money.exceptions,
       },
     };
   }

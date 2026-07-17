@@ -26,6 +26,19 @@ export function aggregateRating(publishedScores: readonly number[]): RatingSumma
   return { count: publishedScores.length, average: sum / publishedScores.length };
 }
 
+/**
+ * REV-04 for a subject whose reviews the caller has already counted and averaged — e.g. a
+ * store that aggregated in SQL rather than fetching every score.
+ *
+ * The cold-start threshold is the rule, so it stays here: a caller that has a count and an
+ * average should not have to reconstruct a fake score array to ask the domain, nor
+ * re-express `>= 3` as a HAVING clause the next reader must reconcile with this file.
+ */
+export function ratingFromCounts(count: number, average: number): RatingSummary | null {
+  if (count < MIN_PUBLISHED_REVIEWS_FOR_RATING) return null;
+  return { count, average };
+}
+
 /** REV-03: the instant an unpublished review created at `createdAt` auto-publishes. */
 export function reviewPublishDueAt(createdAt: number): number {
   return createdAt + REVIEW_PUBLISH_AFTER;
