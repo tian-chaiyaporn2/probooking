@@ -55,6 +55,21 @@ test("pages are responsive — no horizontal page overflow on a small screen", a
   }
 });
 
+test("mobile nav collapses into a drawer that opens and closes", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  // The desktop nav is hidden; a menu button stands in for it.
+  await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
+  await page.getByLabel("Open menu").click();
+  // Drawer is open; its links are now visible and Escape dismisses it.
+  const drawer = page.getByRole("navigation", { name: "Primary" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("link", { name: "เดโม" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(page.getByLabel("Open menu")).toBeVisible();
+});
+
 test("booking flow confirms a booking with the correct checkout total", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();

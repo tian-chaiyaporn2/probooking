@@ -1,4 +1,8 @@
 import { InMemoryMarketplaceStore } from "../../apps/api/src/modules/marketplace/marketplace.memory-store.js";
+import {
+  seedDemoFixtures,
+  type DemoSeedResult,
+} from "../../apps/api/src/fixtures/demo-fixtures.js";
 import { buildCheckout, satang } from "@probook/domain";
 
 /**
@@ -9,6 +13,11 @@ import { buildCheckout, satang } from "@probook/domain";
  */
 export function newStore(): InMemoryMarketplaceStore {
   return new InMemoryMarketplaceStore();
+}
+
+/** Load the full demo fixture set (same data as API boot seeding). */
+export async function seedDemo(store: InMemoryMarketplaceStore): Promise<DemoSeedResult> {
+  return seedDemoFixtures(store);
 }
 
 let seq = 0;
@@ -184,4 +193,83 @@ export async function completeAndPay(
     payoutAmount: seed.compensation,
     idempotencyKey: `payout:${seed.bookingId}`,
   });
+}
+
+/** Seed a confirmed booking that is on hold with an open credential_hold case. */
+export async function seedHeldBooking(
+  store: InMemoryMarketplaceStore,
+  opts: SeedOpts = {},
+): Promise<SeededBooking> {
+  const s = await seedConfirmedBooking(store, opts);
+  await store.holdBooking(s.bookingId, "credential_or_insurance_invalid");
+  await store.createSupportCase(s.bookingId, "credential_hold", "Credential review required");
+  return s;
+}
+
+/** Seed a completed, paid-out booking. */
+export async function seedCompletedBooking(
+  store: InMemoryMarketplaceStore,
+  opts: SeedOpts = {},
+): Promise<SeededBooking> {
+  const s = await seedConfirmedBooking(store, opts);
+  await completeAndPay(store, s);
+  return s;
+}
+
+/** Seed an urgent shift (starts within 72h). */
+export async function seedUrgentShift(
+  store: InMemoryMarketplaceStore,
+  opts: SeedOpts = {},
+): Promise<{ clinicId: string; shiftId: string }> {
+  const now = opts.now ?? 1_700_000_000_000;
+  const n = ++seq;
+  const clinic = await store.registerClinic({
+    branchName: "Urgent Clinic",
+    licenceNo: "L",
+    address: "BKK",
+    ownerPhone: `+66u${n}`,
+  });
+  await store.verifyClinic(clinic.id);
+  const { shiftId } = await store.postShift({
+    clinicWorkspaceId: clinic.id,
+    category: opts.category ?? "general",
+    compensation: opts.compensation ?? 1_200_000,
+    urgency: "urgent",
+    shiftStart: now + 24 * HOUR,
+    insuranceRequired: false,
+  });
+  return { clinicId: clinic.id, shiftId };
+}
+
+/** Seed N completed bookings with published reviews for a professional. */
+export async function seedWithReviews(
+  store: InMemoryMarketplaceStore,
+  count: number,
+  opts: SeedOpts = {},
+): Promise<SeededBooking[]> {
+  const out: SeededBooking[] = [];
+  let professionalId = opts.professionalId;
+  for (let i = 0; i < count; i++) {
+    const s = await seedCompletedBooking(store, {
+      ...opts,
+      ...(professionalId ? { professionalId } : {}),
+    });
+    professionalId = s.professionalId;
+    await store.createReview({
+      bookingId: s.bookingId,
+      authorId: s.clinicId,
+      subjectId: s.professionalId,
+      score: 5,
+      tags: ["reliable"],
+    });
+    await store.createReview({
+      bookingId: s.bookingId,
+      authorId: s.professionalId,
+      subjectId: s.clinicId,
+      score: 5,
+      tags: ["professional"],
+    });
+    out.push(s);
+  }
+  return out;
 }

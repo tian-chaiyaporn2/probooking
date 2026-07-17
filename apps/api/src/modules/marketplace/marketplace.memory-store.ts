@@ -87,6 +87,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly bookingByOffer = new Map<string, string>();
   private readonly supportCases = new Map<string, ReviewCase>(); // keyed by `${bookingId}:${kind}`
   private readonly clinics = new Map<string, VerificationState>();
+  private readonly clinicProfiles = new Map<string, { branchName: string }>();
   private readonly professionals = new Map<string, VerificationState>();
   private readonly professionalProfiles = new Map<string, { displayName: string; profession: string }>();
   private readonly usedPhones = new Set<string>(); // mirrors the Prisma User.phone unique constraint
@@ -112,6 +113,16 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly shifts = new Map<string, MemShift>();
   private readonly candidates: MemCandidate[] = [];
   private readonly availabilityBlocks: (AvailabilityBlock & { professionalId: string })[] = [];
+  private seeded = false;
+
+  /** True after demo fixtures have been loaded (boot-time seed guard). */
+  isSeeded(): boolean {
+    return this.seeded;
+  }
+
+  markSeeded(): void {
+    this.seeded = true;
+  }
 
   async registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }> {
     if (this.usedPhones.has(input.ownerPhone)) throw new ConflictError("owner phone already registered");
@@ -119,6 +130,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const id = randomUUID();
     const ownerUserId = randomUUID();
     this.clinics.set(id, "Submitted");
+    this.clinicProfiles.set(id, { branchName: input.branchName });
     // Parity with Prisma's User + Membership graph: the owner's phone is how the caller is
     // later recognised as this workspace's owner. Previously the phone was only added to a
     // uniqueness Set and discarded, so identity could not be resolved in this store at all.
@@ -809,9 +821,19 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
 
   async listPendingVerifications(): Promise<PendingVerification[]> {
     const out: PendingVerification[] = [];
-    for (const [id, v] of this.clinics) if (v === "Submitted") out.push({ kind: "clinic", id, name: "" });
+    for (const [id, v] of this.clinics) {
+      if (v === "Submitted") {
+        out.push({ kind: "clinic", id, name: this.clinicProfiles.get(id)?.branchName ?? "" });
+      }
+    }
     for (const [id, v] of this.professionals) {
-      if (v === "Submitted") out.push({ kind: "professional", id, name: "" });
+      if (v === "Submitted") {
+        out.push({
+          kind: "professional",
+          id,
+          name: this.professionalProfiles.get(id)?.displayName ?? "",
+        });
+      }
     }
     return out;
   }

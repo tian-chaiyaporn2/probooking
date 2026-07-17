@@ -16,6 +16,24 @@ function authHeaders(base: Record<string, string> = {}, token?: string): Record<
   return t ? { ...base, authorization: `Bearer ${t}` } : base;
 }
 
+/**
+ * Turn a non-OK response into a human error. The API returns Nest's JSON envelope
+ * ({ statusCode, message, error }), so surfacing the raw body dumped things like
+ * `429: {"statusCode":429,"message":"too many OTP requests…"}` into toasts and the login
+ * form. Prefer the `message`; fall back to the raw text only if it is not that shape.
+ */
+async function errorFrom(res: Response): Promise<Error> {
+  const text = await res.text();
+  try {
+    const body = JSON.parse(text) as { message?: string | string[] };
+    const msg = Array.isArray(body.message) ? body.message.join("; ") : body.message;
+    if (msg) return new Error(msg);
+  } catch {
+    // not JSON — fall through to the raw text
+  }
+  return new Error(text || `Request failed (${res.status})`);
+}
+
 async function post<T>(path: string, body?: unknown, token?: string): Promise<T> {
   const init: RequestInit = {
     method: "POST",
@@ -27,10 +45,7 @@ async function post<T>(path: string, body?: unknown, token?: string): Promise<T>
     init.body = JSON.stringify(body);
   }
   const res = await fetch(`${API_BASE}${path}`, init);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${res.status}: ${text}`);
-  }
+  if (!res.ok) throw await errorFrom(res);
   return res.json() as Promise<T>;
 }
 
@@ -39,10 +54,7 @@ async function get<T>(path: string, token?: string): Promise<T> {
     headers: authHeaders({}, token),
     signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${res.status}: ${text}`);
-  }
+  if (!res.ok) throw await errorFrom(res);
   return res.json() as Promise<T>;
 }
 
