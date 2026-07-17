@@ -136,11 +136,12 @@ enum FinancialEventType {
 // ----- Identity & access -----
 model User {
   id           String       @id @default(cuid())
-  // Plaintext by design: this is the unique OTP login key, looked up by value, so it cannot
-  // take random-IV encryption. Encrypting it needs deterministic encryption or an HMAC blind
-  // index (deferred). Masked in logs meanwhile. Other sensitive columns (licenceNo, address,
-  // Message.body) are AES-256-GCM encrypted at the app layer — see field-crypto.ts.
-  phone        String       @unique // Thai mobile OTP is primary login (AUTH-01)
+  // Encrypted at rest (field-crypto), like the other sensitive columns. It is the OTP login
+  // key, looked up by value — which random-IV ciphertext cannot support — so uniqueness and
+  // lookup move to `phoneHash`, a keyed HMAC blind index. A DB dump yields neither the
+  // number nor a brute-forceable hash.
+  phone        String // AES-256-GCM ciphertext (AUTH-01)
+  phoneHash    String?      @unique // blind index of the phone (lookup + dedup); nullable for pre-backfill rows
   email        String?      @unique
   mfaEnabled   Boolean      @default(false)
   createdAt    DateTime     @default(now()) @db.Timestamptz(3)

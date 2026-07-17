@@ -4,6 +4,7 @@
  */
 import { buildCheckout, satang } from "@probook/domain";
 import { prisma } from "../src/index.js";
+import { encryptField, blindIndex } from "../src/field-crypto.js";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -27,7 +28,7 @@ async function registerClinic(
   phone: string,
   verified: boolean,
 ) {
-  const owner = await prisma.user.create({ data: { phone } });
+  const owner = await prisma.user.create({ data: { phone: encryptField(phone), phoneHash: blindIndex(phone) } });
   const clinic = await prisma.clinicWorkspace.create({
     data: {
       branchName,
@@ -49,7 +50,7 @@ async function registerProfessional(
   payoutRef: string,
   verified: boolean,
 ) {
-  const user = await prisma.user.create({ data: { phone } });
+  const user = await prisma.user.create({ data: { phone: encryptField(phone), phoneHash: blindIndex(phone) } });
   const profile = await prisma.professionalProfile.create({
     data: {
       userId: user.id,
@@ -134,7 +135,7 @@ async function confirmBooking(
 }
 
 async function main() {
-  const existing = await prisma.user.findUnique({ where: { phone: PHONES.clinicA } });
+  const existing = await prisma.user.findUnique({ where: { phoneHash: blindIndex(PHONES.clinicA) } });
   if (existing) {
     console.log("Demo fixtures already present — skipping (delete demo users to re-seed)");
     return;

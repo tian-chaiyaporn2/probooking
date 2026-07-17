@@ -1,6 +1,8 @@
 import "../env.js"; // load DATABASE_URL + FIELD_ENCRYPTION_KEY before @probook/db
 import { prisma } from "@probook/db";
-import { encryptField } from "../modules/marketplace/field-crypto.js";
+import { encryptField, blindIndex } from "../modules/marketplace/field-crypto.js";
+
+const PREFIX = "enc:v1:";
 
 /**
  * One-off backfill: encrypt PII columns written before field encryption existed.
@@ -30,8 +32,29 @@ async function main() {
     messages++;
   }
 
+  // User.phone: encrypt the value and backfill the blind index that lookups now use. A row
+  // whose phone is already ciphertext AND already has a hash is skipped, so re-running is a
+  // no-op. The hash must be derived from the PLAINTEXT phone, so this runs before the phone
+  // would ever be re-encrypted — hence the "already encrypted" guard uses the prefix.
+  let users = 0;
+  for (const u of await prisma.user.findMany({ select: { id: true, phone: true, phoneHash: true } })) {
+    const alreadyEncrypted = u.phone.startsWith(PREFIX);
+    if (alreadyEncrypted && u.phoneHash) continue;
+    // If still plaintext, the current value IS the phone; if already encrypted but missing a
+    // hash (shouldn't happen), we cannot recover the plaintext, so skip with a warning.
+    if (alreadyEncrypted && !u.phoneHash) {
+      console.warn(`user ${u.id}: phone encrypted but no hash — cannot backfill index`);
+      continue;
+    }
+    await prisma.user.update({
+      where: { id: u.id },
+      data: { phone: encryptField(u.phone), phoneHash: blindIndex(u.phone) },
+    });
+    users++;
+  }
+
   // Count of what was newly encrypted, not the table size — so a re-run reports 0/0.
-  console.log(`encrypted: ${clinics} clinic row(s), ${messages} message(s)`);
+  console.log(`encrypted: ${clinics} clinic row(s), ${messages} message(s), ${users} user phone(s)`);
   await prisma.$disconnect();
 }
 
