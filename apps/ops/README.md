@@ -12,6 +12,13 @@ This surface is intentionally thin. Options, in order of preference for Phase 0/
    `@probook/api` controlled endpoints. Fastest for Operations/Finance queues.
 2. A small protected Next.js admin area if custom UX is needed.
 
+> **Status (Phase 1): option 2 is implemented** in
+> [`apps/web/src/app/ops`](../web/src/app/ops) and
+> [`apps/web/src/app/finance`](../web/src/app/finance) — role-guarded dashboards that
+> call the controlled `/ops/*` and `/finance/*` API actions (verify, hold/resolve,
+> reconciliation, export, metrics, audit). This package remains a design note; there is
+> no separate `apps/ops` build.
+
 Whatever the tool, it authenticates internal users with **MFA** (§3), enforces
 **least privilege**, and every privileged change is **audited** (§6.4). High-value or
 unusual money actions require a **second authorized person** (dual control —
