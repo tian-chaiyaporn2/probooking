@@ -83,6 +83,7 @@ export function AppHeader({ current }: { current?: string }) {
                 {l.label}
               </Link>
             ))}
+            <p className="app-nav--drawer__foot">{th.home.phase}</p>
           </nav>
         </>
       )}

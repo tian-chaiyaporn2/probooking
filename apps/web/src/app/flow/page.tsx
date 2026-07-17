@@ -52,6 +52,9 @@ export default function FlowPage() {
   const [payingOut, setPayingOut] = useState(false);
   const [reviewing, setReviewing] = useState(false);
 
+  const FLOW_TOTAL = 7;
+  const progressPct = Math.min(100, Math.round((steps.length / FLOW_TOTAL) * 100));
+
   async function run() {
     setRunning(true);
     setSteps([]);
@@ -165,9 +168,18 @@ export default function FlowPage() {
         <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
           {running ? th.flow.running : th.flow.run}
         </Button>
-        {running && (
-          <div className="progress" aria-hidden>
-            <div className="progress__bar" />
+        {(running || steps.length > 0) && (
+          <div className="flow-progress" aria-live="polite">
+            <div className="flow-progress__meta">
+              <span>{th.flow.progress(Math.min(steps.length, FLOW_TOTAL), FLOW_TOTAL)}</span>
+              {running && <span className="muted">{th.common.loading}</span>}
+            </div>
+            <div className="progress progress--determinate" aria-hidden>
+              <div
+                className={`progress__bar${running && steps.length === 0 ? " progress__bar--indeterminate" : ""}`}
+                style={steps.length > 0 ? { width: `${progressPct}%`, transform: "none" } : undefined}
+              />
+            </div>
           </div>
         )}
 
@@ -195,7 +207,7 @@ export default function FlowPage() {
 
         {bookingId && (
           <div data-testid="result" className="flow-result">
-            <div data-testid="booking-status" className="flow-result__status">
+            <div data-testid="booking-status" className="flow-result__status flow-result__status--pulse">
               <CheckIcon /> Booking Confirmed
             </div>
             <div className="flow-result__id">
@@ -231,7 +243,7 @@ export default function FlowPage() {
                 </Button>
               ) : (
                 <div data-testid="payout">
-                  <span data-testid="payout-status" className="flow-result__status" style={{ marginBottom: 0 }}>
+                  <span data-testid="payout-status" className="flow-result__status flow-result__status--inline">
                     <CheckIcon /> Paid out
                   </span>{" "}
                   — <span data-testid="payout-amount">{formatThb(payout.payoutAmount)}</span> to the
@@ -247,7 +259,7 @@ export default function FlowPage() {
                     </Button>
                   ) : (
                     <div data-testid="reviews">
-                      <span data-testid="reviews-status" className="flow-result__status" style={{ marginBottom: 0 }}>
+                      <span data-testid="reviews-status" className="flow-result__status flow-result__status--inline">
                         <CheckIcon /> Reviews published
                       </span>
                       {rating && (

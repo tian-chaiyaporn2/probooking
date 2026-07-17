@@ -41,7 +41,7 @@ export default function Home() {
                   <div className="mockcard__name">พญ. ธนพร ก.</div>
                   <div className="mockcard__meta">อายุรแพทย์ · ตรวจสอบแล้ว</div>
                 </div>
-                <span className="mockcard__stamp" style={{ marginInlineStart: "auto" }}>
+                <span className="mockcard__stamp mockcard__stamp--end">
                   <ShieldCheckIcon /> ยืนยันแล้ว
                 </span>
               </div>
@@ -71,6 +71,15 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+        <p className="trust-line" aria-label={th.home.trust.join(" · ")}>
+          {th.home.trust.map((t, i) => (
+            <span key={t}>
+              {i > 0 && <span className="trust-line__dot" aria-hidden>·</span>}
+              {t}
+            </span>
+          ))}
+        </p>
 
         <section>
           <div className="section-head">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
@@ -31,6 +31,13 @@ export function StaffLogin({
   const [stage, setStage] = useState<"phone" | "code">("phone");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (stage === "phone") phoneRef.current?.focus();
+    else codeRef.current?.focus();
+  }, [stage]);
 
   async function sendCode() {
     setBusy(true);
@@ -85,16 +92,18 @@ export function StaffLogin({
               </label>
               <input
                 id="staff-phone"
+                ref={phoneRef}
                 className="input"
                 aria-label={th.staffLogin.phoneLabel}
                 inputMode="tel"
                 autoComplete="tel"
+                autoFocus
                 placeholder="+66…"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
             </div>
-            <Button type="submit" variant="primary" busy={busy} disabled={!phone}>
+            <Button type="submit" variant="primary" busy={busy} disabled={!phone.trim()}>
               {th.staffLogin.sendCode}
             </Button>
           </form>
@@ -102,7 +111,7 @@ export function StaffLogin({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (code) void submitCode();
+              if (code.length >= 6) void submitCode();
             }}
           >
             <div className="field">
@@ -111,6 +120,7 @@ export function StaffLogin({
               </label>
               <input
                 id="staff-otp"
+                ref={codeRef}
                 className="input input--otp"
                 aria-label={th.staffLogin.codeLabel}
                 inputMode="numeric"
