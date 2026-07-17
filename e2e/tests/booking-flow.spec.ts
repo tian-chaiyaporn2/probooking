@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test";
  */
 test("home links to the flow", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "ProBooking" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "ProBooking" })).toBeVisible(); // brand in the app header
   await page.getByTestId("flow-link").click();
   await expect(page).toHaveURL(/\/flow$/);
 });

@@ -18,6 +18,13 @@ export const th = {
     refresh: "รีเฟรช",
     none: "ไม่มี",
     error: "ข้อผิดพลาด",
+    loading: "กำลังโหลด…",
+  },
+  nav: {
+    home: "หน้าแรก",
+    ops: "ปฏิบัติการ",
+    finance: "การเงิน",
+    flow: "เดโม",
   },
   ops: {
     title: "แดชบอร์ดฝ่ายปฏิบัติการ",

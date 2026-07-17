@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AppHeader } from "../../lib/AppHeader";
 import {
   registerClinic,
   registerProfessional,
@@ -136,6 +137,8 @@ export default function FlowPage() {
   }
 
   return (
+    <>
+    <AppHeader current="/flow" />
     <main className="page" style={{ maxWidth: 640 }}>
       <h1>ProBooking — booking flow</h1>
       <p style={{ color: "#555" }}>
@@ -263,5 +266,6 @@ export default function FlowPage() {
         </p>
       )}
     </main>
+    </>
   );
 }

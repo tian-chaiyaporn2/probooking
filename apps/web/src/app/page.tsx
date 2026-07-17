@@ -1,31 +1,46 @@
+import { AppHeader } from "../lib/AppHeader";
+import { Badge } from "../lib/ui";
 import { th } from "../lib/strings";
 
-/**
- * Landing shell. The customer promise (PRD §1.2) is the north-star copy, rendered in
- * Thai (LOC-01). Real marketplace routes are added per Phase 1 scope.
- */
+const CTAS = [
+  { href: "/flow", title: th.home.flowLink },
+  { href: "/ops", title: th.home.opsLink },
+  { href: "/finance", title: th.home.financeLink },
+];
+
+const TRUST = ["ตรวจสอบแล้ว", "พร้อมทำงาน", "จองได้", "คุ้มครองการชำระเงิน"];
+
 export default function Home() {
   return (
-    <main className="page" style={{ maxWidth: 720 }}>
-      <h1>{th.brand}</h1>
-      <p style={{ fontSize: "1.25rem", color: "#444" }}>{th.home.tagline}</p>
-      <p>{th.home.description}</p>
-      <p style={{ color: "#888", fontSize: "0.9rem" }}>{th.home.phase}</p>
-      <p>
-        <a href="/flow" data-testid="flow-link">
-          {th.home.flowLink}
-        </a>
-      </p>
-      <p>
-        <a href="/ops" data-testid="ops-link">
-          {th.home.opsLink}
-        </a>
-      </p>
-      <p>
-        <a href="/finance" data-testid="finance-link">
-          {th.home.financeLink}
-        </a>
-      </p>
-    </main>
+    <>
+      <AppHeader current="/" />
+      <main className="page" style={{ maxWidth: 960 }}>
+        <section className="hero">
+          <div className="hero__eyebrow">{th.home.phase}</div>
+          <h1>{th.home.tagline}</h1>
+          <p className="lead muted" style={{ maxWidth: "48ch" }}>
+            {th.home.description}
+          </p>
+          <div className="trust-row">
+            {TRUST.map((t) => (
+              <Badge key={t} variant="success">
+                ✓ {t}
+              </Badge>
+            ))}
+          </div>
+        </section>
+
+        <section className="cta-grid">
+          {CTAS.map((c) => (
+            <a key={c.href} href={c.href} className="cta-card" data-testid={`${c.href.slice(1) || "flow"}-link`}>
+              <div className="cta-card__title">{c.title.replace(/^→\s*/, "")}</div>
+              <span className="cta-card__arrow">เปิด →</span>
+            </a>
+          ))}
+        </section>
+
+        <footer className="footer">ProBooking · เฟส 0 · กรุงเทพฯ และปริมณฑล</footer>
+      </main>
+    </>
   );
 }
