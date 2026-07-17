@@ -10,7 +10,11 @@ import { assertTransition, type TransitionMap } from "./transition.js";
 export const OFFER_TRANSITIONS: TransitionMap<OfferState> = {
   PendingResponse: ["AwaitingPayment", "Declined", "Withdrawn", "Expired"],
   AwaitingPayment: ["Converted", "PaymentFailed", "Expired", "Withdrawn"],
-  PaymentFailed: ["Expired", "Withdrawn"], // a late/failed payment never books (§6.3)
+  // A declined card inside the 30-minute funding window (OFF-03) must be retryable — a
+  // transient failure is not a decision. This was a dead end, justified by §6.3's "a late
+  // payment after expiry never books"; but that rule is about EXPIRY, and it is enforced by
+  // `offerExpired` in checkConfirmationEligibility, not by making one decline terminal.
+  PaymentFailed: ["AwaitingPayment", "Expired", "Withdrawn"],
   Converted: [],
   Declined: [],
   Withdrawn: [],

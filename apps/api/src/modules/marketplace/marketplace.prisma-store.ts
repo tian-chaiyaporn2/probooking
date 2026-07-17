@@ -1,6 +1,7 @@
 import { prisma } from "@probook/db";
 import {
   autoAcceptDueAt,
+  advanceBooking,
   advanceVerification,
   aggregateRating,
   ratingFromCounts,
@@ -157,38 +158,51 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async registerClinic(
     input: RegisterClinicInput,
   ): Promise<EntityRef & { ownerUserId: string }> {
-    const owner = await prisma.user.create({ data: { phone: input.ownerPhone } });
-    const clinic = await prisma.clinicWorkspace.create({
-      data: {
-        branchName: input.branchName,
-        licenceNo: input.licenceNo,
-        address: input.address,
-        verification: "Submitted",
-      },
+    // One transaction (ORG-01). These were three sequential writes: if the workspace or
+    // membership failed after the User committed, an orphan User kept the phone forever —
+    // every retry then died on User_phone_key and the API reported "owner phone already
+    // registered" for a clinic that does not exist. The user is locked out with no
+    // self-service recovery, which is the worst kind of half-registration.
+    return prisma.$transaction(async (tx) => {
+      const owner = await tx.user.create({ data: { phone: input.ownerPhone } });
+      const clinic = await tx.clinicWorkspace.create({
+        data: {
+          branchName: input.branchName,
+          licenceNo: input.licenceNo,
+          address: input.address,
+          verification: "Submitted",
+        },
+      });
+      await tx.membership.create({
+        data: { userId: owner.id, workspaceId: clinic.id, role: "clinic_owner" },
+      });
+      return { id: clinic.id, verification: "Submitted" as const, ownerUserId: owner.id };
     });
-    await prisma.membership.create({
-      data: { userId: owner.id, workspaceId: clinic.id, role: "clinic_owner" },
-    });
-    return { id: clinic.id, verification: "Submitted", ownerUserId: owner.id };
   }
 
   async registerProfessional(input: RegisterProfessionalInput): Promise<EntityRef> {
-    const user = await prisma.user.create({ data: { phone: input.phone } });
-    const profile = await prisma.professionalProfile.create({
-      data: {
-        userId: user.id,
-        displayName: input.displayName,
-        profession: input.profession,
-        verification: "Submitted",
-      },
+    // One transaction (PRO-01), same reasoning as registerClinic: a partial registration
+    // burns the phone number permanently. A professional with a User but no profile also
+    // resolves to an identity with no professionalId, so they could authenticate and then
+    // be refused every action they tried.
+    return prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { phone: input.phone } });
+      const profile = await tx.professionalProfile.create({
+        data: {
+          userId: user.id,
+          displayName: input.displayName,
+          profession: input.profession,
+          verification: "Submitted",
+        },
+      });
+      await tx.credential.create({
+        data: { professionalId: profile.id, kind: "licence", state: "Submitted" },
+      });
+      await tx.payoutAccount.create({
+        data: { professionalId: profile.id, bankRefMasked: input.payoutRef, verified: false },
+      });
+      return { id: profile.id, verification: "Submitted" as const };
     });
-    await prisma.credential.create({
-      data: { professionalId: profile.id, kind: "licence", state: "Submitted" },
-    });
-    await prisma.payoutAccount.create({
-      data: { professionalId: profile.id, bankRefMasked: input.payoutRef, verified: false },
-    });
-    return { id: profile.id, verification: "Submitted" };
   }
 
   async verifyClinic(id: string): Promise<EntityRef | null> {
@@ -765,11 +779,21 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     if (!existing) return null;
     // CMP-01: professional marks completion; booking -> AwaitingCompletion. Stamp the
     // auto-accept deadline (CMP-03): 24h after the later of shift end and submission.
+    // CMP-01 is idempotent: a resubmitted completion is one completion, and must not
+    // re-stamp the auto-accept deadline (that would let a professional push the clinic's
+    // review window out indefinitely by resubmitting).
+    if (existing.state === "AwaitingCompletion") return this.getBooking(id);
     const autoAcceptAt = new Date(autoAcceptDueAt(existing.shift.endsAt.getTime(), Date.now()));
-    await prisma.booking.update({
-      where: { id },
-      data: { state: "AwaitingCompletion", autoAcceptAt },
+    // Through the machine (§6.2), not around it — and as a conditional update, so the
+    // precondition holds against a concurrent cancel rather than being a stale read.
+    const next = advanceBooking(existing.state as BookingState, "AwaitingCompletion");
+    const claimed = await prisma.booking.updateMany({
+      where: { id, state: existing.state },
+      data: { state: next, autoAcceptAt },
     });
+    if (claimed.count !== 1) {
+      throw new ConflictError("booking changed concurrently; completion not recorded");
+    }
     await prisma.attendanceEvent.create({
       data: { bookingId: id, kind: "Completed", actorId: existing.professionalId },
     });

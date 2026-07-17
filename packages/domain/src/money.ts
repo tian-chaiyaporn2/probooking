@@ -24,6 +24,14 @@ export function satang(value: number): Satang {
   return value as Satang;
 }
 
+/**
+ * Guard for amounts that cannot meaningfully be negative (compensation, payouts, refunds).
+ * `satang()` itself stays signed on purpose: reversals and adjustments need a direction.
+ */
+export function assertNonNegative(value: Satang, what: string): void {
+  if (value < 0) throw new RangeError(`${what} must not be negative, got ${value}`);
+}
+
 /** Convert whole/decimal THB to satang. `thb(1250.5)` -> 125050 satang. */
 export function thb(amount: number): Satang {
   const s = Math.round(amount * 100);
@@ -55,6 +63,14 @@ export const DEFAULT_SERVICE_FEE_BPS = 1200; // basis points (12.00%)
  * deterministic so reconciliation (PAY-11) is reproducible.
  */
 export function serviceFee(compensation: Satang, bps: number = DEFAULT_SERVICE_FEE_BPS): Satang {
+  // `satang()` deliberately permits negatives — reversals and adjustments are signed. But a
+  // fee on a negative compensation is not a thing, and an out-of-range bps is always a
+  // typo: `serviceFee(comp, 120_000)` (12% written as if it were percent×1000) silently
+  // returned 12x the compensation with nothing to catch it.
+  assertNonNegative(compensation, "compensation");
+  if (!Number.isFinite(bps) || bps < 0 || bps > 10_000) {
+    throw new RangeError(`Service fee bps must be between 0 and 10000 (100%), got ${bps}`);
+  }
   return satang(Math.round((compensation * bps) / 10_000));
 }
 
@@ -70,8 +86,12 @@ export function buildCheckout(
   compensation: Satang,
   opts: { bps?: number; tax?: Satang } = {},
 ): Checkout {
+  // A checkout is money someone is about to be charged; a negative one is a bug upstream,
+  // not a refund. `buildCheckout(satang(-100))` used to return a total of -112 quite happily.
+  assertNonNegative(compensation, "compensation");
   const fee = serviceFee(compensation, opts.bps ?? DEFAULT_SERVICE_FEE_BPS);
   const tax = opts.tax ?? satang(0);
+  assertNonNegative(tax, "tax");
   return {
     compensation,
     serviceFee: fee,

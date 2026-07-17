@@ -24,3 +24,17 @@ describe("state machines (§6.2)", () => {
     expect(() => advanceVerification("Draft", "Verified")).toThrow(IllegalTransitionError);
   });
 });
+
+describe("booking machine covers the real completion path (§6.2, CMP-01)", () => {
+  it("allows Confirmed -> AwaitingCompletion", () => {
+    // Nothing writes InProgress, so requiring it made the only real path illegal and both
+    // stores bypassed the machine to compensate.
+    expect(advanceBooking("Confirmed", "AwaitingCompletion")).toBe("AwaitingCompletion");
+  });
+
+  it("still refuses to skip completion entirely", () => {
+    expect(() => advanceBooking("Confirmed", "ServiceCompleted")).toThrow(IllegalTransitionError);
+    expect(() => advanceBooking("Cancelled", "AwaitingCompletion")).toThrow(IllegalTransitionError);
+    expect(() => advanceBooking("Archived", "Confirmed")).toThrow(IllegalTransitionError);
+  });
+});

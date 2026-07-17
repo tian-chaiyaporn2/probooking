@@ -90,3 +90,25 @@ describe("money (integer satang, LOC-02)", () => {
     ).toBe(true);
   });
 });
+
+describe("money constructors reject impossible amounts", () => {
+  it("refuses a negative checkout (it is a bug upstream, not a refund)", () => {
+    // buildCheckout(satang(-100)) used to return { total: -112 } quite happily.
+    expect(() => buildCheckout(satang(-100))).toThrow(RangeError);
+    expect(() => serviceFee(satang(-100))).toThrow(RangeError);
+    expect(() => buildCheckout(satang(1000), { tax: satang(-1) })).toThrow(RangeError);
+  });
+
+  it("refuses an out-of-range fee rate", () => {
+    // 12% mistyped as if bps were percent x 1000 silently charged 12x the compensation.
+    expect(() => serviceFee(satang(1_000_000), 120_000)).toThrow(RangeError);
+    expect(() => serviceFee(satang(1_000_000), -1)).toThrow(RangeError);
+    // The boundaries are legal: 0% and 100%.
+    expect(serviceFee(satang(1_000_000), 0)).toBe(0);
+    expect(serviceFee(satang(1_000_000), 10_000)).toBe(1_000_000);
+  });
+
+  it("keeps satang() itself signed — reversals and adjustments need a direction", () => {
+    expect(satang(-100)).toBe(-100);
+  });
+});

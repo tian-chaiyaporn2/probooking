@@ -172,6 +172,32 @@ describe.skipIf(!DB)("PrismaMarketplaceStore (integration)", () => {
     ).rejects.toThrow();
   });
 
+  it("CMP-01/03: resubmitting completion does not push the clinic's review window out", async () => {
+    const { shiftId, clinic, pro, offerId } = await seedAcceptedOffer();
+    await store.confirmBooking({
+      offerId,
+      shiftId,
+      clinicWorkspaceId: clinic.id,
+      professionalId: pro.id,
+      allocation: { compensation: 1_000_000, serviceFee: 120_000, tax: 0 },
+      captured: 1_120_000,
+      idempotencyKey: `collection:${offerId}`,
+    });
+    const first = await store.markCompletion(
+      (await prisma.booking.findUniqueOrThrow({ where: { offerId } })).id,
+    );
+    const bookingId = first!.id;
+    const deadline = await store.getAutoAcceptDueAt(bookingId);
+    expect(deadline).not.toBeNull();
+
+    // Resubmitting is one completion, not a new clock. If it re-stamped autoAcceptAt, a
+    // professional could defer auto-accept forever by resubmitting.
+    await new Promise((r) => setTimeout(r, 10));
+    await store.markCompletion(bookingId);
+    expect(await store.getAutoAcceptDueAt(bookingId)).toBe(deadline);
+    expect((await store.getBooking(bookingId))!.state).toBe("AwaitingCompletion");
+  });
+
   it("PAY-05/§6.4: the ledger and audit trail cannot be rewritten", async () => {
     // The append-only triggers are a database control; assert they hold for the client too,
     // not just in psql.

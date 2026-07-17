@@ -44,7 +44,7 @@ import type {
   CreateApprovalInput,
   ExecuteApprovalInput,
 } from "./marketplace.types.js";
-import { advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
+import { advanceBooking, advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
 import type { OfferState, VerificationState, RatingSummary, Role } from "@probook/domain";
 
@@ -95,6 +95,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly professionalByPhone = new Map<string, string>(); // phone -> professionalId
   private readonly membershipsByPhone = new Map<string, { workspaceId: string; role: Role }[]>();
   private readonly suspendedCredentials = new Set<string>();
+  // professionalId -> licence expiry (epoch ms), mirroring Prisma's Credential.validUntil.
+  // Absent = no expiry recorded, which Prisma treats as valid (`!licence?.validUntil`).
+  private readonly licenceValidUntil = new Map<string, number>();
   private readonly arrivals = new Set<string>(); // bookingIds with a recorded arrival (CAN-03)
   private readonly autoAcceptAt = new Map<string, number>(); // bookingId -> CMP-03 deadline
   private readonly approvals = new Map<string, ApprovalRequestRecord>(); // §6.4 dual control
@@ -183,10 +186,12 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return {
       clinicVerified: this.clinics.get(o.clinicWorkspaceId) === "Verified",
       professionalVerified: this.professionals.get(o.professionalId) === "Verified",
-      // VER-04: block a suspended licence at confirm. The in-memory store does not
-      // track licence expiry, so it treats an unsuspended licence as valid.
+      // VER-04: block a suspended OR expired licence at confirm. `licenceValid...` was
+      // hardcoded true here, so the expiry half of VER-04 was structurally untestable in
+      // this store — a bug letting an expired-licence professional book would pass every
+      // suite that runs against it.
       professionalNotSuspended: !this.suspendedCredentials.has(o.professionalId),
-      licenceValidThroughShiftEnd: true,
+      licenceValidThroughShiftEnd: this.licenceValidThrough(o.professionalId, shiftEnd),
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,
     };
@@ -500,7 +505,14 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async markCompletion(id: string): Promise<BookingDetail | null> {
     const detail = this.bookings.get(id);
     if (!detail) return null;
-    detail.state = "AwaitingCompletion";
+    // CMP-01 is idempotent: submitting completion twice is one completion, not an error.
+    // This used to be implicit — the store wrote the state directly, so a repeat was a
+    // harmless no-op. Routing through the machine made the second call illegal, which is
+    // the machine being right and the idempotency being unstated. State it.
+    if (detail.state === "AwaitingCompletion") return { ...detail };
+    // Through the machine, not around it: writing the state directly is what let the
+    // completion path drift out of §6.2's control entirely.
+    detail.state = advanceBooking(detail.state, "AwaitingCompletion");
     // Parity with the Prisma store: stamp the CMP-03 auto-accept deadline and record the
     // completion as attendance. Without the deadline, the auto-accept sweep had nothing to
     // select on in this store, so CMP-03 could not be exercised by the suites at all.
@@ -615,6 +627,18 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       .filter((m) => m.bookingId === bookingId)
       .sort((a, b) => a.createdAt - b.createdAt)
       .map((m) => ({ id: m.id, senderId: m.senderId, body: m.body, createdAt: m.createdAt }));
+  }
+
+  /** VER-04 parity with Prisma: no recorded expiry means valid; otherwise it must cover the shift. */
+  private licenceValidThrough(professionalId: string, shiftEnd: number): boolean {
+    const until = this.licenceValidUntil.get(professionalId);
+    return until === undefined || until >= shiftEnd;
+  }
+
+  /** Test/ops seam mirroring Prisma's Credential.validUntil, so VER-04 expiry is reachable. */
+  async setLicenceValidUntil(professionalId: string, validUntil: number | null): Promise<void> {
+    if (validUntil === null) this.licenceValidUntil.delete(professionalId);
+    else this.licenceValidUntil.set(professionalId, validUntil);
   }
 
   async getBookingContact(bookingId: string): Promise<BookingContact | null> {
