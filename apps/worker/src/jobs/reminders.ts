@@ -20,8 +20,8 @@ export interface ReminderSweepResult {
  *
  * Once-only is the database's job: the partial unique index `Notification_reminder_once`
  * on (event, refId) makes a duplicate impossible even with several workers sweeping at
- * once. A findFirst/create pair cannot do that — both instances read "none" before either
- * writes. The pre-filter below is only an optimisation; the index is the guarantee.
+ * once. The SQL anti-join below keeps already-sent rows out of the batch so they cannot
+ * starve unsent reminders once history exceeds BATCH.
  */
 const WINDOWS = [
   { event: "reminder_24h", lead: REMINDER_24H_BEFORE },
@@ -36,21 +36,27 @@ export async function reminderSweep(now: number): Promise<ReminderSweepResult> {
   let failed = 0;
 
   for (const w of WINDOWS) {
-    const due = await prisma.booking.findMany({
-      where: {
-        state: "Confirmed",
-        // Due once the lead time has passed; still worth sending while the shift is ahead.
-        shift: { startsAt: { gt: new Date(now), lte: new Date(now + w.lead) } },
-      },
-      select: { id: true, professionalId: true },
-      take: BATCH,
-    });
+    const windowEnd = new Date(now + w.lead);
+    const nowDate = new Date(now);
+    const due = await prisma.$queryRaw<{ id: string; professionalId: string }[]>`
+      SELECT b.id, b."professionalId"
+      FROM "Booking" b
+      INNER JOIN "Shift" s ON s.id = b."shiftId"
+      WHERE b.state = 'Confirmed'
+        AND s."startsAt" > ${nowDate}
+        AND s."startsAt" <= ${windowEnd}
+        AND NOT EXISTS (
+          SELECT 1 FROM "Notification" n
+          WHERE n.event = ${w.event}
+            AND n."refType" = 'Booking'
+            AND n."refId" = b.id
+        )
+      ORDER BY s."startsAt" ASC
+      LIMIT ${BATCH}
+    `;
     if (due.length === 0) continue;
 
-    const alreadySent = await sentFor(w.event, due.map((b) => b.id));
-
     for (const b of due) {
-      if (alreadySent.has(b.id)) continue;
       // Per-booking isolation: one bad row must not abort the rest of the batch, nor the
       // next window. Previously a single failure threw out of the whole sweep, so every
       // later booking was skipped that pass and the 3h window never ran at all.
@@ -72,18 +78,12 @@ export async function reminderSweep(now: number): Promise<ReminderSweepResult> {
         console.error(`[reminders] ${w.event} failed for booking ${b.id}:`, (e as Error).message);
       }
     }
+    if (due.length === BATCH) {
+      console.log(`[reminders] ${w.event} batch full (${BATCH}); more remain for the next pass`);
+    }
   }
 
   return { sent, skipped: await countMissed(now), failed };
-}
-
-/** Which of these bookings already have this reminder? One query, not one per booking. */
-async function sentFor(event: string, bookingIds: string[]): Promise<Set<string>> {
-  const rows = await prisma.notification.findMany({
-    where: { event, refType: "Booking", refId: { in: bookingIds } },
-    select: { refId: true },
-  });
-  return new Set(rows.map((r) => r.refId).filter((id): id is string => id !== null));
 }
 
 /**
@@ -91,15 +91,21 @@ async function sentFor(event: string, bookingIds: string[]): Promise<Set<string>
  * out. Counted so a drop is observable — a silent miss reads as "nothing was due".
  */
 async function countMissed(now: number): Promise<number> {
-  const started = await prisma.booking.findMany({
-    where: {
-      state: { in: ["Confirmed", "InProgress"] },
-      shift: { startsAt: { lte: new Date(now), gt: new Date(now - REMINDER_3H_BEFORE) } },
-    },
-    select: { id: true },
-    take: BATCH,
-  });
-  if (started.length === 0) return 0;
-  const sent = await sentFor("reminder_3h", started.map((b) => b.id));
-  return started.filter((b) => !sent.has(b.id)).length;
+  const windowStart = new Date(now - REMINDER_3H_BEFORE);
+  const nowDate = new Date(now);
+  const rows = await prisma.$queryRaw<{ n: bigint }[]>`
+    SELECT COUNT(*)::bigint AS n
+    FROM "Booking" b
+    INNER JOIN "Shift" s ON s.id = b."shiftId"
+    WHERE b.state IN ('Confirmed', 'InProgress')
+      AND s."startsAt" <= ${nowDate}
+      AND s."startsAt" > ${windowStart}
+      AND NOT EXISTS (
+        SELECT 1 FROM "Notification" n
+        WHERE n.event = 'reminder_3h'
+          AND n."refType" = 'Booking'
+          AND n."refId" = b.id
+      )
+  `;
+  return Number(rows[0]?.n ?? 0n);
 }

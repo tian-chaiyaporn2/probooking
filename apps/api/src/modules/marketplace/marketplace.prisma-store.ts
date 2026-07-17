@@ -267,11 +267,19 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     const professionalNotSuspended = licence?.state !== "Suspended";
     const licenceValidThroughShiftEnd =
       !licence?.validUntil || licence.validUntil.getTime() >= shiftEnd;
+    // Specialty evidence is optional: absent → nothing to invalidate; present → must cover
+    // the shift end and not be Suspended (same shape as licence).
+    const specialty = offer.professional.credentials.find((c) => c.kind === "specialty_evidence");
+    const specialtyValidThroughShiftEnd =
+      !specialty ||
+      (specialty.state !== "Suspended" &&
+        (!specialty.validUntil || specialty.validUntil.getTime() >= shiftEnd));
     return {
       clinicVerified: offer.shift.workspace.verification === "Verified",
       professionalVerified: offer.professional.verification === "Verified",
       professionalNotSuspended,
       licenceValidThroughShiftEnd,
+      specialtyValidThroughShiftEnd,
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,
     };

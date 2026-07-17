@@ -1,19 +1,17 @@
 // Thin client for the ProBooking API. Base URL is inlined at build for the browser.
+import { formatThb as formatThbDomain } from "@probook/domain";
+
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
-// Bearer token for internal (ops/finance) dashboard calls. The booking flow does NOT use
-// this: it acts as two different parties (a clinic and a professional) within one page, so
-// a single module-global token would silently attach the wrong identity to half the calls.
-// Those callers pass their token explicitly instead.
-let authToken: string | null = null;
-export const setAuthToken = (token: string | null) => {
-  authToken = token;
-};
+/**
+ * Re-export domain money formatting so UI and API share one satang→THB rule (LOC-02).
+ * Prefer this over a local float division that can drift from `packages/domain`.
+ */
+export const formatThb = (s: number) => formatThbDomain(s);
 
 function authHeaders(base: Record<string, string> = {}, token?: string): Record<string, string> {
-  const t = token ?? authToken;
-  return t ? { ...base, authorization: `Bearer ${t}` } : base;
+  return token ? { ...base, authorization: `Bearer ${token}` } : base;
 }
 
 /**
@@ -137,9 +135,10 @@ export const registerProfessional = (input: {
   payoutRef: string;
 }) => post<Registered>("/professionals", input);
 
-export const verifyClinic = (id: string) => post<Registered>(`/ops/clinics/${id}/verify`);
-export const verifyProfessional = (id: string) =>
-  post<Registered>(`/ops/professionals/${id}/verify`);
+export const verifyClinic = (id: string, token: string) =>
+  post<Registered>(`/ops/clinics/${id}/verify`, undefined, token);
+export const verifyProfessional = (id: string, token: string) =>
+  post<Registered>(`/ops/professionals/${id}/verify`, undefined, token);
 
 // Each action below is taken BY someone: the caller passes the token of the party acting.
 // The API derives authority from that token, so passing the wrong one is a 403 rather than
@@ -233,8 +232,9 @@ export interface PendingVerification {
   name: string;
 }
 
-export const getOpsCases = () => get<{ cases: CaseSummary[] }>("/ops/cases");
-export const getOpsPending = () => get<{ pending: PendingVerification[] }>("/ops/pending");
+export const getOpsCases = (token: string) => get<{ cases: CaseSummary[] }>("/ops/cases", token);
+export const getOpsPending = (token: string) =>
+  get<{ pending: PendingVerification[] }>("/ops/pending", token);
 
 // ----- Finance -----
 export interface ReconciliationRow {
@@ -252,7 +252,8 @@ export interface Reconciliation {
   summary: { count: number; captured: number; payouts: number; refunds: number; exceptions: number };
 }
 
-export const getReconciliation = () => get<Reconciliation>("/finance/reconciliation");
+export const getReconciliation = (token: string) =>
+  get<Reconciliation>("/finance/reconciliation", token);
 
 // ----- Reporting & exports (REP-02/03) -----
 export interface MarketplaceMetrics {
@@ -270,17 +271,16 @@ export interface MarketplaceMetrics {
   money: { captured: number; paidOut: number; refunded: number; reconciliationExceptions: number };
 }
 
-export const getMetrics = () => get<MarketplaceMetrics>("/ops/metrics");
+export const getMetrics = (token: string) => get<MarketplaceMetrics>("/ops/metrics", token);
 
 /** REP-02: fetch the Finance CSV export as text (Authorization header required). */
-export async function fetchFinanceExport(): Promise<string> {
-  const res = await fetch(`${API_BASE}/finance/export`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+export async function fetchFinanceExport(token: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/finance/export`, {
+    headers: authHeaders({}, token),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw await errorFrom(res);
   return res.text();
 }
-export const resolveHold = (bookingId: string) =>
-  post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`);
-
-/** Format integer satang as THB, e.g. 1_120_000 -> "฿11,200.00". */
-export const formatThb = (s: number) =>
-  `฿${(s / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const resolveHold = (bookingId: string, token: string) =>
+  post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`, undefined, token);

@@ -89,6 +89,9 @@ jobs:
       - name: Unit tests (domain)
         run: pnpm --filter @probook/domain test
 
+      - name: Unit tests (worker)
+        run: pnpm --filter @probook/worker test
+
       - name: Integration tests (Prisma store)
         # Assert the invariants that exist only in Postgres — transaction atomicity and the
         # unique constraints. They self-skip without DATABASE_URL, so the memory leg is a

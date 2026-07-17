@@ -32,6 +32,11 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // Behind a reverse proxy / tunnel, `req.ip` is only trustworthy when Express honours
+  // X-Forwarded-For. Without this, every caller shares one throttle key (or spoofs freely
+  // if the proxy is misconfigured). One hop is enough for our tunnel / single LB shape.
+  app.getHttpAdapter().getInstance().set("trust proxy", 1);
+
   // §7.3 security headers (HSTS, X-Content-Type-Options, Referrer-Policy, …). None were
   // set on a service handling medical credentials and money. `contentSecurityPolicy` is
   // left off: this process serves JSON only — the web app is a separate static origin, and

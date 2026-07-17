@@ -127,3 +127,11 @@ export function conserves(c: Conservation): boolean {
   );
   return c.captured === outflow;
 }
+
+/** Format integer satang as THB for UI, e.g. 1_120_000 -> "฿11,200.00". */
+export function formatThb(s: Satang | number): string {
+  return `฿${(Number(s) / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}

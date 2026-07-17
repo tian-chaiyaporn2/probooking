@@ -204,6 +204,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       // suite that runs against it.
       professionalNotSuspended: !this.suspendedCredentials.has(o.professionalId),
       licenceValidThroughShiftEnd: this.licenceValidThrough(o.professionalId, shiftEnd),
+      // Memory store has no specialty_evidence seam yet — specialty gate stays permissive
+      // here (Prisma path reads the credential when present).
+      specialtyValidThroughShiftEnd: true,
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,
     };

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getReconciliation,
-  setAuthToken,
   fetchFinanceExport,
   formatThb,
   type Reconciliation,
@@ -27,9 +26,9 @@ export default function FinancePage() {
   const [token, setToken] = useState<string | null>(null);
   const toast = useToast();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (auth: string) => {
     try {
-      setData(await getReconciliation());
+      setData(await getReconciliation(auth));
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
@@ -38,15 +37,13 @@ export default function FinancePage() {
   }, [toast]);
 
   useEffect(() => {
-    if (token) {
-      setAuthToken(token);
-      void load();
-    }
+    if (token) void load(token);
   }, [token, load]);
 
   async function exportCsv() {
+    if (!token) return;
     try {
-      const csv = await fetchFinanceExport();
+      const csv = await fetchFinanceExport(token);
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;
@@ -100,7 +97,7 @@ export default function FinancePage() {
         <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
           <h1 style={{ margin: 0 }}>{th.finance.title}</h1>
           <div className="actions">
-            <Button data-testid="refresh" onClick={() => void load()} icon={<RefreshIcon />}>
+            <Button data-testid="refresh" onClick={() => void load(token)} icon={<RefreshIcon />}>
               {th.common.refresh}
             </Button>
             <Button data-testid="export-csv" variant="primary" onClick={() => void exportCsv()} icon={<DownloadIcon />}>

@@ -72,5 +72,10 @@ export function validateBody<T>(body: unknown, spec: Record<string, FieldSpec>):
   }
 
   if (errors.length) throw new BadRequestException(errors.join("; "));
-  return b as T;
+  // Strip unknown keys so mass-assignment cannot slip extra fields into typed DTOs.
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(spec)) {
+    if (b[key] !== undefined) out[key] = b[key];
+  }
+  return out as T;
 }

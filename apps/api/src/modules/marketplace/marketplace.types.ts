@@ -111,6 +111,7 @@ export interface OfferEligibility {
   professionalVerified: boolean;
   professionalNotSuspended: boolean; // VER-04: licence credential not suspended by Ops
   licenceValidThroughShiftEnd: boolean; // VER-04: licence not expired before shift ends
+  specialtyValidThroughShiftEnd: boolean; // specialty_evidence credential, if any
   insuranceRequired: boolean; // VER-05: does the shift require insurance?
   insuranceValidThroughShiftEnd: boolean;
 }

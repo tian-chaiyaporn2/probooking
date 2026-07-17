@@ -8,7 +8,6 @@ import {
   verifyClinic,
   verifyProfessional,
   resolveHold,
-  setAuthToken,
   type CaseSummary,
   type PendingVerification,
   type MarketplaceMetrics,
@@ -43,9 +42,13 @@ export default function OpsPage() {
   const [token, setToken] = useState<string | null>(null);
   const toast = useToast();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (auth: string) => {
     try {
-      const [p, c, m] = await Promise.all([getOpsPending(), getOpsCases(), getMetrics()]);
+      const [p, c, m] = await Promise.all([
+        getOpsPending(auth),
+        getOpsCases(auth),
+        getMetrics(auth),
+      ]);
       setPending(p.pending);
       setCases(c.cases);
       setMetrics(m);
@@ -56,12 +59,10 @@ export default function OpsPage() {
     }
   }, [toast]);
 
-  // Authority now comes from a real staff sign-in, not a token the page minted for itself.
+  // Authority comes from a real staff sign-in; token is held in page state and passed
+  // explicitly — never a module-global that Flow/Finance could overwrite mid-navigation.
   useEffect(() => {
-    if (token) {
-      setAuthToken(token);
-      void load();
-    }
+    if (token) void load(token);
   }, [token, load]);
 
   if (!token) {
@@ -76,9 +77,9 @@ export default function OpsPage() {
   async function verify(kind: "clinic" | "professional", id: string) {
     setBusy(true);
     try {
-      if (kind === "clinic") await verifyClinic(id);
-      else await verifyProfessional(id);
-      await load();
+      if (kind === "clinic") await verifyClinic(id, token);
+      else await verifyProfessional(id, token);
+      await load(token);
       toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
@@ -90,8 +91,8 @@ export default function OpsPage() {
   async function resolve(bookingId: string) {
     setBusy(true);
     try {
-      await resolveHold(bookingId);
-      await load();
+      await resolveHold(bookingId, token);
+      await load(token);
       toast.success("ปลดการระงับแล้ว");
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
@@ -106,7 +107,7 @@ export default function OpsPage() {
       <main className="page" style={{ maxWidth: 960 }}>
         <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
           <h1 style={{ margin: 0 }}>{th.ops.title}</h1>
-          <Button data-testid="refresh" onClick={() => void load()} disabled={busy} icon={<RefreshIcon />}>
+          <Button data-testid="refresh" onClick={() => void load(token)} disabled={busy} icon={<RefreshIcon />}>
             {th.common.refresh}
           </Button>
         </div>

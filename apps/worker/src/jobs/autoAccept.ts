@@ -33,6 +33,8 @@ export async function autoAcceptSweep(now: number): Promise<SweepResult> {
       heldAt: null, // VER-06: never auto-accept a held booking
     },
     select: { id: true },
+    // Oldest-due first so a recurring failure on a newer row cannot starve earlier payouts.
+    orderBy: { autoAcceptAt: "asc" },
     // Bound the pass. The candidate set only shrinks as bookings are accepted, so a backlog
     // drains across passes instead of pulling every row into memory at once.
     take: BATCH,
