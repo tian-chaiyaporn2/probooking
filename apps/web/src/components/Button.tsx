@@ -46,7 +46,7 @@ export function Button({
       {...rest}
     >
       {busy ? <span className="btn__spinner" aria-hidden /> : icon}
-      <span>{children}</span>
+      {children}
     </button>
   );
 }
@@ -71,7 +71,7 @@ export function ButtonLink({
   return (
     <Link className={buttonClassName({ variant, size, className })} {...rest}>
       {icon}
-      <span>{children}</span>
+      {children}
     </Link>
   );
 }
@@ -93,7 +93,7 @@ export function ButtonAnchor({
   return (
     <a className={buttonClassName({ variant, size, className })} {...rest}>
       {icon}
-      <span>{children}</span>
+      {children}
     </a>
   );
 }

@@ -19,14 +19,13 @@ export function Skeleton({
 }: {
   variant?: SkeletonVariant;
   className?: string;
-} & HTMLAttributes<HTMLSpanElement>) {
-  return (
-    <span
-      className={[VARIANT_CLASS[variant], className].filter(Boolean).join(" ")}
-      aria-hidden
-      {...rest}
-    />
-  );
+} & HTMLAttributes<HTMLElement>) {
+  const cls = [VARIANT_CLASS[variant], className].filter(Boolean).join(" ");
+  // Stat tiles are grid items — use a div so layout matches real `.stat` cards.
+  if (variant === "stat") {
+    return <div className={cls} aria-hidden {...rest} />;
+  }
+  return <span className={cls} aria-hidden {...rest} />;
 }
 
 /** Convenience row of stat-tile skeletons for dashboard grids. */

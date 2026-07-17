@@ -30,7 +30,7 @@ Domain helpers: `badgeToneForKind("clinic" | "professional" | "credential_hold")
 - `Field` + `Input` — forms
 - `EmptyState`, `Skeleton` / `StatSkeletonGrid` — loading & empty
 - `DataTable` — tabular data; `KeyValueTable` — checkout/summary pairs
-- `Badge`, `Stat`, `Toast`
+- `Badge` (`tone` + `badgeToneForKind`), `Stat`, `Toast`
 
 ## Typography (Thai-first)
 

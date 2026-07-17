@@ -13,7 +13,7 @@ const LINKS = [
   { href: "/flow", label: th.nav.flow },
 ] as const;
 
-/** Keep in sync with max-width: 959px drawer breakpoint in globals.css. */
+/** Keep in sync with max-width: 959px drawer breakpoint in pages.css. */
 const DRAWER_MQ = "(min-width: 960px)";
 
 /**

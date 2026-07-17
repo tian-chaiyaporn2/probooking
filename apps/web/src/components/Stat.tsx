@@ -15,15 +15,10 @@ export function Stat({
   hint?: string;
   icon?: ReactNode;
   testid?: string;
-  /** Prefer success | danger; default is neutral. */
-  tone?: "default" | "neutral" | "success" | "danger" | "warning";
+  tone?: "default" | "success" | "danger";
 }): ReactNode {
   const toneClass =
-    tone === "success"
-      ? " stat--success"
-      : tone === "danger" || tone === "warning"
-        ? " stat--danger"
-        : "";
+    tone === "success" ? " stat--success" : tone === "danger" ? " stat--danger" : "";
   return (
     <div className={`stat${toneClass}`}>
       <div className="stat__top">

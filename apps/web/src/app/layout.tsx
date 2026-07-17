@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* Apply the saved theme before paint to avoid a flash of the wrong theme. */}
         <script
           dangerouslySetInnerHTML={{
-            // Resolve theme before paint so CSS only needs [data-theme], not duplicated media queries.
+            // Resolve theme before paint. CSS prefers [data-theme]; media queries cover no-JS.
             __html: `try{var t=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=(t==='dark'||t==='light')?t:(d?'dark':'light');}catch(e){}`,
           }}
         />

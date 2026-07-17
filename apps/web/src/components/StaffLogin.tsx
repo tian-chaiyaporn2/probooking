@@ -110,7 +110,6 @@ export function StaffLogin({
                 id="staff-phone"
                 name="phone"
                 ref={phoneRef}
-                aria-label={th.staffLogin.phoneLabel}
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
                 inputMode="tel"
@@ -139,7 +138,6 @@ export function StaffLogin({
                 name="otp"
                 ref={codeRef}
                 otp
-                aria-label={th.staffLogin.codeLabel}
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
                 inputMode="numeric"

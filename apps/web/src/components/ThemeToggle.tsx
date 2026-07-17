@@ -50,6 +50,8 @@ export function ThemeToggle() {
   }, []);
 
   function toggle() {
+    // Ignore clicks before mount sync — otherwise null would always flip to "dark".
+    if (theme === null) return;
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
     applyTheme(next);
@@ -66,6 +68,7 @@ export function ThemeToggle() {
       type="button"
       className="btn btn--ghost btn--icon"
       onClick={toggle}
+      disabled={theme === null}
       aria-label={isDark ? th.a11y.switchToLight : th.a11y.switchToDark}
       aria-pressed={isDark}
       title={isDark ? th.a11y.lightMode : th.a11y.darkMode}

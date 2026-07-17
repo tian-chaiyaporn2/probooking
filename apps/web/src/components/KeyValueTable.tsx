@@ -22,7 +22,7 @@ export function KeyValueTable({
       <caption className="sr-only">{caption}</caption>
       <tbody>
         {rows.map((row, i) => (
-          <tr key={i} className={row.total ? `${className}__total` : undefined}>
+          <tr key={i} className={row.total ? "checkout__total" : undefined}>
             <th scope="row">{row.label}</th>
             <td data-testid={row.valueTestId}>{row.value}</td>
           </tr>

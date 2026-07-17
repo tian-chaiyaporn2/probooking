@@ -14,9 +14,10 @@ export function SectionBlock({
   id?: string;
   "aria-labelledby"?: string;
 }) {
-  const headingId = id ? `${id}-heading` : undefined;
+  const headingId = id && title != null ? `${id}-heading` : undefined;
+  const labelledBy = ariaLabelledby ?? headingId;
   return (
-    <section className="section-block" id={id} aria-labelledby={ariaLabelledby ?? headingId}>
+    <section className="section-block" id={id} aria-labelledby={labelledBy}>
       {title != null && (
         <div className="section-block__head">
           <h2 id={headingId}>{title}</h2>
