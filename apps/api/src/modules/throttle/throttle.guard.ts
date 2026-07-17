@@ -20,7 +20,7 @@ import type { Request } from "express";
  * moving parts beats debugging module resolution for ~40 lines of counting.
  *
  * Counters are in-process — correct for one instance, per-instance behind a load balancer,
- * exactly like OtpService's. `REDIS_URL` is already in the env for when that matters; the
+ * exactly like OtpService's. `REDIS_URL` is reserved in `.env.example` for when that matters; the
  * limits here are a blunt DoS/brute-force brake, not a quota system.
  */
 export interface ThrottleLimit {

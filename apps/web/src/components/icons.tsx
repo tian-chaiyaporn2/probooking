@@ -90,12 +90,6 @@ export const UsersIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-export const BoltIcon = (p: SVGProps<SVGSVGElement>) => (
-  <svg {...base(p)}>
-    <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
-  </svg>
-);
-
 export const ClinicIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M10 10h4M12 8v4" />

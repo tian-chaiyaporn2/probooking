@@ -40,13 +40,11 @@ export const th = {
     run: "เริ่มขั้นตอนการจอง",
     running: "กำลังเดินขั้นตอน…",
     progress: (done: number, total: number) => `ขั้นตอน ${done} จาก ${total}`,
-    steps: "ขั้นตอน",
   },
   common: {
     refresh: "รีเฟรช",
     none: "ไม่มี",
     emptyTable: "ยังไม่มีรายการ",
-    error: "ข้อผิดพลาด",
     loading: "กำลังโหลด…",
   },
   nav: {

@@ -532,3 +532,52 @@ test("§6.4: a refund needs two different authorized people (dual-control guard)
   // Replaying the approval does not refund twice.
   expect((await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, { headers: fin2Auth })).status()).toBe(409);
 });
+
+test("§7.3: logout revokes a token, and revoke-sessions kills a subject's tokens", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const j = async (r: Awaited<ReturnType<typeof page.request.get>>) => (await r.json()) as any;
+
+  // A finance staff token can read the reconciliation.
+  const finAuth = await loginAs(page.request, api, "+66900000010");
+  expect((await page.request.get(`${api}/finance/reconciliation`, { headers: finAuth })).ok()).toBe(true);
+
+  // After logout, the very same token is refused (401), even though it has not expired.
+  expect((await page.request.post(`${api}/auth/logout`, { headers: finAuth })).ok()).toBe(true);
+  expect((await page.request.get(`${api}/finance/reconciliation`, { headers: finAuth })).status()).toBe(401);
+
+  // Admin can log a subject out everywhere. A fresh finance login, then admin revokes it.
+  const finAuth2 = await loginAs(page.request, api, "+66900000011");
+  expect((await page.request.get(`${api}/finance/reconciliation`, { headers: finAuth2 })).ok()).toBe(true);
+  const admAuth = await loginAs(page.request, api, "+66900000012");
+  expect(
+    (await page.request.post(`${api}/auth/sessions/revoke`, {
+      data: { subject: "+66900000011" },
+      headers: admAuth,
+    })).ok(),
+  ).toBe(true);
+  // The finance token issued before the revoke is now rejected.
+  expect((await page.request.get(`${api}/finance/reconciliation`, { headers: finAuth2 })).status()).toBe(401);
+  // A non-admin cannot revoke sessions.
+  const finAuth3 = await loginAs(page.request, api, "+66900000013");
+  expect(
+    (await page.request.post(`${api}/auth/sessions/revoke`, {
+      data: { subject: "+66900000010" },
+      headers: finAuth3,
+    })).status(),
+  ).toBe(403);
+
+  // §3: suspending a staff phone denies their existing token immediately AND drops them to
+  // an ordinary user on re-login — no restart. (Uses +66900000014, not reused elsewhere.)
+  const victimAuth = await loginAs(page.request, api, "+66900000014");
+  expect((await page.request.get(`${api}/finance/reconciliation`, { headers: victimAuth })).ok()).toBe(true);
+  expect(
+    (await page.request.post(`${api}/auth/staff/suspend`, {
+      data: { phone: "+66900000014" },
+      headers: admAuth,
+    })).ok(),
+  ).toBe(true);
+  // The suspended staff's existing token is refused on its next request. (That a re-login
+  // then resolves to an ordinary user is asserted in the StaffDirectory unit test, which
+  // does not fight the per-phone OTP interval.)
+  expect((await page.request.get(`${api}/finance/reconciliation`, { headers: victimAuth })).status()).toBe(401);
+});

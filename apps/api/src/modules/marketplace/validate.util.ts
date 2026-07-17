@@ -6,7 +6,7 @@ import { BadRequestException } from "@nestjs/common";
  * a 400 with the offending fields — turning untrusted bodies into predictable errors
  * rather than downstream 500s or silently-wrong domain calls.
  */
-export interface FieldSpec {
+interface FieldSpec {
   /** `stringArray`: an array of strings — without it, arrays reached Prisma unvalidated. */
   type: "string" | "number" | "boolean" | "stringArray";
   optional?: boolean;

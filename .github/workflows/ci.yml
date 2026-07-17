@@ -1,7 +1,6 @@
 name: CI
 
-# Nothing gated the deploy before this: `pnpm run deploy:pages` force-pushes to gh-pages,
-# so a broken build could ship without a single test having run.
+# Deploy is gated on verify: a broken build must not ship to gh-pages.
 on:
   push:
     branches: [master]
@@ -112,3 +111,44 @@ jobs:
           name: playwright-report-${{ matrix.store }}
           path: playwright-report/
           retention-days: 7
+
+  # Static frontend → gh-pages whenever master lands a green verify.
+  # PRs never deploy; workflow_dispatch on master does (manual re-ship).
+  deploy-pages:
+    needs: verify
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # domain is consumed as a built artifact (see ADR 0002); web transpilePackages
+      # still needs dist/ present because package exports point there.
+      - name: Build domain package
+        run: pnpm --filter @probook/domain build
+
+      - name: Build static export for GitHub Pages
+        run: NEXT_PUBLIC_BASE_PATH=/probooking pnpm --filter @probook/web build
+
+      - name: Add .nojekyll
+        run: touch apps/web/out/.nojekyll
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./apps/web/out
+          force_orphan: true
+          commit_message: Deploy web from ${{ github.sha }}
