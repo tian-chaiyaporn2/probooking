@@ -1,7 +1,7 @@
 import { Given, When, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
-import { conserves, satang, withinAllocation, dualControlSatisfied } from "@probook/domain";
-import { newStore, seedConfirmedBooking } from "../support/store.js";
+import { conserves, satang, withinAllocation, dualControlSatisfied, buildCheckout } from "@probook/domain";
+import { newStore, seedConfirmedBooking, completeAndPay } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
 /** Areas 6 & 11 (§9.4-6/11): callback idempotency, conservation (PAY-07/08), payout rules (§3). */
@@ -74,6 +74,66 @@ Then(
     assert.equal(conserves({ ...base, protectedRemainder: satang(protectedRemainder + 1) }), false);
   },
 );
+
+Given("a confirmed booking with recorded collection", async function (this: ProBookingWorld) {
+  this.state.store = newStore();
+  this.state.seed = await seedConfirmedBooking(this.state.store);
+});
+
+When("the professional is paid the scheduled compensation", async function (this: ProBookingWorld) {
+  await completeAndPay(this.state.store, this.state.seed);
+});
+
+Then(
+  "the booking's captured funds equal compensation plus fee plus tax with zero remainder",
+  async function (this: ProBookingWorld) {
+    const booking = await this.state.store.getBooking(this.state.seed.bookingId);
+    assert.ok(booking);
+    assert.equal(booking.payoutState, "Paid");
+    // After full compensation payout, every satang is allocated to payout/fee/tax — remainder is 0.
+    assert.equal(
+      conserves({
+        captured: satang(booking.captured),
+        protectedRemainder: satang(0),
+        payout: satang(booking.compensation),
+        fee: satang(booking.serviceFee),
+        tax: satang(booking.tax),
+        refunds: satang(0),
+        providerCosts: satang(0),
+        adjustments: satang(0),
+      }),
+      true,
+    );
+    assert.equal(booking.captured, booking.compensation + booking.serviceFee + booking.tax);
+  },
+);
+
+Then("reconciliation reports no conservation exceptions", async function (this: ProBookingWorld) {
+  const report = await this.state.store.reconcile();
+  assert.equal(report.summary.exceptions, 0);
+  const row = report.rows.find((r: { bookingId: string }) => r.bookingId === this.state.seed.bookingId);
+  assert.ok(row);
+  assert.equal(row.conserved, true);
+});
+
+Given("compensation of {int} satang", function (this: ProBookingWorld, amount: number) {
+  this.state.compensation = satang(amount);
+});
+
+Then(
+  "checkout yields service fee {int} and total {int}",
+  function (this: ProBookingWorld, fee: number, total: number) {
+    const checkout = buildCheckout(this.state.compensation);
+    assert.equal(checkout.serviceFee, satang(fee));
+    assert.equal(checkout.total, satang(total));
+    assert.equal(checkout.compensation, this.state.compensation);
+  },
+);
+
+Then("non-integer satang amounts are rejected", function () {
+  assert.throws(() => satang(1.5), RangeError);
+  assert.throws(() => satang(Number.MAX_SAFE_INTEGER + 1), RangeError);
+});
 
 // ----- Area 11: payout idempotency (real store), cap + separation of duties (real domain) -----
 Given("a payout already marked Paid", async function (this: ProBookingWorld) {
@@ -174,3 +234,26 @@ Then("it cannot be executed by the same user alone", async function (this: ProBo
   assert.equal(after?.state, "Executed");
   assert.equal(after?.executorId, "finance-user-2");
 });
+
+Given("a seeded confirmed booking for history", async function (this: ProBookingWorld) {
+  this.state.store = newStore();
+  this.state.seed = await seedConfirmedBooking(this.state.store);
+});
+
+When("listing booking history for the clinic", async function (this: ProBookingWorld) {
+  this.state.history = await this.state.store.listPartyBookings("clinic", this.state.seed.clinicId);
+});
+
+Then(
+  "the history row matches the booking's compensation fee tax and total",
+  async function (this: ProBookingWorld) {
+    assert.equal(this.state.history.length, 1);
+    const row = this.state.history[0];
+    const booking = await this.state.store.getBooking(this.state.seed.bookingId);
+    assert.equal(row.bookingId, this.state.seed.bookingId);
+    assert.equal(row.compensation, booking.compensation);
+    assert.equal(row.serviceFee, booking.serviceFee);
+    assert.equal(row.tax, booking.tax);
+    assert.equal(row.total, booking.captured);
+  },
+);

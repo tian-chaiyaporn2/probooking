@@ -11,6 +11,18 @@ Feature: Reviews, cold-start safeguards, and related-party exclusion
     Given a professional with two published reviews
     Then no aggregate rating or rating-based sorting is shown
 
+  Scenario: Rating appears only after three published store reviews
+    Given a professional with three completed bookings and published review pairs
+    When the subject rating is requested
+    Then an aggregate rating is returned
+    And with only two published scores it remains hidden
+
   Scenario: Related-party transactions create no public reputation
     Given a related-party booking
     Then it creates no public reputation
+
+  @wip
+  Scenario: Related-party self-dealing and test bookings are excluded from store ratings
+    Given a related-party or self-dealing completed booking with published reviews
+    When the subject rating is requested
+    Then those scores do not count toward the public aggregate

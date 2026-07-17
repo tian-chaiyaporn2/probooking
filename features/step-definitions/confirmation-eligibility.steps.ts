@@ -1,10 +1,17 @@
 import { Given, When, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
-import { checkConfirmationEligibility, type ConfirmationContext } from "@probook/domain";
+import {
+  checkConfirmationEligibility,
+  effectiveOfferExpiry,
+  OFFER_TIMERS,
+  type ConfirmationContext,
+} from "@probook/domain";
 import { newStore, seedConfirmedBooking } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
 /** Areas 5 & 13 (§9.4-5/13): confirmation eligibility (§6.3) and post-confirmation holds (VER-04..06). */
+
+const HOUR = 60 * 60 * 1000;
 
 /** A fully-eligible confirmation context; scenarios flip exactly one field. */
 const baseCtx = (): ConfirmationContext => ({
@@ -39,6 +46,33 @@ Then("no booking is created", function (this: ProBookingWorld) {
 
 Then("the payment enters refund or payment-exception handling", function (this: ProBookingWorld) {
   assert.ok(this.state.result.failures.includes("offer_expired"));
+});
+
+// ----- Area 5: OFF-03 effective offer expiry timers -----
+Given("an urgent offer sent at a known time before a near shift start", function (this: ProBookingWorld) {
+  this.state.sentAt = 1_700_000_000_000;
+  this.state.shiftStart = this.state.sentAt + HOUR; // shift starts before the 2h urgent timer
+  this.state.urgency = "urgent";
+});
+
+Then(
+  "the effective offer expiry is the earlier of the 2-hour timer and shift start",
+  function (this: ProBookingWorld) {
+    const expiry = effectiveOfferExpiry(this.state.sentAt, this.state.shiftStart, "urgent");
+    assert.equal(expiry, this.state.shiftStart);
+    assert.ok(expiry < this.state.sentAt + OFFER_TIMERS.urgentExpiry);
+  },
+);
+
+Given("a standard offer sent at a known time well before shift start", function (this: ProBookingWorld) {
+  this.state.sentAt = 1_700_000_000_000;
+  this.state.shiftStart = this.state.sentAt + 48 * HOUR;
+  this.state.urgency = "standard";
+});
+
+Then("the effective offer expiry is sent-at plus 12 hours", function (this: ProBookingWorld) {
+  const expiry = effectiveOfferExpiry(this.state.sentAt, this.state.shiftStart, "standard");
+  assert.equal(expiry, this.state.sentAt + OFFER_TIMERS.standardExpiry);
 });
 
 // ----- Area 13: credential / insurance failure after confirmation (real store hold overlay) -----

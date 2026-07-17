@@ -1,6 +1,6 @@
 import { Given, When, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
-import { checkConfirmationEligibility, conserves, satang, buildCheckout, type ConfirmationContext } from "@probook/domain";
+import { checkConfirmationEligibility, conserves, satang, type ConfirmationContext } from "@probook/domain";
 import { newStore, seedConfirmedBooking } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
@@ -52,20 +52,37 @@ Then("a booking is created", async function (this: ProBookingWorld) {
   assert.equal(booking.state, "Confirmed");
 });
 
-Then("captured funds conserve", function (this: ProBookingWorld) {
-  const checkout = buildCheckout(satang(this.state.seed.compensation));
+Then("captured funds conserve from the stored booking amounts", async function (this: ProBookingWorld) {
+  // Read the store's recorded booking — not a re-derived checkout identity.
+  const booking = await this.state.store.getBooking(this.state.seed.bookingId);
+  assert.ok(booking);
+  assert.equal(booking.captured, this.state.seed.captured);
   assert.equal(
     conserves({
-      captured: checkout.total,
-      protectedRemainder: checkout.compensation,
+      captured: satang(booking.captured),
+      protectedRemainder: satang(booking.compensation),
       payout: satang(0),
-      fee: checkout.serviceFee,
-      tax: checkout.tax,
+      fee: satang(booking.serviceFee),
+      tax: satang(booking.tax),
       refunds: satang(0),
       providerCosts: satang(0),
       adjustments: satang(0),
     }),
     true,
+  );
+  // And conserves() must reject a tampered remainder (guards against a vacuous pass).
+  assert.equal(
+    conserves({
+      captured: satang(booking.captured),
+      protectedRemainder: satang(booking.compensation + 1),
+      payout: satang(0),
+      fee: satang(booking.serviceFee),
+      tax: satang(booking.tax),
+      refunds: satang(0),
+      providerCosts: satang(0),
+      adjustments: satang(0),
+    }),
+    false,
   );
 });
 

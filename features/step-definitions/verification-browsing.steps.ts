@@ -14,12 +14,15 @@ Given("an unverified user", async function (this: ProBookingWorld) {
   this.state.clinicId = clinic.id;
 });
 
-When("they view public content", function (this: ProBookingWorld) {
-  this.state.browsed = true; // browsing restricted public content is open to everyone
+When("they view public content", async function (this: ProBookingWorld) {
+  // Browsing is a real public read — open shifts and professional search — not a step-local flag.
+  this.state.openShifts = await this.state.store.listOpenShifts();
+  this.state.searchResults = await this.state.store.searchProfessionals({});
 });
 
 Then("they can browse restricted public content", function (this: ProBookingWorld) {
-  assert.equal(this.state.browsed, true);
+  assert.ok(Array.isArray(this.state.openShifts));
+  assert.ok(Array.isArray(this.state.searchResults));
 });
 
 Then("they cannot apply, invite, offer, or pay", async function (this: ProBookingWorld) {
@@ -41,7 +44,7 @@ When("a clinic views the public profile", async function (this: ProBookingWorld)
   this.state.profile = await this.state.store.getProfessionalProfile(this.state.professionalId);
 });
 
-Then("verified facts are labelled with a last-checked date", function (this: ProBookingWorld) {
+Then("verified facts are labelled as platform-verified", function (this: ProBookingWorld) {
   // The profile's `verified` section carries platform-confirmed facts (VER-03).
   assert.equal(this.state.profile.verified.identityVerified, true);
   assert.equal(this.state.profile.verified.licence.state, "Verified");
