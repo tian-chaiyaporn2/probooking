@@ -40,7 +40,10 @@ export default defineConfig({
         // (ops dashboard).
         STAFF_PHONES:
           "+66900000001:finance,+66900000002:finance,+66900000003:administrator," +
-          "+66900000004:finance,+66900000005:finance,+66900000008:operations,+66900000009:operations",
+          "+66900000004:finance,+66900000005:finance,+66900000008:operations,+66900000009:operations," +
+          // dedicated to the token-revocation test so its many logins do not collide with
+          // other tests on the per-phone OTP interval:
+          "+66900000010:finance,+66900000011:finance,+66900000012:administrator,+66900000013:finance,+66900000014:finance",
         // The suite drives hundreds of calls from one IP, which is not what the rate limit
         // is defending against. Raised, not disabled: the guard stays wired so a broken
         // throttle config still fails here rather than in production.
