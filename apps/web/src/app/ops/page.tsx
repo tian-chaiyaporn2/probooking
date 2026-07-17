@@ -17,7 +17,15 @@ import { AppHeader } from "../../components/AppHeader";
 import { Stat } from "../../components/Stat";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
-import { RefreshIcon } from "../../components/icons";
+import {
+  RefreshIcon,
+  CalendarIcon,
+  UsersIcon,
+  CheckIcon,
+  AlertIcon,
+  ShieldCheckIcon,
+  WalletIcon,
+} from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th } from "../../lib/strings";
@@ -108,14 +116,25 @@ export default function OpsPage() {
             Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
           ) : (
             <>
-              <Stat label={th.ops.metricShifts} value={`${metrics.shifts.total} (${metrics.shifts.open})`} />
-              <Stat label={th.ops.metricBookings} value={String(metrics.bookings.total)} />
-              <Stat label={th.ops.metricCompleted} value={String(metrics.bookings.completed)} />
-              <Stat label={th.ops.metricHeld} value={String(metrics.bookings.held)} />
-              <Stat label={th.ops.metricCases} value={String(metrics.cases.open)} />
+              <Stat
+                label={th.ops.metricShifts}
+                value={String(metrics.shifts.total)}
+                hint={`${metrics.shifts.open} ${th.ops.openSuffix}`}
+                icon={<CalendarIcon />}
+              />
+              <Stat label={th.ops.metricBookings} value={String(metrics.bookings.total)} icon={<UsersIcon />} />
+              <Stat label={th.ops.metricCompleted} value={String(metrics.bookings.completed)} icon={<CheckIcon />} />
+              <Stat
+                label={th.ops.metricHeld}
+                value={String(metrics.bookings.held)}
+                icon={<AlertIcon />}
+                tone={metrics.bookings.held > 0 ? "danger" : "default"}
+              />
+              <Stat label={th.ops.metricCases} value={String(metrics.cases.open)} icon={<ShieldCheckIcon />} />
               <Stat
                 label={th.ops.metricExceptions}
                 value={String(metrics.money.reconciliationExceptions)}
+                icon={<WalletIcon />}
                 tone={metrics.money.reconciliationExceptions === 0 ? "success" : "danger"}
               />
             </>
@@ -130,9 +149,15 @@ export default function OpsPage() {
             {!loading && pending.length === 0 && <li className="empty">{th.common.none}</li>}
             {pending.map((p) => (
               <li key={p.id} data-testid={`pending-${p.id}`}>
-                <Badge variant={p.kind}>{p.kind}</Badge>
+                <span className={`row__avatar row__avatar--${p.kind}`} aria-hidden>
+                  {p.kind === "clinic" ? "🏥" : "🩺"}
+                </span>
                 <span className="row__main">
-                  {p.name} <code className="row__id">{p.id.slice(0, 8)}…</code>
+                  <span className="row__name">{p.name}</span>
+                  <span className="row__sub">
+                    <Badge variant={p.kind}>{th.ops.kind[p.kind]}</Badge>
+                    <code className="row__id">{p.id.slice(0, 8)}…</code>
+                  </span>
                 </span>
                 <span className="row__actions">
                   <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify(p.kind, p.id)}>
