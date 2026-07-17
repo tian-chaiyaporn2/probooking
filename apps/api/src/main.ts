@@ -25,7 +25,7 @@ async function bootstrap() {
   // an operator can never mistake a bypass-enabled host for a secured one.
   if (devAuth) {
     console.warn(
-      "AUTH_DEV_MODE=true — /auth/dev/token is exposed and OTP codes are returned in responses. " +
+      "AUTH_DEV_MODE=true — /auth/dev/token + /auth/dev/status are exposed and OTP codes are returned in responses. " +
         "Never point this at real data or a public tunnel.",
     );
   }

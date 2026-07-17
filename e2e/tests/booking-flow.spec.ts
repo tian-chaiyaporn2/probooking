@@ -100,6 +100,18 @@ test("finance reconciliation shows zero exceptions", async ({ page }) => {
   await expect(page.getByTestId("fin-exceptions")).toHaveText("0");
 });
 
+test("ops/finance one-click demo sign-in (AUTH_DEV_MODE)", async ({ page }) => {
+  await page.goto("/ops");
+  await expect(page.getByTestId("dev-quick-signin")).toBeVisible();
+  await page.getByTestId("dev-quick-signin").click();
+  await expect(page.getByTestId("refresh")).toBeVisible();
+
+  await page.goto("/finance");
+  await expect(page.getByTestId("dev-quick-signin")).toBeVisible();
+  await page.getByTestId("dev-quick-signin").click();
+  await expect(page.getByTestId("fin-summary")).toBeVisible();
+});
+
 test("ops dashboard verifies a pending clinic", async ({ page }) => {
   const uniq = `${Date.now()}`;
   // Register a clinic (lands in Submitted) directly against the API.

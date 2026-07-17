@@ -72,6 +72,22 @@ authentication bypass, both are forced off when `NODE_ENV=production` regardless
 flag, and neither belongs on anything reachable from the internet (the tunnel script
 refuses to publish an API with them on). `.env.example` documents the whole contract.
 
+### Walk the whole system (no SMS)
+
+With `AUTH_DEV_MODE=true` (the `.env.example` default) you can exercise every surface
+without an SMS provider or real staff credentials:
+
+1. **Booking** — open [`/flow`](http://localhost:3000/flow) and run the demo. It registers
+   parties, mints an ops token, verifies them, and drives offer → accept → confirm → payout.
+2. **Operations** — open [`/ops`](http://localhost:3000/ops) and click **เข้าสู่ระบบด่วน**.
+   Demo fixtures (auto-seeded in-memory) give you pending verifications and open cases.
+3. **Finance** — open [`/finance`](http://localhost:3000/finance) and click **เข้าสู่ระบบด่วน**.
+   Reconciliation rows come from the same demo seed / bookings you confirmed in `/flow`.
+
+Optional OTP path on Ops/Finance: tap the demo staff phone chip
+(`+66900000008` ops / `+66900000005` finance — matches `STAFF_PHONES` in `.env.example`).
+Under AUTH_DEV_MODE the code is echoed back and login completes in one step.
+
 Every mutating endpoint is authenticated. A token proves possession of a phone; **authority
 is derived from the identity graph** (professional profile / clinic membership), never from
 a role or party id in the request body. The `/flow` demo logs in as both parties over OTP to

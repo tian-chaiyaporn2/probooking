@@ -1,7 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { requestOtp, verifyOtp } from "../lib/api";
+import { useEffect, useState } from "react";
+import {
+  DEMO_STAFF_PHONES,
+  getDevToken,
+  isDevAuthEnabled,
+  requestOtp,
+  verifyOtp,
+} from "../lib/api";
 import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
 
@@ -21,8 +27,8 @@ function normalizePhone(raw: string): string {
  * phone's entry in the server's access list (STAFF_PHONES), not from anything the page asks
  * for.
  *
- * The form also checks the returned role against the surface before accepting the token —
- * an ordinary user who can complete OTP must not be treated as signed into Ops/Finance.
+ * When AUTH_DEV_MODE is on, the form also offers one-click demo sign-in (and staff-phone
+ * chips) so local explorers can walk Ops/Finance without memorising demo numbers.
  */
 export function StaffLogin({
   surface,
@@ -36,6 +42,17 @@ export function StaffLogin({
   const [stage, setStage] = useState<"phone" | "code">("phone");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [devMode, setDevMode] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void isDevAuthEnabled().then((on) => {
+      if (!cancelled) setDevMode(on);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function roleAllowed(role: string): boolean {
     return surface === "operations" ? OPS_ROLES.has(role) : FINANCE_ROLES.has(role);
@@ -50,11 +67,12 @@ export function StaffLogin({
     onToken(token);
   }
 
-  async function sendCode() {
+  async function sendCode(overridePhone?: string) {
     setBusy(true);
     setError(null);
     try {
-      const normalized = normalizePhone(phone);
+      const normalized = normalizePhone(overridePhone ?? phone);
+      if (overridePhone) setPhone(normalized);
       const { devCode } = await requestOtp(normalized);
       if (devCode) {
         await completeLogin(normalized, devCode);
@@ -80,12 +98,59 @@ export function StaffLogin({
     }
   }
 
+  async function quickDevSignIn() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { token, role } = await getDevToken(surface);
+      if (!roleAllowed(role)) {
+        throw new Error("forbidden: requires role for this surface");
+      }
+      onToken(token);
+    } catch (e) {
+      setError(getThaiErrorMessage(e, th.staffLogin.devSignInError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const demoPhone = DEMO_STAFF_PHONES[surface];
+
   return (
-    <div className="card card--pad" style={{ maxWidth: 380, margin: "2rem auto" }}>
+    <div className="card card--pad" style={{ maxWidth: 420, margin: "2rem auto" }}>
       <h2 style={{ marginTop: 0 }}>{th.staffLogin.title[surface]}</h2>
       <p className="muted" style={{ fontSize: "0.9rem" }}>
-        {th.staffLogin.description}
+        {devMode ? th.staffLogin.descriptionDev : th.staffLogin.description}
       </p>
+
+      {devMode && stage === "phone" && (
+        <div style={{ marginBottom: "1rem" }}>
+          <Button
+            type="button"
+            variant="primary"
+            busy={busy}
+            onClick={() => void quickDevSignIn()}
+            data-testid="dev-quick-signin"
+          >
+            {th.staffLogin.devSignIn}
+          </Button>
+          <p className="muted" style={{ fontSize: "0.8rem", margin: "0.75rem 0 0.35rem" }}>
+            {th.staffLogin.orOtp}
+          </p>
+          <div className="actions" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+            <Button
+              type="button"
+              variant="subtle"
+              disabled={busy}
+              onClick={() => void sendCode(demoPhone)}
+              data-testid="demo-staff-phone"
+            >
+              {demoPhone}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {stage === "phone" ? (
         <form
           onSubmit={(e) => {

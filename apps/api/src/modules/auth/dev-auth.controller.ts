@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post } from "@nestjs/common";
 import { Public } from "./auth.guard.js";
 import { Throttle, AUTH_THROTTLE } from "../throttle/throttle.guard.js";
 import { signToken } from "./token.util.js";
@@ -15,6 +15,13 @@ const INTERNAL_ROLES = new Set(["operations", "finance", "administrator"]);
  */
 @Controller("auth")
 export class DevAuthController {
+  /** Lets the UI know one-click demo sign-in is available (route 404s when AUTH_DEV_MODE is off). */
+  @Public()
+  @Get("dev/status")
+  status() {
+    return { enabled: true as const };
+  }
+
   @Public()
   @Throttle(AUTH_THROTTLE)
   @Post("dev/token")

@@ -79,6 +79,21 @@ export default function Home() {
           </div>
         </section>
 
+        <section id="try">
+          <div className="section-head">
+            <h2>{th.home.tryTitle}</h2>
+            <p>{th.home.trySubtitle}</p>
+          </div>
+          <div className="steps">
+            {th.home.trySteps.map((s) => (
+              <div key={s.t} className="step">
+                <h3>{s.t}</h3>
+                <p>{s.d}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section>
           <div className="section-head">
             <h2>{th.home.surfacesTitle}</h2>

@@ -57,12 +57,36 @@ async function get<T>(path: string, token?: string): Promise<T> {
 }
 
 /**
+ * True when the API has AUTH_DEV_MODE on (exposes /auth/dev/*). 404 when off — dashboards
+ * then hide one-click demo sign-in and require real OTP + STAFF_PHONES.
+ */
+export async function isDevAuthEnabled(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/dev/status`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { enabled?: boolean };
+    return body.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Dev-only: obtain an internal role token so the ops/finance dashboards can call
  * guarded endpoints. Absent in production (the route 404s) — the dashboards must then use
  * the real OTP + access-list login.
  */
 export const getDevToken = (role: "operations" | "finance" | "administrator") =>
   post<{ token: string; role: string }>("/auth/dev/token", { role });
+
+/** Default STAFF_PHONES from .env.example — used as one-tap OTP demo shortcuts. */
+export const DEMO_STAFF_PHONES = {
+  operations: "+66900000008",
+  finance: "+66900000005",
+  administrator: "+66900000003",
+} as const;
 
 /**
  * Request an OTP for a phone. Returns the code ONLY under AUTH_DEV_MODE (so the demo can
