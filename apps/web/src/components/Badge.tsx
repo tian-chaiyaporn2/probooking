@@ -1,20 +1,33 @@
 import type { ReactNode } from "react";
+import { badgeToneForKind, resolveBadgeTone, type BadgeTone } from "../lib/tones";
 
-/** Visual tones only — pages map domain kinds onto these. */
-export type BadgeTone = "muted" | "info" | "accent" | "warn" | "success";
-
-const TONE_CLASS: Record<BadgeTone, string> = {
+const TONE_CLASS: Record<string, string> = {
   muted: "badge--muted",
   info: "badge--info",
   accent: "badge--accent",
-  warn: "badge--warn",
+  warning: "badge--warning",
   success: "badge--success",
+  danger: "badge--danger",
 };
 
-/**
- * Semantic pill. Prefer `tone` for visual styling.
- * `variant` remains as a domain alias (clinic / professional / credential_hold) for call sites.
- */
+function toneFromVariant(variant?: string): BadgeTone {
+  if (!variant) return "muted";
+  if (
+    variant === "success" ||
+    variant === "info" ||
+    variant === "accent" ||
+    variant === "muted" ||
+    variant === "warn" ||
+    variant === "warning" ||
+    variant === "danger" ||
+    variant === "neutral"
+  ) {
+    return variant;
+  }
+  return badgeToneForKind(variant);
+}
+
+/** Semantic pill. Prefer `tone`; `variant` keeps domain aliases for existing call sites. */
 export function Badge({
   children,
   tone,
@@ -22,19 +35,11 @@ export function Badge({
 }: {
   children: ReactNode;
   tone?: BadgeTone;
-  /** @deprecated Prefer `tone`. Domain aliases kept for existing call sites. */
-  variant?: "clinic" | "professional" | "credential_hold" | BadgeTone | string;
+  /** Domain aliases (clinic / professional / credential_hold) or legacy tone names. */
+  variant?: string;
 }): ReactNode {
-  const resolved: BadgeTone =
-    tone ??
-    (variant === "clinic"
-      ? "info"
-      : variant === "professional"
-        ? "accent"
-        : variant === "credential_hold" || variant === "warn"
-          ? "warn"
-          : variant === "success" || variant === "info" || variant === "accent" || variant === "muted"
-            ? variant
-            : "muted");
-  return <span className={`badge ${TONE_CLASS[resolved]}`}>{children}</span>;
+  const resolved = resolveBadgeTone(tone ?? toneFromVariant(variant));
+  return <span className={`badge ${TONE_CLASS[resolved] ?? TONE_CLASS.muted}`}>{children}</span>;
 }
+
+export type { BadgeTone };

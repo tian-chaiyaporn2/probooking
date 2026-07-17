@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "../components/AppHeader";
+import { ButtonLink, ButtonAnchor } from "../components/Button";
 import { ShieldCheckIcon, CalendarIcon, WalletIcon, ArrowRightIcon } from "../components/icons";
 import { th } from "../lib/strings";
 
@@ -23,12 +24,12 @@ export default function Home() {
             <h1>{th.home.tagline}</h1>
             <p className="lead muted">{th.home.description}</p>
             <div className="hero__actions">
-              <Link href="/flow" className="btn btn--primary btn--lg" data-testid="hero-flow-link">
+              <ButtonLink href="/flow" variant="primary" size="lg" data-testid="hero-flow-link">
                 {th.home.ctaPrimary} <ArrowRightIcon />
-              </Link>
-              <a href="#how" className="btn btn--ghost btn--lg">
+              </ButtonLink>
+              <ButtonAnchor href="#how" variant="ghost" size="lg">
                 {th.home.ctaSecondary}
-              </a>
+              </ButtonAnchor>
             </div>
           </div>
 

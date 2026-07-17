@@ -14,6 +14,9 @@ import { Stat } from "../../components/Stat";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { DataTable, type Column } from "../../components/DataTable";
+import { PageHeader } from "../../components/PageHeader";
+import { SectionBlock } from "../../components/SectionBlock";
+import { StatSkeletonGrid } from "../../components/Skeleton";
 import { RefreshIcon, DownloadIcon, CheckIcon, AlertIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
@@ -110,7 +113,7 @@ export default function FinancePage() {
             <CheckIcon /> {th.finance.conservedYes}
           </Badge>
         ) : (
-          <Badge tone="warn">
+          <Badge tone="warning">
             <AlertIcon /> {th.finance.conservedNo}
           </Badge>
         ),
@@ -130,30 +133,30 @@ export default function FinancePage() {
     <>
       <AppHeader current="/finance" />
       <main id="main" className="page page--finance">
-        <div className="page-head">
-          <div>
-            <h1>{th.finance.title}</h1>
-            <p className="page-head__sub">{th.finance.subtitle}</p>
-          </div>
-          <div className="actions">
-            <Button data-testid="refresh" onClick={() => void load()} disabled={loading || exporting} icon={<RefreshIcon />}>
-              {th.common.refresh}
-            </Button>
-            <Button
-              data-testid="export-csv"
-              variant="primary"
-              onClick={() => void exportCsv()}
-              busy={exporting}
-              disabled={loading}
-              icon={<DownloadIcon />}
-            >
-              {th.finance.exportCsv}
-            </Button>
-            <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
-              {th.staffLogin.signOut}
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title={th.finance.title}
+          subtitle={th.finance.subtitle}
+          actions={
+            <>
+              <Button data-testid="refresh" onClick={() => void load()} disabled={loading || exporting} icon={<RefreshIcon />}>
+                {th.common.refresh}
+              </Button>
+              <Button
+                data-testid="export-csv"
+                variant="primary"
+                onClick={() => void exportCsv()}
+                busy={exporting}
+                disabled={loading}
+                icon={<DownloadIcon />}
+              >
+                {th.finance.exportCsv}
+              </Button>
+              <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
+                {th.staffLogin.signOut}
+              </Button>
+            </>
+          }
+        />
 
         {loadError && (
           <p role="alert" className="form-error">
@@ -161,30 +164,28 @@ export default function FinancePage() {
           </p>
         )}
 
-        <div className="stat-grid" data-testid="fin-summary">
-          {loading && !s ? (
-            Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton" />)
-          ) : s ? (
-            <>
-              <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
-              <Stat label={th.finance.captured} value={formatThb(s.captured)} />
-              <Stat label={th.finance.payouts} value={formatThb(s.payouts)} />
-              <Stat label={th.finance.refunds} value={formatThb(s.refunds)} />
-              <Stat
-                label={th.finance.exceptions}
-                value={String(s.exceptions)}
-                testid="fin-exceptions"
-                tone={s.exceptions === 0 ? "success" : "danger"}
-              />
-            </>
-          ) : null}
-        </div>
-
-        <section className="section-block" aria-labelledby="finance-recon-heading">
-          <div className="section-block__head">
-            <h2 id="finance-recon-heading">{th.finance.reconciliation}</h2>
-            {s && <span className="section-block__count">{rows.length}</span>}
+        {loading && !s ? (
+          <StatSkeletonGrid count={5} testid="fin-summary" />
+        ) : (
+          <div className="stat-grid" data-testid="fin-summary">
+            {s ? (
+              <>
+                <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
+                <Stat label={th.finance.captured} value={formatThb(s.captured)} />
+                <Stat label={th.finance.payouts} value={formatThb(s.payouts)} />
+                <Stat label={th.finance.refunds} value={formatThb(s.refunds)} />
+                <Stat
+                  label={th.finance.exceptions}
+                  value={String(s.exceptions)}
+                  testid="fin-exceptions"
+                  tone={s.exceptions === 0 ? "success" : "danger"}
+                />
+              </>
+            ) : null}
           </div>
+        )}
+
+        <SectionBlock id="finance-recon" title={th.finance.reconciliation} count={s ? rows.length : undefined}>
           <DataTable
             columns={columns}
             rows={shown}
@@ -194,7 +195,7 @@ export default function FinancePage() {
             bodyTestid="reconciliation-rows"
             caption={th.a11y.reconciliationTable}
           />
-        </section>
+        </SectionBlock>
         {rows.length > MAX_ROWS && (
           <p data-testid="rows-truncated" className="muted table-truncated">
             {th.finance.showing(shown.length, rows.length)}

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { InboxIcon } from "./icons";
+import { Skeleton } from "./Skeleton";
+import { EmptyState } from "./EmptyState";
 import { th } from "../lib/strings";
 
 export interface Column<T> {
@@ -51,7 +53,7 @@ export function DataTable<T>({
               <tr key={i}>
                 {columns.map((c) => (
                   <td key={c.key}>
-                    <span className="skeleton skeleton--line" />
+                    <Skeleton variant="line" />
                   </td>
                 ))}
               </tr>
@@ -59,12 +61,7 @@ export function DataTable<T>({
           ) : rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length}>
-                <div className="empty">
-                  <span className="empty__icon" aria-hidden>
-                    <InboxIcon />
-                  </span>
-                  <span className="empty__title">{empty ?? th.common.emptyTable}</span>
-                </div>
+                <EmptyState title={empty ?? th.common.emptyTable} icon={<InboxIcon />} />
               </td>
             </tr>
           ) : (

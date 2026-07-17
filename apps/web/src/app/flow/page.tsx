@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { Button } from "../../components/Button";
+import { PageHeader } from "../../components/PageHeader";
+import { KeyValueTable } from "../../components/KeyValueTable";
 import { useToast } from "../../components/Toast";
 import { CheckIcon } from "../../components/icons";
 import { th } from "../../lib/strings";
@@ -157,13 +159,11 @@ export default function FlowPage() {
     <>
       <AppHeader current="/flow" />
       <main id="main" className="page page--flow">
-        <div className="page-head">
-          <div>
-            <span className="hero__eyebrow">{th.home.phase}</span>
-            <h1>{th.flow.title}</h1>
-            <p className="page-head__sub">{th.flow.subtitle}</p>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow={<span className="hero__eyebrow">{th.home.phase}</span>}
+          title={th.flow.title}
+          subtitle={th.flow.subtitle}
+        />
 
         <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
           {running ? th.flow.running : th.flow.run}
@@ -221,27 +221,15 @@ export default function FlowPage() {
               Booking ID: <code data-testid="booking-id">{bookingId}</code>
             </div>
             {checkout && (
-              <table className="checkout">
-                <caption className="sr-only">Checkout totals</caption>
-                <tbody>
-                  <tr>
-                    <th scope="row">Compensation</th>
-                    <td>{formatThb(checkout.compensation)}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Service fee (12%)</th>
-                    <td>{formatThb(checkout.serviceFee)}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Tax</th>
-                    <td>{formatThb(checkout.tax)}</td>
-                  </tr>
-                  <tr className="checkout__total">
-                    <th scope="row">Total</th>
-                    <td data-testid="checkout-total">{formatThb(checkout.total)}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <KeyValueTable
+                caption="Checkout totals"
+                rows={[
+                  { label: "Compensation", value: formatThb(checkout.compensation) },
+                  { label: "Service fee (12%)", value: formatThb(checkout.serviceFee) },
+                  { label: "Tax", value: formatThb(checkout.tax) },
+                  { label: "Total", value: formatThb(checkout.total), total: true, valueTestId: "checkout-total" },
+                ]}
+              />
             )}
 
             <div className="flow-result__actions">

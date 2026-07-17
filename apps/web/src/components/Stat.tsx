@@ -7,7 +7,7 @@ export function Stat({
   hint,
   icon,
   testid,
-  tone,
+  tone = "default",
 }: {
   label: string;
   value: string;
@@ -15,10 +15,15 @@ export function Stat({
   hint?: string;
   icon?: ReactNode;
   testid?: string;
-  tone?: "default" | "success" | "danger";
+  /** Prefer success | danger; default is neutral. */
+  tone?: "default" | "neutral" | "success" | "danger" | "warning";
 }): ReactNode {
   const toneClass =
-    tone === "success" ? " stat--success" : tone === "danger" ? " stat--danger" : "";
+    tone === "success"
+      ? " stat--success"
+      : tone === "danger" || tone === "warning"
+        ? " stat--danger"
+        : "";
   return (
     <div className={`stat${toneClass}`}>
       <div className="stat__top">

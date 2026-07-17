@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { AppHeader } from "../components/AppHeader";
+import { ButtonLink } from "../components/Button";
 import { th } from "../lib/strings";
 
 /** Branded 404 so a missing route still feels like ProBooking, not Next's default. */
@@ -14,9 +14,9 @@ export default function NotFound() {
           </p>
           <h1>{th.notFound.title}</h1>
           <p className="lead muted">{th.notFound.description}</p>
-          <Link href="/" className="btn btn--primary btn--lg">
+          <ButtonLink href="/" variant="primary" size="lg">
             {th.notFound.home}
-          </Link>
+          </ButtonLink>
         </div>
       </main>
     </>

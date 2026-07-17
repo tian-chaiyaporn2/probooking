@@ -17,6 +17,10 @@ import { AppHeader } from "../../components/AppHeader";
 import { Stat } from "../../components/Stat";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
+import { PageHeader } from "../../components/PageHeader";
+import { SectionBlock } from "../../components/SectionBlock";
+import { EmptyState } from "../../components/EmptyState";
+import { Skeleton, StatSkeletonGrid } from "../../components/Skeleton";
 import {
   RefreshIcon,
   CalendarIcon,
@@ -32,6 +36,7 @@ import {
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
+import { badgeToneForKind } from "../../lib/tones";
 
 /**
  * Operations dashboard (ADM-01). Internal tool that calls controlled API actions:
@@ -137,20 +142,20 @@ export default function OpsPage() {
     <>
       <AppHeader current="/ops" />
       <main id="main" className="page page--ops">
-        <div className="page-head">
-          <div>
-            <h1>{th.ops.title}</h1>
-            <p className="page-head__sub">{th.ops.subtitle}</p>
-          </div>
-          <div className="actions">
-            <Button data-testid="refresh" onClick={() => void load()} disabled={busy || loading} icon={<RefreshIcon />}>
-              {th.common.refresh}
-            </Button>
-            <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
-              {th.staffLogin.signOut}
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title={th.ops.title}
+          subtitle={th.ops.subtitle}
+          actions={
+            <>
+              <Button data-testid="refresh" onClick={() => void load()} disabled={busy || loading} icon={<RefreshIcon />}>
+                {th.common.refresh}
+              </Button>
+              <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
+                {th.staffLogin.signOut}
+              </Button>
+            </>
+          }
+        />
 
         {loadError && (
           <p role="alert" className="form-error">
@@ -158,60 +163,53 @@ export default function OpsPage() {
           </p>
         )}
 
-        <div className="stat-grid" data-testid="ops-metrics">
-          {loading && !metrics ? (
-            Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton" />)
-          ) : metrics ? (
-            <>
-              <Stat
-                label={th.ops.metricShifts}
-                value={String(metrics.shifts.total)}
-                hint={`${metrics.shifts.open} ${th.ops.openSuffix}`}
-                icon={<CalendarIcon />}
-              />
-              <Stat label={th.ops.metricBookings} value={String(metrics.bookings.total)} icon={<UsersIcon />} />
-              <Stat label={th.ops.metricCompleted} value={String(metrics.bookings.completed)} icon={<CheckIcon />} />
-              <Stat
-                label={th.ops.metricHeld}
-                value={String(metrics.bookings.held)}
-                icon={<AlertIcon />}
-                tone={metrics.bookings.held > 0 ? "danger" : "default"}
-              />
-              <Stat label={th.ops.metricCases} value={String(metrics.cases.open)} icon={<ShieldCheckIcon />} />
-              <Stat
-                label={th.ops.metricExceptions}
-                value={String(metrics.money.reconciliationExceptions)}
-                icon={<WalletIcon />}
-                tone={metrics.money.reconciliationExceptions === 0 ? "success" : "danger"}
-              />
-            </>
-          ) : null}
-        </div>
-
-        <section className="section-block">
-          <div className="section-block__head">
-            <h2>{th.ops.pending}</h2>
-            <span className="section-block__count">{pending.length}</span>
+        {loading && !metrics ? (
+          <StatSkeletonGrid count={6} testid="ops-metrics" />
+        ) : (
+          <div className="stat-grid" data-testid="ops-metrics">
+            {metrics ? (
+              <>
+                <Stat
+                  label={th.ops.metricShifts}
+                  value={String(metrics.shifts.total)}
+                  hint={`${metrics.shifts.open} ${th.ops.openSuffix}`}
+                  icon={<CalendarIcon />}
+                />
+                <Stat label={th.ops.metricBookings} value={String(metrics.bookings.total)} icon={<UsersIcon />} />
+                <Stat label={th.ops.metricCompleted} value={String(metrics.bookings.completed)} icon={<CheckIcon />} />
+                <Stat
+                  label={th.ops.metricHeld}
+                  value={String(metrics.bookings.held)}
+                  icon={<AlertIcon />}
+                  tone={metrics.bookings.held > 0 ? "danger" : "default"}
+                />
+                <Stat label={th.ops.metricCases} value={String(metrics.cases.open)} icon={<ShieldCheckIcon />} />
+                <Stat
+                  label={th.ops.metricExceptions}
+                  value={String(metrics.money.reconciliationExceptions)}
+                  icon={<WalletIcon />}
+                  tone={metrics.money.reconciliationExceptions === 0 ? "success" : "danger"}
+                />
+              </>
+            ) : null}
           </div>
+        )}
+
+        <SectionBlock title={th.ops.pending} count={pending.length}>
           <div className="card">
             <ul data-testid="pending-list" className="rowlist" aria-busy={loading || undefined}>
               {loading && pending.length === 0 &&
                 Array.from({ length: 3 }).map((_, i) => (
                   <li key={i} className="rowlist__skeleton" aria-hidden>
-                    <span className="skeleton skeleton--avatar" />
+                    <Skeleton variant="avatar" />
                     <span className="row__main">
-                      <span className="skeleton skeleton--line" />
-                      <span className="skeleton skeleton--line skeleton--line-short" />
+                      <Skeleton variant="line" />
+                      <Skeleton variant="line-short" />
                     </span>
                   </li>
                 ))}
               {!loading && pending.length === 0 && (
-                <li className="empty">
-                  <span className="empty__icon" aria-hidden>
-                    <InboxIcon />
-                  </span>
-                  <span className="empty__title">{th.ops.emptyPending}</span>
-                </li>
+                <EmptyState as="li" title={th.ops.emptyPending} icon={<InboxIcon />} />
               )}
               {pending.map((p) => (
                 <li key={p.id} data-testid={`pending-${p.id}`}>
@@ -221,7 +219,7 @@ export default function OpsPage() {
                   <span className="row__main">
                     <span className="row__name">{p.name}</span>
                     <span className="row__sub">
-                      <Badge variant={p.kind}>{th.ops.kind[p.kind]}</Badge>
+                      <Badge tone={badgeToneForKind(p.kind)}>{th.ops.kind[p.kind]}</Badge>
                       <code className="row__id">{p.id.slice(0, 8)}…</code>
                     </span>
                   </span>
@@ -234,59 +232,50 @@ export default function OpsPage() {
               ))}
             </ul>
           </div>
-        </section>
+        </SectionBlock>
 
-        <section className="section-block">
-          <div className="section-block__head">
-            <h2>{th.ops.openCases}</h2>
-            <span className="section-block__count">{cases.length}</span>
-          </div>
+        <SectionBlock title={th.ops.openCases} count={cases.length}>
           <div className="card">
             <ul data-testid="cases-list" className="rowlist" aria-busy={loading || undefined}>
               {loading && cases.length === 0 &&
                 Array.from({ length: 2 }).map((_, i) => (
                   <li key={i} className="rowlist__skeleton" aria-hidden>
-                    <span className="skeleton skeleton--chip" />
+                    <Skeleton variant="chip" />
                     <span className="row__main">
-                      <span className="skeleton skeleton--line" />
+                      <Skeleton variant="line" />
                     </span>
                   </li>
                 ))}
               {!loading && cases.length === 0 && (
-                <li className="empty">
-                  <span className="empty__icon" aria-hidden>
-                    <CheckIcon />
-                  </span>
-                  <span className="empty__title">{th.ops.emptyCases}</span>
-                </li>
+                <EmptyState as="li" title={th.ops.emptyCases} icon={<CheckIcon />} />
               )}
               {cases.map((c) => {
                 const refId = c.refId;
                 return (
-                <li key={c.id} data-testid={`case-${c.id}`}>
-                  <Badge variant={c.kind}>{th.ops.caseKind[c.kind] ?? c.kind}</Badge>
-                  <span className="row__main">
-                    <span className="row__name">{c.subject || (th.ops.caseState[c.state] ?? c.state)}</span>
-                    <span className="row__sub">
-                      {c.subject ? (
-                        <span className="muted">{th.ops.caseState[c.state] ?? c.state}</span>
-                      ) : null}
-                      {refId && <code className="row__id">{refId.slice(0, 8)}…</code>}
+                  <li key={c.id} data-testid={`case-${c.id}`}>
+                    <Badge tone={badgeToneForKind(c.kind)}>{th.ops.caseKind[c.kind] ?? c.kind}</Badge>
+                    <span className="row__main">
+                      <span className="row__name">{c.subject || (th.ops.caseState[c.state] ?? c.state)}</span>
+                      <span className="row__sub">
+                        {c.subject ? (
+                          <span className="muted">{th.ops.caseState[c.state] ?? c.state}</span>
+                        ) : null}
+                        {refId && <code className="row__id">{refId.slice(0, 8)}…</code>}
+                      </span>
                     </span>
-                  </span>
-                  {c.kind === "credential_hold" && refId ? (
-                    <span className="row__actions">
-                      <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(refId)}>
-                        {th.ops.resolveHold}
-                      </Button>
-                    </span>
-                  ) : null}
-                </li>
+                    {c.kind === "credential_hold" && refId ? (
+                      <span className="row__actions">
+                        <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(refId)}>
+                          {th.ops.resolveHold}
+                        </Button>
+                      </span>
+                    ) : null}
+                  </li>
                 );
               })}
             </ul>
           </div>
-        </section>
+        </SectionBlock>
       </main>
     </>
   );

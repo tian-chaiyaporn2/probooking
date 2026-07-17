@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
+import { Field, Input } from "./Field";
 import { ShieldCheckIcon, WalletIcon } from "./icons";
 
 const OPS_ROLES = new Set(["operations", "administrator"]);
@@ -39,6 +40,7 @@ export function StaffLogin({
   const [error, setError] = useState<string | null>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
+  const errorId = "staff-login-error";
 
   useEffect(() => {
     if (stage === "phone") phoneRef.current?.focus();
@@ -103,18 +105,14 @@ export function StaffLogin({
               if (phone) void sendCode();
             }}
           >
-            <div className="field">
-              <label className="field__label" htmlFor="staff-phone">
-                {th.staffLogin.phoneLabel}
-              </label>
-              <input
+            <Field label={th.staffLogin.phoneLabel} htmlFor="staff-phone">
+              <Input
                 id="staff-phone"
                 name="phone"
                 ref={phoneRef}
-                className="input"
                 aria-label={th.staffLogin.phoneLabel}
                 aria-invalid={error ? true : undefined}
-                aria-describedby={error ? "staff-login-error" : undefined}
+                aria-describedby={error ? errorId : undefined}
                 inputMode="tel"
                 autoComplete="tel"
                 autoFocus
@@ -123,7 +121,7 @@ export function StaffLogin({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
-            </div>
+            </Field>
             <Button type="submit" variant="primary" busy={busy} disabled={!phone.trim()}>
               {th.staffLogin.sendCode}
             </Button>
@@ -135,18 +133,15 @@ export function StaffLogin({
               if (code.length >= 6) void submitCode();
             }}
           >
-            <div className="field">
-              <label className="field__label" htmlFor="staff-otp">
-                {th.staffLogin.codeLabel}
-              </label>
-              <input
+            <Field label={th.staffLogin.codeLabel} htmlFor="staff-otp">
+              <Input
                 id="staff-otp"
                 name="otp"
                 ref={codeRef}
-                className="input input--otp"
+                otp
                 aria-label={th.staffLogin.codeLabel}
                 aria-invalid={error ? true : undefined}
-                aria-describedby={error ? "staff-login-error" : undefined}
+                aria-describedby={error ? errorId : undefined}
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={6}
@@ -155,7 +150,7 @@ export function StaffLogin({
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               />
-            </div>
+            </Field>
             <div className="actions">
               <Button type="submit" variant="primary" busy={busy} disabled={code.length < 6}>
                 {th.staffLogin.signIn}
@@ -176,7 +171,7 @@ export function StaffLogin({
           </form>
         )}
         {error && (
-          <p id="staff-login-error" role="alert" className="form-error">
+          <p id={errorId} role="alert" className="form-error">
             {error}
           </p>
         )}
