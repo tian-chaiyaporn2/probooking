@@ -58,6 +58,8 @@ export const th = {
     metricCases: "เคสที่เปิด",
     metricExceptions: "รายการกระทบยอดผิดปกติ",
     pending: "รอการตรวจสอบ",
+    openSuffix: "เปิดรับ",
+    kind: { clinic: "คลินิก", professional: "บุคลากร" } as Record<string, string>,
     verify: "ตรวจสอบ",
     openCases: "เคสที่เปิดอยู่",
     resolveHold: "ปลดการระงับ",

@@ -223,9 +223,18 @@ img, svg { max-width: 100%; height: auto; }
   display: grid; gap: var(--s3);
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
-.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s4); }
-.stat__label { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.15rem; }
-.stat__value { font-size: 1.4rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stat { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s4); overflow: hidden; }
+/* A thin accent rail keyed to the tile's tone. */
+.stat::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--primary); opacity: 0.55; }
+.stat--success::before { background: var(--success); }
+.stat--danger::before { background: var(--danger); }
+.stat__top { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin-bottom: 0.15rem; }
+.stat__label { font-size: 0.75rem; color: var(--muted); }
+.stat__icon { color: var(--muted); font-size: 1rem; display: inline-flex; opacity: 0.8; }
+.stat__value { font-size: 1.5rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat--success .stat__value { color: var(--success); }
+.stat--danger .stat__value { color: var(--danger); }
+.stat__hint { font-size: 0.72rem; color: var(--muted); margin-top: 0.15rem; }
 
 /* ---- Badges ---- */
 .badge {
@@ -261,11 +270,21 @@ img, svg { max-width: 100%; height: auto; }
 .rowlist > li {
   display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
   padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line);
+  transition: background .12s ease;
 }
+.rowlist > li:hover { background: var(--primary-050); }
 .rowlist > li:last-child { border-bottom: none; }
-.rowlist .row__id { color: var(--muted); }
-.rowlist .row__main { flex: 1 1 auto; min-width: 0; }
+.rowlist .row__id { color: var(--muted); font-size: 0.78rem; }
+.rowlist .row__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.rowlist .row__name { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.rowlist .row__sub { display: inline-flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 .rowlist .row__actions { margin-inline-start: auto; }
+.row__avatar {
+  width: 2.2rem; height: 2.2rem; flex: none; border-radius: 50%; display: grid; place-items: center;
+  font-size: 1.1rem; background: var(--bg); border: 1px solid var(--line);
+}
+.row__avatar--clinic { background: var(--info-050); }
+.row__avatar--professional { background: var(--accent-050); }
 
 /* ---- Empty + loading states ---- */
 .empty { padding: var(--s6); text-align: center; color: var(--muted); }
