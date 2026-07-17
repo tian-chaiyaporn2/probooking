@@ -83,7 +83,7 @@ export default function OpsPage() {
   }
 
   return (
-    <main style={{ maxWidth: 760, margin: "3rem auto", padding: "0 1.5rem", fontFamily: "system-ui" }}>
+    <main className="page" style={{ maxWidth: 760 }}>
       <h1>{th.ops.title}</h1>
       <button data-testid="refresh" onClick={() => void load()} disabled={busy} style={btn("#555")}>
         {th.common.refresh}

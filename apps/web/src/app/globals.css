@@ -1,0 +1,72 @@
+/* Responsive base. The pages use inline styles for local layout; this sheet owns the
+   cross-cutting responsive concerns (box model, fluid container, scrollable tables,
+   small-screen type scale) that inline styles can't express (no media queries). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+  line-height: 1.5;
+  color: #1a1a1a;
+}
+
+/* Fluid page container: centered, capped width, padding/margins that shrink on phones. */
+.page {
+  width: 100%;
+  max-width: var(--page-max, 820px);
+  margin-inline: auto;
+  margin-block: clamp(1.5rem, 4vw, 3rem);
+  padding-inline: clamp(1rem, 4vw, 1.5rem);
+}
+
+/* Long ids / codes must wrap instead of forcing horizontal overflow. */
+code {
+  overflow-wrap: anywhere;
+}
+
+img,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Wide content (data tables) scrolls within its own box rather than breaking the page. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll > table {
+  min-width: 30rem; /* keep columns legible; the wrapper scrolls on narrow screens */
+}
+
+/* Comfortable tap targets on touch devices. */
+button {
+  min-height: 2.25rem;
+}
+
+/* Action rows wrap instead of overflowing on small screens. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+  h2 {
+    font-size: 1.15rem;
+  }
+}

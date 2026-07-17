@@ -13,6 +13,21 @@ test("home links to the flow", async ({ page }) => {
   await expect(page).toHaveURL(/\/flow$/);
 });
 
+test("pages are responsive — no horizontal page overflow on a small screen", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 }); // small phone
+  for (const path of ["/", "/flow", "/ops", "/finance"]) {
+    await page.goto(path);
+    // Let data-driven dashboards settle (finance renders its 6-column table).
+    if (path === "/finance") await expect(page.getByTestId("fin-summary")).toBeVisible();
+    if (path === "/ops") await expect(page.getByTestId("refresh")).toBeVisible();
+    // The page itself must not scroll horizontally (wide tables scroll inside their box).
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `horizontal overflow on ${path}`).toBeLessThanOrEqual(1);
+  }
+});
+
 test("booking flow confirms a booking with the correct checkout total", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();

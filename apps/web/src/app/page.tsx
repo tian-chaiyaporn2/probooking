@@ -6,7 +6,7 @@ import { th } from "../lib/strings";
  */
 export default function Home() {
   return (
-    <main style={{ maxWidth: 720, margin: "4rem auto", padding: "0 1.5rem", fontFamily: "system-ui" }}>
+    <main className="page" style={{ maxWidth: 720 }}>
       <h1>{th.brand}</h1>
       <p style={{ fontSize: "1.25rem", color: "#444" }}>{th.home.tagline}</p>
       <p>{th.home.description}</p>

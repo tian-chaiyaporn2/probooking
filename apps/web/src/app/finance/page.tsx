@@ -69,14 +69,16 @@ export default function FinancePage() {
   const shown = rows.slice(0, MAX_ROWS);
 
   return (
-    <main style={{ maxWidth: 820, margin: "3rem auto", padding: "0 1.5rem", fontFamily: "system-ui" }}>
+    <main className="page" style={{ maxWidth: 820 }}>
       <h1>{th.finance.title}</h1>
-      <button data-testid="refresh" onClick={() => void load()} style={btn("#555")}>
-        {th.common.refresh}
-      </button>{" "}
-      <button data-testid="export-csv" onClick={() => void exportCsv()} style={btn("#06b")}>
-        {th.finance.exportCsv}
-      </button>
+      <div className="actions">
+        <button data-testid="refresh" onClick={() => void load()} style={btn("#555")}>
+          {th.common.refresh}
+        </button>
+        <button data-testid="export-csv" onClick={() => void exportCsv()} style={btn("#06b")}>
+          {th.finance.exportCsv}
+        </button>
+      </div>
 
       {s && (
         <div data-testid="fin-summary" style={{ marginTop: "1rem", display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
@@ -93,7 +95,8 @@ export default function FinancePage() {
         </div>
       )}
 
-      <table style={{ marginTop: "1.5rem", borderCollapse: "collapse", width: "100%", fontSize: "0.85rem" }}>
+      <div className="table-scroll" style={{ marginTop: "1.5rem" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.85rem" }}>
         <thead>
           <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
             <th scope="col" style={cell}>{th.finance.colBooking}</th>
@@ -117,6 +120,7 @@ export default function FinancePage() {
           ))}
         </tbody>
       </table>
+      </div>
       {rows.length > MAX_ROWS && (
         <p data-testid="rows-truncated" style={{ color: "#888", fontSize: "0.8rem" }}>
           {th.finance.showing(shown.length, rows.length)}

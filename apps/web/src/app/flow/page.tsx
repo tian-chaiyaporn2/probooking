@@ -136,7 +136,7 @@ export default function FlowPage() {
   }
 
   return (
-    <main style={{ maxWidth: 640, margin: "3rem auto", padding: "0 1.5rem", fontFamily: "system-ui" }}>
+    <main className="page" style={{ maxWidth: 640 }}>
       <h1>ProBooking — booking flow</h1>
       <p style={{ color: "#555" }}>
         Onboard and verify a clinic and professional, create a binding offer, accept it
