@@ -169,12 +169,19 @@ export default function FlowPage() {
           {running ? th.flow.running : th.flow.run}
         </Button>
         {(running || steps.length > 0) && (
-          <div className="flow-progress" aria-live="polite">
+          <div className="flow-progress">
             <div className="flow-progress__meta">
-              <span>{th.flow.progress(Math.min(steps.length, FLOW_TOTAL), FLOW_TOTAL)}</span>
+              <span id="flow-progress-label">{th.flow.progress(Math.min(steps.length, FLOW_TOTAL), FLOW_TOTAL)}</span>
               {running && <span className="muted">{th.common.loading}</span>}
             </div>
-            <div className="progress progress--determinate" aria-hidden>
+            <div
+              className="progress progress--determinate"
+              role="progressbar"
+              aria-labelledby="flow-progress-label"
+              aria-valuemin={0}
+              aria-valuemax={FLOW_TOTAL}
+              aria-valuenow={Math.min(steps.length, FLOW_TOTAL)}
+            >
               <div
                 className={`progress__bar${running && steps.length === 0 ? " progress__bar--indeterminate" : ""}`}
                 style={steps.length > 0 ? { width: `${progressPct}%`, transform: "none" } : undefined}
@@ -185,7 +192,7 @@ export default function FlowPage() {
 
         {/* Preview the flow before it runs, so the page is not an empty button in a void. */}
         {steps.length === 0 && !bookingId && !running && (
-          <ol className="flow-preview" aria-hidden>
+          <ol className="flow-preview">
             {th.home.steps.map((s, i) => (
               <li key={s.t}>
                 <span className="flow-preview__num">{i + 1}</span>
@@ -199,7 +206,7 @@ export default function FlowPage() {
 
         <ol data-testid="steps" className="flow-log">
           {steps.map((s, i) => (
-            <li key={i} style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}>
+            <li key={i} className={`flow-log__item flow-log__item--d${Math.min(i, 6)}`}>
               <strong>{s.label}</strong> — <span>{s.detail}</span>
             </li>
           ))}
@@ -263,7 +270,7 @@ export default function FlowPage() {
                         <CheckIcon /> Reviews published
                       </span>
                       {rating && (
-                        <div data-testid="rating" className="muted" style={{ marginTop: "0.35rem" }}>
+                        <div data-testid="rating" className="muted flow-result__rating">
                           {rating.hasRating
                             ? `Professional rating: ${rating.average} (${rating.count} reviews)`
                             : "Professional rating: not shown yet (needs 3 reviews)"}

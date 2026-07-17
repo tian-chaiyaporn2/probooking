@@ -11,9 +11,10 @@ import {
 } from "../../lib/api";
 import { AppHeader } from "../../components/AppHeader";
 import { Stat } from "../../components/Stat";
+import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { DataTable, type Column } from "../../components/DataTable";
-import { RefreshIcon, DownloadIcon } from "../../components/icons";
+import { RefreshIcon, DownloadIcon, CheckIcon, AlertIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
@@ -24,16 +25,20 @@ const MAX_ROWS = 25;
 export default function FinancePage() {
   const [data, setData] = useState<Reconciliation | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const toast = useToast();
   const loadSeq = useRef(0);
 
   const signOut = useCallback(() => {
+    loadSeq.current += 1;
     setToken(null);
     setAuthToken(null);
     setData(null);
     setLoadError(null);
+    setLoading(false);
+    setExporting(false);
   }, []);
 
   const load = useCallback(async () => {
@@ -64,6 +69,7 @@ export default function FinancePage() {
   }, [token, load]);
 
   async function exportCsv() {
+    setExporting(true);
     try {
       const csv = await fetchFinanceExport(token!);
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -78,6 +84,8 @@ export default function FinancePage() {
       toast.success("กำลังดาวน์โหลด finance-export.csv");
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -96,13 +104,13 @@ export default function FinancePage() {
       header: th.finance.colConserved,
       render: (r) =>
         r.conserved ? (
-          <span className="badge badge--success" aria-label="conserved">
-            ✓
-          </span>
+          <Badge variant="success">
+            <CheckIcon /> {th.finance.conservedYes}
+          </Badge>
         ) : (
-          <span className="badge badge--warn" aria-label="exception">
-            ✗ {th.finance.exceptions}
-          </span>
+          <Badge variant="credential_hold">
+            <AlertIcon /> {th.finance.conservedNo}
+          </Badge>
         ),
     },
   ];
@@ -126,10 +134,17 @@ export default function FinancePage() {
             <p className="page-head__sub">{th.finance.subtitle}</p>
           </div>
           <div className="actions">
-            <Button data-testid="refresh" onClick={() => void load()} icon={<RefreshIcon />}>
+            <Button data-testid="refresh" onClick={() => void load()} disabled={loading || exporting} icon={<RefreshIcon />}>
               {th.common.refresh}
             </Button>
-            <Button data-testid="export-csv" variant="primary" onClick={() => void exportCsv()} icon={<DownloadIcon />}>
+            <Button
+              data-testid="export-csv"
+              variant="primary"
+              onClick={() => void exportCsv()}
+              busy={exporting}
+              disabled={loading}
+              icon={<DownloadIcon />}
+            >
               {th.finance.exportCsv}
             </Button>
             <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
@@ -138,15 +153,15 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {loadError && !s && (
-          <p role="alert" style={{ color: "var(--danger)" }}>
+        {loadError && (
+          <p role="alert" className="form-error">
             {loadError}
           </p>
         )}
 
         <div className="stat-grid" data-testid="fin-summary">
           {loading && !s ? (
-            Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 72 }} />)
+            Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton" />)
           ) : s ? (
             <>
               <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
@@ -163,7 +178,11 @@ export default function FinancePage() {
           ) : null}
         </div>
 
-        <div className="section-block" style={{ marginTop: "var(--s5)" }}>
+        <section className="section-block" aria-labelledby="finance-recon-heading">
+          <div className="section-block__head">
+            <h2 id="finance-recon-heading">{th.finance.reconciliation}</h2>
+            {s && <span className="section-block__count">{rows.length}</span>}
+          </div>
           <DataTable
             columns={columns}
             rows={shown}
@@ -171,10 +190,11 @@ export default function FinancePage() {
             loading={loading}
             empty={th.common.emptyTable}
             bodyTestid="reconciliation-rows"
+            caption={th.a11y.reconciliationTable}
           />
-        </div>
+        </section>
         {rows.length > MAX_ROWS && (
-          <p data-testid="rows-truncated" className="muted" style={{ fontSize: "0.8rem", marginTop: "var(--s3)" }}>
+          <p data-testid="rows-truncated" className="muted table-truncated">
             {th.finance.showing(shown.length, rows.length)}
           </p>
         )}

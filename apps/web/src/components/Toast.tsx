@@ -48,21 +48,39 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [push, dismiss],
   );
 
+  const errors = toasts.filter((t) => t.kind === "error");
+  const successes = toasts.filter((t) => t.kind === "success");
+
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="toast-viewport" role="region" aria-live="polite" aria-label={th.a11y.notifications}>
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast toast--${t.kind}`} data-testid={`toast-${t.kind}`} role="status">
-            <span className="toast__icon" aria-hidden>
-              {t.kind === "error" ? <AlertIcon /> : <CheckIcon />}
-            </span>
-            <span className="toast__msg">{t.message}</span>
-            <button className="toast__close" aria-label={th.a11y.dismissNotification} onClick={() => dismiss(t.id)}>
-              <CloseIcon />
-            </button>
-          </div>
-        ))}
+      <div className="toast-viewport" role="region" aria-label={th.a11y.notifications}>
+        <div className="toast-stack" aria-live="assertive">
+          {errors.map((t) => (
+            <div key={t.id} className="toast toast--error" data-testid="toast-error" role="alert">
+              <span className="toast__icon" aria-hidden>
+                <AlertIcon />
+              </span>
+              <span className="toast__msg">{t.message}</span>
+              <button type="button" className="toast__close" aria-label={th.a11y.dismissNotification} onClick={() => dismiss(t.id)}>
+                <CloseIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="toast-stack" aria-live="polite">
+          {successes.map((t) => (
+            <div key={t.id} className="toast toast--success" data-testid="toast-success" role="status">
+              <span className="toast__icon" aria-hidden>
+                <CheckIcon />
+              </span>
+              <span className="toast__msg">{t.message}</span>
+              <button type="button" className="toast__close" aria-label={th.a11y.dismissNotification} onClick={() => dismiss(t.id)}>
+                <CloseIcon />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </ToastContext.Provider>
   );

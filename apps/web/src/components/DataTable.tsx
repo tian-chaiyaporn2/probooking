@@ -17,17 +17,29 @@ interface Props<T> {
   loadingRows?: number;
   empty?: ReactNode;
   bodyTestid?: string;
+  /** Accessible name for the table (rendered as a visually-hidden caption). */
+  caption?: string;
 }
 
 /** Generic data table: right-alignable numeric columns, loading skeleton, empty state. */
-export function DataTable<T>({ columns, rows, rowKey, loading, loadingRows = 6, empty, bodyTestid }: Props<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  loading,
+  loadingRows = 6,
+  empty,
+  bodyTestid,
+  caption,
+}: Props<T>) {
   return (
-    <div className="table-scroll">
+    <div className="table-scroll" tabIndex={0} role="region" aria-label={caption}>
       <table className="data-table">
+        {caption ? <caption className="sr-only">{caption}</caption> : null}
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={c.align === "right" ? "num" : undefined}>
+              <th key={c.key} className={c.align === "right" ? "num" : undefined} scope="col">
                 {c.header}
               </th>
             ))}
@@ -39,7 +51,7 @@ export function DataTable<T>({ columns, rows, rowKey, loading, loadingRows = 6, 
               <tr key={i}>
                 {columns.map((c) => (
                   <td key={c.key}>
-                    <span className="skeleton" style={{ display: "block", height: "0.9rem", borderRadius: 4 }} />
+                    <span className="skeleton skeleton--line" />
                   </td>
                 ))}
               </tr>

@@ -109,12 +109,16 @@ export function StaffLogin({
               </label>
               <input
                 id="staff-phone"
+                name="phone"
                 ref={phoneRef}
                 className="input"
                 aria-label={th.staffLogin.phoneLabel}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "staff-login-error" : undefined}
                 inputMode="tel"
                 autoComplete="tel"
                 autoFocus
+                required
                 placeholder="+66…"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -137,12 +141,16 @@ export function StaffLogin({
               </label>
               <input
                 id="staff-otp"
+                name="otp"
                 ref={codeRef}
                 className="input input--otp"
                 aria-label={th.staffLogin.codeLabel}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "staff-login-error" : undefined}
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={6}
+                required
                 placeholder="••••••"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -168,7 +176,7 @@ export function StaffLogin({
           </form>
         )}
         {error && (
-          <p role="alert" className="form-error">
+          <p id="staff-login-error" role="alert" className="form-error">
             {error}
           </p>
         )}

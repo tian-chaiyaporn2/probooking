@@ -67,6 +67,16 @@ export const th = {
     pending: "รอการตรวจสอบ",
     openSuffix: "เปิดรับ",
     kind: { clinic: "คลินิก", professional: "บุคลากร" } as Record<string, string>,
+    caseKind: {
+      credential_hold: "ระงับคุณสมบัติ",
+      completion_review: "ตรวจหลังเสร็จงาน",
+      cancellation_support: "สนับสนุนการยกเลิก",
+    } as Record<string, string>,
+    caseState: {
+      Open: "เปิด",
+      InProgress: "กำลังดำเนินการ",
+      Resolved: "ปิดแล้ว",
+    } as Record<string, string>,
     verify: "ตรวจสอบ",
     openCases: "เคสที่เปิดอยู่",
     resolveHold: "ปลดการระงับ",
@@ -75,6 +85,7 @@ export const th = {
     title: "การเงิน — การกระทบยอด",
     subtitle: "กระทบยอดคำสั่งชำระเงินกับเงินที่เก็บแล้ว และตรวจการอนุรักษ์ยอด",
     exportCsv: "ส่งออก CSV (REP-02)",
+    reconciliation: "รายการกระทบยอด",
     paymentOrders: "คำสั่งชำระเงิน",
     captured: "เก็บเงินแล้ว",
     payouts: "จ่ายออก",
@@ -83,6 +94,8 @@ export const th = {
     colBooking: "การจอง",
     colUndistributed: "ยังไม่กระจาย",
     colConserved: "สมดุล",
+    conservedYes: "สมดุล",
+    conservedNo: "ผิดปกติ",
     showing: (shown: number, total: number) => `แสดง ${shown} จาก ${total} รายการ`,
   },
   staffLogin: {
@@ -114,6 +127,7 @@ export const th = {
     lightMode: "โหมดสว่าง",
     darkMode: "โหมดมืด",
     skipToContent: "ข้ามไปยังเนื้อหา",
+    reconciliationTable: "ตารางกระทบยอดคำสั่งชำระเงิน",
   },
   notFound: {
     title: "ไม่พบหน้านี้",
