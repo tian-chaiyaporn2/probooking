@@ -27,3 +27,11 @@ Feature: Onboarding and verification — success/edge/error cases
   Scenario: Error — registering a duplicate phone conflicts
     Given a registered professional
     Then registering another professional with the same phone conflicts
+
+  Scenario: VER-04 — an expired licence does not cover the shift, so confirmation is refused
+    Given a professional with an offer whose licence has expired
+    Then the licence does not cover the shift
+
+  Scenario: VER-04 — a licence with no recorded expiry covers the shift
+    Given a professional with an offer whose licence is still valid
+    Then the licence covers the shift
