@@ -100,7 +100,7 @@ export default function FinancePage() {
   return (
     <>
       <AppHeader current="/finance" />
-      <main className="page" style={{ maxWidth: 1040 }}>
+      <main id="main" className="page page--finance">
         <div className="page-head">
           <div>
             <h1>{th.finance.title}</h1>
@@ -135,13 +135,13 @@ export default function FinancePage() {
           )}
         </div>
 
-        <div style={{ marginTop: "var(--s5)" }}>
+        <div className="section-block" style={{ marginTop: "var(--s5)" }}>
           <DataTable
             columns={columns}
             rows={shown}
             rowKey={(r) => r.paymentOrderId}
             loading={loading}
-            empty={th.common.none}
+            empty={th.common.emptyTable}
             bodyTestid="reconciliation-rows"
           />
         </div>

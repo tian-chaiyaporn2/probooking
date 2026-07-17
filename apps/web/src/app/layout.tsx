@@ -45,6 +45,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t;}}catch(e){}`,
           }}
         />
+        <a className="skip-link" href="#main">
+          {th.a11y.skipToContent}
+        </a>
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

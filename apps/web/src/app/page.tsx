@@ -13,7 +13,7 @@ export default function Home() {
   return (
     <>
       <AppHeader current="/" />
-      <main className="page" style={{ maxWidth: 1080 }}>
+      <main id="main" className="page page--wide">
         <section className="hero">
           <div>
             <p className="hero__brand">{th.brand}</p>
@@ -91,7 +91,15 @@ export default function Home() {
           </div>
         </section>
 
-        <footer className="footer">ProBooking · เฟส 0 · กรุงเทพฯ และปริมณฑล</footer>
+        <footer className="footer">
+          <span className="footer__brand">
+            <span className="brand__mark" aria-hidden>
+              P
+            </span>
+            ProBooking
+          </span>
+          <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+        </footer>
       </main>
     </>
   );

@@ -153,7 +153,7 @@ export default function FlowPage() {
   return (
     <>
       <AppHeader current="/flow" />
-      <main className="page" style={{ maxWidth: 680 }}>
+      <main id="main" className="page page--flow">
         <div className="page-head">
           <div>
             <span className="hero__eyebrow">{th.home.phase}</span>
@@ -163,11 +163,16 @@ export default function FlowPage() {
         </div>
 
         <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
-          {th.flow.run}
+          {running ? th.flow.running : th.flow.run}
         </Button>
+        {running && (
+          <div className="progress" aria-hidden>
+            <div className="progress__bar" />
+          </div>
+        )}
 
         {/* Preview the flow before it runs, so the page is not an empty button in a void. */}
-        {steps.length === 0 && !bookingId && (
+        {steps.length === 0 && !bookingId && !running && (
           <ol className="flow-preview" aria-hidden>
             {th.home.steps.map((s, i) => (
               <li key={s.t}>

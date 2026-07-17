@@ -4,6 +4,7 @@ import { useState } from "react";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
+import { ShieldCheckIcon, WalletIcon } from "./icons";
 
 /**
  * OTP login for the internal dashboards (Operations / Finance).
@@ -64,81 +65,87 @@ export function StaffLogin({
   }
 
   return (
-    <div className="auth-card">
-      <h2>{th.staffLogin.title[surface]}</h2>
-      <p className="lead muted">{th.staffLogin.description}</p>
-      {stage === "phone" ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (phone) void sendCode();
-          }}
-        >
-          <div className="field">
-            <label className="field__label" htmlFor="staff-phone">
-              {th.staffLogin.phoneLabel}
-            </label>
-            <input
-              id="staff-phone"
-              className="input"
-              aria-label={th.staffLogin.phoneLabel}
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="+66…"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
-          <Button type="submit" variant="primary" busy={busy} disabled={!phone}>
-            {th.staffLogin.sendCode}
-          </Button>
-        </form>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code) void submitCode();
-          }}
-        >
-          <div className="field">
-            <label className="field__label" htmlFor="staff-otp">
-              {th.staffLogin.codeLabel}
-            </label>
-            <input
-              id="staff-otp"
-              className="input"
-              aria-label={th.staffLogin.codeLabel}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder={th.staffLogin.codePlaceholder}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </div>
-          <div className="actions">
-            <Button type="submit" variant="primary" busy={busy} disabled={!code}>
-              {th.staffLogin.signIn}
+    <main id="main" className="page">
+      <div className="auth-card">
+        <div className="auth-card__mark" aria-hidden>
+          {surface === "operations" ? <ShieldCheckIcon /> : <WalletIcon />}
+        </div>
+        <h2>{th.staffLogin.title[surface]}</h2>
+        <p className="lead muted">{th.staffLogin.description}</p>
+        {stage === "phone" ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (phone) void sendCode();
+            }}
+          >
+            <div className="field">
+              <label className="field__label" htmlFor="staff-phone">
+                {th.staffLogin.phoneLabel}
+              </label>
+              <input
+                id="staff-phone"
+                className="input"
+                aria-label={th.staffLogin.phoneLabel}
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="+66…"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+            <Button type="submit" variant="primary" busy={busy} disabled={!phone}>
+              {th.staffLogin.sendCode}
             </Button>
-            <Button
-              type="button"
-              variant="subtle"
-              disabled={busy}
-              onClick={() => {
-                setCode("");
-                setError(null);
-                setStage("phone");
-              }}
-            >
-              {th.staffLogin.requestNewCode}
-            </Button>
-          </div>
-        </form>
-      )}
-      {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
-      )}
-    </div>
+          </form>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (code) void submitCode();
+            }}
+          >
+            <div className="field">
+              <label className="field__label" htmlFor="staff-otp">
+                {th.staffLogin.codeLabel}
+              </label>
+              <input
+                id="staff-otp"
+                className="input input--otp"
+                aria-label={th.staffLogin.codeLabel}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="••••••"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              />
+            </div>
+            <div className="actions">
+              <Button type="submit" variant="primary" busy={busy} disabled={code.length < 6}>
+                {th.staffLogin.signIn}
+              </Button>
+              <Button
+                type="button"
+                variant="subtle"
+                disabled={busy}
+                onClick={() => {
+                  setCode("");
+                  setError(null);
+                  setStage("phone");
+                }}
+              >
+                {th.staffLogin.requestNewCode}
+              </Button>
+            </div>
+          </form>
+        )}
+        {error && (
+          <p role="alert" className="form-error">
+            {error}
+          </p>
+        )}
+      </div>
+    </main>
   );
 }

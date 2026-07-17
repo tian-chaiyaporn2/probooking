@@ -106,7 +106,7 @@ export default function OpsPage() {
   return (
     <>
       <AppHeader current="/ops" />
-      <main className="page" style={{ maxWidth: 960 }}>
+      <main id="main" className="page page--ops">
         <div className="page-head">
           <div>
             <h1>{th.ops.title}</h1>
@@ -147,72 +147,78 @@ export default function OpsPage() {
           )}
         </div>
 
-        <h2 style={{ marginTop: "var(--s6)" }}>
-          {th.ops.pending} ({pending.length})
-        </h2>
-        <div className="card">
-          <ul data-testid="pending-list" className="rowlist">
-            {!loading && pending.length === 0 && (
-              <li className="empty">
-                <span className="empty__icon" aria-hidden>
-                  <InboxIcon />
-                </span>
-                <span className="empty__title">{th.ops.emptyPending}</span>
-              </li>
-            )}
-            {pending.map((p) => (
-              <li key={p.id} data-testid={`pending-${p.id}`}>
-                <span className={`row__avatar row__avatar--${p.kind}`} aria-hidden>
-                  {p.kind === "clinic" ? <ClinicIcon /> : <StethoscopeIcon />}
-                </span>
-                <span className="row__main">
-                  <span className="row__name">{p.name}</span>
-                  <span className="row__sub">
-                    <Badge variant={p.kind}>{th.ops.kind[p.kind]}</Badge>
-                    <code className="row__id">{p.id.slice(0, 8)}…</code>
+        <section className="section-block">
+          <div className="section-block__head">
+            <h2>{th.ops.pending}</h2>
+            <span className="section-block__count">{pending.length}</span>
+          </div>
+          <div className="card">
+            <ul data-testid="pending-list" className="rowlist">
+              {!loading && pending.length === 0 && (
+                <li className="empty">
+                  <span className="empty__icon" aria-hidden>
+                    <InboxIcon />
                   </span>
-                </span>
-                <span className="row__actions">
-                  <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify(p.kind, p.id)}>
-                    {th.ops.verify}
-                  </Button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <h2 style={{ marginTop: "var(--s6)" }}>
-          {th.ops.openCases} ({cases.length})
-        </h2>
-        <div className="card">
-          <ul data-testid="cases-list" className="rowlist">
-            {!loading && cases.length === 0 && (
-              <li className="empty">
-                <span className="empty__icon" aria-hidden>
-                  <CheckIcon />
-                </span>
-                <span className="empty__title">{th.ops.emptyCases}</span>
-              </li>
-            )}
-            {cases.map((c) => (
-              <li key={c.id} data-testid={`case-${c.id}`}>
-                <Badge variant={c.kind}>{c.kind}</Badge>
-                <span className="row__main">
-                  <span className="muted">{c.state}</span>{" "}
-                  {c.refId && <code className="row__id">{c.refId.slice(0, 8)}…</code>}
-                </span>
-                {c.kind === "credential_hold" && c.refId && (
+                  <span className="empty__title">{th.ops.emptyPending}</span>
+                </li>
+              )}
+              {pending.map((p) => (
+                <li key={p.id} data-testid={`pending-${p.id}`}>
+                  <span className={`row__avatar row__avatar--${p.kind}`} aria-hidden>
+                    {p.kind === "clinic" ? <ClinicIcon /> : <StethoscopeIcon />}
+                  </span>
+                  <span className="row__main">
+                    <span className="row__name">{p.name}</span>
+                    <span className="row__sub">
+                      <Badge variant={p.kind}>{th.ops.kind[p.kind]}</Badge>
+                      <code className="row__id">{p.id.slice(0, 8)}…</code>
+                    </span>
+                  </span>
                   <span className="row__actions">
-                    <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(c.refId as string)}>
-                      {th.ops.resolveHold}
+                    <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify(p.kind, p.id)}>
+                      {th.ops.verify}
                     </Button>
                   </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="section-block">
+          <div className="section-block__head">
+            <h2>{th.ops.openCases}</h2>
+            <span className="section-block__count">{cases.length}</span>
+          </div>
+          <div className="card">
+            <ul data-testid="cases-list" className="rowlist">
+              {!loading && cases.length === 0 && (
+                <li className="empty">
+                  <span className="empty__icon" aria-hidden>
+                    <CheckIcon />
+                  </span>
+                  <span className="empty__title">{th.ops.emptyCases}</span>
+                </li>
+              )}
+              {cases.map((c) => (
+                <li key={c.id} data-testid={`case-${c.id}`}>
+                  <Badge variant={c.kind}>{c.kind}</Badge>
+                  <span className="row__main">
+                    <span className="muted">{c.state}</span>{" "}
+                    {c.refId && <code className="row__id">{c.refId.slice(0, 8)}…</code>}
+                  </span>
+                  {c.kind === "credential_hold" && c.refId && (
+                    <span className="row__actions">
+                      <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(c.refId as string)}>
+                        {th.ops.resolveHold}
+                      </Button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
       </main>
     </>
   );

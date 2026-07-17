@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { InboxIcon } from "./icons";
+import { th } from "../lib/strings";
 
 export interface Column<T> {
   key: string;
@@ -44,8 +46,13 @@ export function DataTable<T>({ columns, rows, rowKey, loading, loadingRows = 6, 
             ))
           ) : rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="empty">
-                {empty}
+              <td colSpan={columns.length}>
+                <div className="empty">
+                  <span className="empty__icon" aria-hidden>
+                    <InboxIcon />
+                  </span>
+                  <span className="empty__title">{empty ?? th.common.emptyTable}</span>
+                </div>
               </td>
             </tr>
           ) : (
