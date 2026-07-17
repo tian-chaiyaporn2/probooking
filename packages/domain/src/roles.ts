@@ -128,14 +128,24 @@ export function requiresDualControl(capability: Capability): boolean {
 
 /**
  * §6.4 different-person approval: a dual-control action is satisfied only when the
- * executor is a DIFFERENT authorized person than the initiator. Non-dual-control
+ * executor is a DIFFERENT **authorized** person than the initiator. Non-dual-control
  * actions are always satisfiable by a single actor.
+ *
+ * Both halves matter. Comparing ids alone answers "were there two people?" but not "were
+ * they both allowed to do this?" — so any second pair of hands, including an unrelated
+ * clinic user, would have satisfied a payout approval.
  */
+export interface DualControlActor {
+  id: string;
+  role: Role;
+}
+
 export function dualControlSatisfied(
   capability: Capability,
-  initiatorId: string,
-  executorId: string,
+  initiator: DualControlActor,
+  executor: DualControlActor,
 ): boolean {
+  if (!can(executor.role, capability)) return false;
   if (!requiresDualControl(capability)) return true;
-  return initiatorId !== executorId;
+  return can(initiator.role, capability) && initiator.id !== executor.id;
 }

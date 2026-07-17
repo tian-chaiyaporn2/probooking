@@ -94,9 +94,45 @@ import type {
   AuditEntry,
   AuditRow,
   CallerIdentity,
+  ApprovalRequestRecord,
+  CreateApprovalInput,
+  ExecuteApprovalInput,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
+
+/** Row -> port record. Timestamps are epoch ms UTC across the port (see AuditRow). */
+function toApproval(r: {
+  id: string;
+  capability: string;
+  refType: string;
+  refId: string;
+  amount: number;
+  reason: string;
+  state: string;
+  initiatorId: string;
+  initiatorRole: string;
+  executorId: string | null;
+  executorRole: string | null;
+  createdAt: Date;
+  decidedAt: Date | null;
+}): ApprovalRequestRecord {
+  return {
+    id: r.id,
+    capability: r.capability,
+    refType: r.refType,
+    refId: r.refId,
+    amount: r.amount,
+    reason: r.reason,
+    state: r.state as ApprovalRequestRecord["state"],
+    initiatorId: r.initiatorId,
+    initiatorRole: r.initiatorRole,
+    executorId: r.executorId,
+    executorRole: r.executorRole,
+    createdAt: r.createdAt.getTime(),
+    decidedAt: r.decidedAt ? r.decidedAt.getTime() : null,
+  };
+}
 
 type OfferWithShift = {
   id: string;
@@ -549,6 +585,71 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         role: m.role as Role,
       })),
     };
+  }
+
+  // ----- §6.4 dual control -----
+
+  async createApproval(input: CreateApprovalInput): Promise<ApprovalRequestRecord> {
+    const r = await prisma.approvalRequest.create({ data: { ...input, state: "Pending" } });
+    return toApproval(r);
+  }
+
+  async getApproval(id: string): Promise<ApprovalRequestRecord | null> {
+    const r = await prisma.approvalRequest.findUnique({ where: { id } });
+    return r ? toApproval(r) : null;
+  }
+
+  async listPendingApprovals(): Promise<ApprovalRequestRecord[]> {
+    const rows = await prisma.approvalRequest.findMany({
+      where: { state: "Pending" },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    });
+    return rows.map(toApproval);
+  }
+
+  async executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }> {
+    return prisma.$transaction(async (tx) => {
+      const req = await tx.approvalRequest.findUnique({ where: { id: input.approvalId } });
+      if (!req) throw new Error("approval request not found");
+
+      // Claim the request as part of the write. Two approvers clicking at once would
+      // otherwise both read Pending and both write a refund event against one captured sum.
+      const claimed = await tx.approvalRequest.updateMany({
+        where: { id: input.approvalId, state: "Pending" },
+        data: {
+          state: "Executed",
+          executorId: input.executorId,
+          executorRole: input.executorRole,
+          decidedAt: new Date(),
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictError("approval request is no longer pending (concurrent update)");
+      }
+
+      const po = await tx.paymentOrder.findUnique({
+        where: { bookingId: req.refId },
+        include: { allocation: true },
+      });
+      if (!po?.allocation) throw new Error("no payment allocation for booking");
+
+      // PAY-05/06: the money moves as an immutable event, exactly like every other path —
+      // staff never edit a balance. PAY-04 idempotency is the unique key.
+      await tx.financialEvent.create({
+        data: {
+          paymentOrderId: po.id,
+          type: "Refund",
+          amount: req.amount,
+          idempotencyKey: input.idempotencyKey,
+        },
+      });
+      await tx.financialAllocation.update({
+        where: { paymentOrderId: po.id },
+        data: { refundState: "PartiallyRefunded" },
+      });
+      return { refund: req.amount, bookingId: req.refId };
+    });
   }
 
   async getBooking(id: string): Promise<BookingDetail | null> {

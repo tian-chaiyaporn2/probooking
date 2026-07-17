@@ -28,6 +28,7 @@ import {
   isUrgentEligible,
   canLeaveReview,
   can,
+  dualControlSatisfied,
   satang,
   type ConfirmationContext,
   type Capability,
@@ -473,6 +474,106 @@ export class MarketplaceController {
   }
 
   // ----- Operations dashboard (ADM-01) -----
+  // ----- §6.4 dual control: payment exceptions -------------------------------------
+  //
+  // An out-of-flow refund is a high-value money action, so it needs two different
+  // authorized people (§3, §6.4). `requiresDualControl`/`dualControlSatisfied` existed in
+  // the domain with no caller at all — the rule was tested and unenforced. It is now a
+  // proposal that one person raises and a different one executes; the DB CHECK
+  // `ApprovalRequest_different_person` backs it up so no row can contradict the rule.
+
+  @UseGuards(AuthGuard)
+  @Roles("finance")
+  @Post("finance/refunds")
+  async proposeRefund(
+    @Body() raw: { bookingId: string; amount: number; reason: string },
+    @CurrentUser() user?: TokenPayload,
+  ) {
+    const dto = validateBody<typeof raw>(raw, {
+      bookingId: { type: "string", maxLen: 64 },
+      amount: { type: "number", int: true, positive: true },
+      reason: { type: "string", maxLen: 500 },
+    });
+    const booking = await this.requireBooking(dto.bookingId);
+    // PAY-08 at proposal time: refuse to record a request that could never be executed.
+    this.payments.assertWithinAllocation(
+      satang(dto.amount),
+      satang(booking.captured),
+      "refund",
+    );
+    const approval = await this.repo.createApproval({
+      capability: "finance.execute_refund",
+      refType: "Booking",
+      refId: dto.bookingId,
+      amount: dto.amount,
+      reason: dto.reason,
+      initiatorId: user?.sub ?? "unknown",
+      initiatorRole: user?.role ?? "unknown",
+    });
+    await this.audit(user, "propose_refund", "booking", dto.bookingId, {
+      approvalId: approval.id,
+      amount: dto.amount,
+    });
+    return { id: approval.id, state: approval.state, amount: approval.amount };
+  }
+
+  @UseGuards(AuthGuard)
+  @Roles("finance", "administrator")
+  @Get("finance/refunds")
+  async listPendingRefunds() {
+    return { pending: await this.repo.listPendingApprovals() };
+  }
+
+  // Only `finance` holds finance.execute_refund (§3). An administrator is a *different*
+  // person but not an authorized one, so admin is deliberately not an approver here —
+  // separation of duties is the point of the rule.
+  @UseGuards(AuthGuard)
+  @Roles("finance")
+  @Post("finance/refunds/:id/approve")
+  async approveRefund(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const approval = await this.repo.getApproval(id);
+    if (!approval) throw new NotFoundException("approval request not found");
+    if (approval.state !== "Pending") {
+      throw new ConflictException(`approval is ${approval.state}`);
+    }
+
+    // §6.4: the executor must be authorized AND a different person than the initiator. The
+    // domain owns both halves — checking only "ids differ" would let any second pair of
+    // hands approve a payout.
+    const executor = { id: user?.sub ?? "unknown", role: (user?.role ?? "unknown") as Role };
+    const initiator = { id: approval.initiatorId, role: approval.initiatorRole as Role };
+    if (!dualControlSatisfied(approval.capability as Capability, initiator, executor)) {
+      throw new ForbiddenException(
+        "§6.4: this action requires approval by a different authorized person",
+      );
+    }
+
+    const booking = await this.requireBooking(approval.refId);
+    this.payments.assertWithinAllocation(
+      satang(approval.amount),
+      satang(booking.captured),
+      "refund",
+    );
+
+    try {
+      const result = await this.repo.executeApproval({
+        approvalId: id,
+        executorId: executor.id,
+        executorRole: executor.role,
+        idempotencyKey: `approval-refund:${id}`,
+      });
+      await this.audit(user, "execute_refund", "booking", approval.refId, {
+        approvalId: id,
+        amount: approval.amount,
+        initiatorId: approval.initiatorId,
+      });
+      return { id, state: "Executed", ...result };
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictException("approval was already executed");
+      throw e;
+    }
+  }
+
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Get("ops/cases")

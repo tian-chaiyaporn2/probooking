@@ -31,6 +31,10 @@ export default defineConfig({
         NODE_ENV: "test",
         AUTH_DEV_MODE: "true",
         CORS_ORIGINS: "http://localhost:3000",
+        // Two distinct finance identities: §6.4 dual control needs a real second person,
+        // and /auth/dev/token mints only one identity per role (sub = "dev:finance").
+        // Exercises the real OTP + access-list login rather than the dev shortcut.
+        STAFF_PHONES: "+66900000001:finance,+66900000002:finance,+66900000003:administrator",
       },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,

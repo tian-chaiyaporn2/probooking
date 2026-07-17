@@ -331,6 +331,41 @@ export interface CallerIdentity {
   memberships: { workspaceId: string; role: Role }[];
 }
 
+/** §6.4: a money action proposed by one authorized person, executed by a different one. */
+export interface ApprovalRequestRecord {
+  id: string;
+  capability: string;
+  refType: string;
+  refId: string;
+  amount: number; // integer satang
+  reason: string;
+  state: "Pending" | "Executed" | "Rejected";
+  initiatorId: string;
+  initiatorRole: string;
+  executorId: string | null;
+  executorRole: string | null;
+  createdAt: number; // epoch ms UTC
+  decidedAt: number | null;
+}
+
+export interface CreateApprovalInput {
+  capability: string;
+  refType: string;
+  refId: string;
+  amount: number;
+  reason: string;
+  initiatorId: string;
+  initiatorRole: string;
+}
+
+export interface ExecuteApprovalInput {
+  approvalId: string;
+  executorId: string;
+  executorRole: string;
+  /** Dedupes the money event this approval writes (PAY-04). */
+  idempotencyKey: string;
+}
+
 export interface BookingDetail {
   id: string;
   offerId: string;
@@ -449,6 +484,19 @@ export interface MarketplaceRepository {
    * self-certification.
    */
   resolveIdentity(phone: string): Promise<CallerIdentity>;
+
+  // ----- §6.4 dual control -----
+  /** Propose a money action. Writes no money — it only records the request. */
+  createApproval(input: CreateApprovalInput): Promise<ApprovalRequestRecord>;
+  getApproval(id: string): Promise<ApprovalRequestRecord | null>;
+  listPendingApprovals(): Promise<ApprovalRequestRecord[]>;
+  /**
+   * Execute a pending approval: mark it Executed and write its immutable Refund event, in
+   * one transaction. The Pending precondition is asserted as part of the write, so two
+   * approvers racing produce one execution rather than two refunds.
+   */
+  executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }>;
+
   getBooking(id: string): Promise<BookingDetail | null>;
   /**
    * CAN-03: did the professional actually arrive for this booking? Answered from the

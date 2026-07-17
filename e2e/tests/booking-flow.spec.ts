@@ -423,3 +423,80 @@ test("OFF-02 is enforced by the database, not only by a read (OFF-02 regression 
   });
   expect([400, 409]).toContain(second.status());
 });
+
+test("§6.4: a refund needs two different authorized people (dual-control guard)", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: Awaited<ReturnType<typeof page.request.get>>) => (await r.json()) as any;
+  const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
+  const opsAuth = { authorization: `Bearer ${ops.token}` };
+
+  // Two DISTINCT finance people, via the real OTP + access list (STAFF_PHONES). The
+  // dev-token endpoint mints one identity per role (sub = "dev:finance"), which cannot
+  // express "a different finance person" — the whole point of §6.4.
+  const fin1Auth = await loginAs(page.request, api, "+66900000001");
+  const fin2Auth = await loginAs(page.request, api, "+66900000002");
+
+  // Build a confirmed booking with captured funds.
+  const clinic = await j(await page.request.post(`${api}/clinics`, {
+    data: { branchName: `Dc ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66dc${uniq}` },
+  }));
+  await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Dc", profession: "physician", phone: `+66dp${uniq}`, payoutRef: "x" },
+  }));
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
+  const clinicAuth = await loginAs(page.request, api, `+66dc${uniq}`);
+  const proAuth = await loginAs(page.request, api, `+66dp${uniq}`);
+  const shift = await j(await page.request.post(`${api}/shifts`, {
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, headers: clinicAuth,
+  }));
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: pro.id }, headers: proAuth,
+  });
+  const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
+    data: { professionalId: pro.id }, headers: clinicAuth,
+  }));
+  await page.request.post(`${api}/offers/${offer.id}/accept`, { headers: proAuth });
+  const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`, { headers: clinicAuth }));
+  const bookingId = confirmed.booking.id;
+
+  // Proposing a refund is finance-only, and moves no money by itself.
+  expect((await page.request.post(`${api}/finance/refunds`, {
+    data: { bookingId, amount: 50_000, reason: "goodwill" }, headers: clinicAuth,
+  })).status()).toBe(403);
+  const approval = await j(await page.request.post(`${api}/finance/refunds`, {
+    data: { bookingId, amount: 50_000, reason: "goodwill" }, headers: fin1Auth,
+  }));
+  expect(approval.state).toBe("Pending");
+
+  // PAY-08 still binds at proposal: a refund beyond the captured funds is refused outright.
+  expect((await page.request.post(`${api}/finance/refunds`, {
+    data: { bookingId, amount: 99_999_999, reason: "too much" }, headers: fin1Auth,
+  })).status()).toBe(500); // conservation/allocation guard throws before anything is written
+
+  // §6.4: the initiator cannot approve their own request.
+  const self = await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, { headers: fin1Auth });
+  expect(self.status()).toBe(403);
+  expect(await self.text()).toContain("different authorized person");
+
+  // Nor can an unauthorized second pair of hands (a clinic owner is "different", not authorized).
+  expect((await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, {
+    headers: clinicAuth,
+  })).status()).toBe(403);
+
+  // An administrator is a different person but does NOT hold finance.execute_refund
+  // (§3 separation of duties), so they are not a valid approver either.
+  const adminAuth = await loginAs(page.request, api, "+66900000003");
+  expect((await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, {
+    headers: adminAuth,
+  })).status()).toBe(403);
+
+  // A different AUTHORIZED finance person executes it exactly once.
+  const done = await j(await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, { headers: fin2Auth }));
+  expect(done.state).toBe("Executed");
+  expect(done.refund).toBe(50_000);
+
+  // Replaying the approval does not refund twice.
+  expect((await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, { headers: fin2Auth })).status()).toBe(409);
+});

@@ -28,9 +28,28 @@ describe("money + dual-control predicates", () => {
   });
 
   it("dual-control requires a different second approver (§6.4)", () => {
-    expect(dualControlSatisfied("finance.execute_payout", "u1", "u1")).toBe(false);
-    expect(dualControlSatisfied("finance.execute_payout", "u1", "u2")).toBe(true);
+    const fin1 = { id: "u1", role: "finance" } as const;
+    const fin2 = { id: "u2", role: "finance" } as const;
+    expect(dualControlSatisfied("finance.execute_payout", fin1, fin1)).toBe(false);
+    expect(dualControlSatisfied("finance.execute_payout", fin1, fin2)).toBe(true);
     // A non-dual-control capability is satisfiable by a single actor.
-    expect(dualControlSatisfied("pro.apply", "u1", "u1")).toBe(true);
+    expect(dualControlSatisfied("pro.apply", { id: "u1", role: "professional" }, { id: "u1", role: "professional" })).toBe(true);
+  });
+
+  it("dual-control requires the second person to be AUTHORIZED, not merely different (§6.4)", () => {
+    // The check used to compare ids only, so any second pair of hands satisfied a payout
+    // approval — including someone with no finance authority at all.
+    const finance = { id: "u1", role: "finance" } as const;
+    const clinic = { id: "u2", role: "clinic_owner" } as const;
+    expect(dualControlSatisfied("finance.execute_payout", finance, clinic)).toBe(false);
+    // ...and the initiator must have been authorized too, or "two people" is theatre.
+    expect(dualControlSatisfied("finance.execute_payout", clinic, finance)).toBe(false);
+  });
+
+  it("a non-dual-control capability still requires the executor to hold it", () => {
+    // pro.apply is single-actor, but a clinic owner still cannot apply as a professional.
+    expect(
+      dualControlSatisfied("pro.apply", { id: "u1", role: "clinic_owner" }, { id: "u1", role: "clinic_owner" }),
+    ).toBe(false);
   });
 });

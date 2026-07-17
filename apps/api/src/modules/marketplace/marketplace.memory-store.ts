@@ -40,6 +40,9 @@ import type {
   AuditEntry,
   AuditRow,
   CallerIdentity,
+  ApprovalRequestRecord,
+  CreateApprovalInput,
+  ExecuteApprovalInput,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
@@ -94,6 +97,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly suspendedCredentials = new Set<string>();
   private readonly arrivals = new Set<string>(); // bookingIds with a recorded arrival (CAN-03)
   private readonly autoAcceptAt = new Map<string, number>(); // bookingId -> CMP-03 deadline
+  private readonly approvals = new Map<string, ApprovalRequestRecord>(); // §6.4 dual control
   private readonly reviews: MemReview[] = [];
   private readonly shifts = new Map<string, MemShift>();
   private readonly candidates: MemCandidate[] = [];
@@ -414,6 +418,54 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const id = this.bookingByOffer.get(offerId);
     const detail = id ? this.bookings.get(id) : undefined;
     return detail ? this.toRecord(detail) : null;
+  }
+
+  // ----- §6.4 dual control -----
+
+  async createApproval(input: CreateApprovalInput): Promise<ApprovalRequestRecord> {
+    const record: ApprovalRequestRecord = {
+      id: randomUUID(),
+      ...input,
+      state: "Pending",
+      executorId: null,
+      executorRole: null,
+      createdAt: Date.now(),
+      decidedAt: null,
+    };
+    this.approvals.set(record.id, record);
+    return { ...record };
+  }
+
+  async getApproval(id: string): Promise<ApprovalRequestRecord | null> {
+    const r = this.approvals.get(id);
+    return r ? { ...r } : null;
+  }
+
+  async listPendingApprovals(): Promise<ApprovalRequestRecord[]> {
+    return [...this.approvals.values()]
+      .filter((r) => r.state === "Pending")
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((r) => ({ ...r }));
+  }
+
+  async executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }> {
+    const req = this.approvals.get(input.approvalId);
+    if (!req) throw new Error("approval request not found");
+    // Parity with the Prisma conditional update: only a Pending request executes.
+    if (req.state !== "Pending") {
+      throw new ConflictError("approval request is no longer pending");
+    }
+    // Parity with the DB CHECK "ApprovalRequest_different_person" (§6.4).
+    if (req.initiatorId === input.executorId) {
+      throw new ConflictError("an approval cannot be executed by its initiator");
+    }
+    const booking = this.bookings.get(req.refId);
+    if (!booking) throw new Error("no payment allocation for booking");
+    req.state = "Executed";
+    req.executorId = input.executorId;
+    req.executorRole = input.executorRole;
+    req.decidedAt = Date.now();
+    return { refund: req.amount, bookingId: req.refId };
   }
 
   async getBooking(id: string): Promise<BookingDetail | null> {

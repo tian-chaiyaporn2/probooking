@@ -452,6 +452,40 @@ model Notification {
   @@index([refType, refId])
 }
 
+enum ApprovalState {
+  Pending
+  Executed
+  Rejected
+}
+
+// §6.4 different-person approval. A high-value money action (a payment exception: an
+// out-of-flow refund or payout) is *proposed* by one authorized person and *executed* by a
+// different one. The two halves are separate requests, so the invariant is enforced by
+// stored state rather than by asking a single request to contain two people.
+//
+// PAY-06 still holds: staff never edit balances directly. Executing an approval writes an
+// immutable FinancialEvent through the same conservation checks as every other money path.
+model ApprovalRequest {
+  id            String        @id @default(cuid())
+  // The capability being exercised (e.g. finance.execute_refund) — the domain decides
+  // whether it needs a second person.
+  capability    String
+  refType       String // "Booking"
+  refId         String
+  amount        Int // integer satang
+  reason        String
+  state         ApprovalState @default(Pending)
+  initiatorId   String
+  initiatorRole String
+  executorId    String?
+  executorRole  String?
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  decidedAt     DateTime?     @db.Timestamptz(3)
+
+  @@index([state, createdAt])
+  @@index([refType, refId])
+}
+
 // ----- Audit (every privileged change; §6.4) -----
 model AuditRecord {
   id         String   @id @default(cuid())
