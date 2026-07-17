@@ -15,7 +15,7 @@ export default function Home() {
   return (
     <>
       <AppHeader current="/" />
-      <main className="page" style={{ maxWidth: 960 }}>
+      <main id="main-content" tabIndex={-1} className="page page--wide">
         <section className="hero">
           <div className="hero__eyebrow">{th.home.phase}</div>
           <h1>{th.home.tagline}</h1>

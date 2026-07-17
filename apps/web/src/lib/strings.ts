@@ -20,6 +20,14 @@ export const th = {
     error: "ข้อผิดพลาด",
     loading: "กำลังโหลด…",
   },
+  a11y: {
+    skipToContent: "ข้ามไปยังเนื้อหาหลัก",
+  },
+  badge: {
+    clinic: "คลินิก",
+    professional: "บุคลากร",
+    credential_hold: "ระงับเอกสาร",
+  },
   nav: {
     home: "หน้าแรก",
     ops: "ปฏิบัติการ",

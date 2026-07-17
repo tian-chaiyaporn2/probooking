@@ -138,7 +138,7 @@ export default function FlowPage() {
   return (
     <>
     <AppHeader current="/flow" />
-    <main className="page" style={{ maxWidth: 640 }}>
+    <main id="main-content" tabIndex={-1} className="page page--narrow">
       <h1>ProBooking — booking flow</h1>
       <p className="muted">
         Onboard and verify a clinic and professional, create a binding offer, accept it

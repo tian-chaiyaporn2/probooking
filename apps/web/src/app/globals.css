@@ -79,10 +79,35 @@ html { -webkit-text-size-adjust: 100%; color-scheme: light; }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.55;
   color: var(--text);
   background: var(--bg);
+}
+
+/* Skip link: off-screen until focused. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 100;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+.skip-link:focus {
+  left: max(1rem, env(safe-area-inset-left, 0));
+  top: max(1rem, env(safe-area-inset-top, 0));
+  width: auto;
+  height: auto;
+  overflow: visible;
 }
 
 h1, h2, h3 { color: var(--ink); line-height: 1.25; }
@@ -110,6 +135,9 @@ img, svg { max-width: 100%; height: auto; }
   padding-inline: clamp(1rem, 4vw, 1.5rem);
   padding-block: clamp(1.5rem, 4vw, 2.5rem);
 }
+.page--narrow { --page-max: 40rem; }
+.page--wide { --page-max: 60rem; }
+.page--finance { --page-max: 65rem; }
 
 /* ---- App header / nav (shared shell for the surfaces) ---- */
 .app-header {
@@ -162,6 +190,17 @@ img, svg { max-width: 100%; height: auto; }
 .app-nav a:hover { color: var(--ink); background: var(--bg); }
 .app-nav a[aria-current="page"] { color: var(--primary-hover); background: var(--primary-050); }
 .app-nav-toggle { flex: none; }
+
+.app-nav-backdrop {
+  display: block;
+  position: fixed; inset: 0; z-index: 9;
+  border: none; padding: 0; margin: 0;
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+  cursor: default;
+}
+@media (min-width: 768px) {
+  .app-nav-backdrop { display: none; }
+}
 
 @media (min-width: 768px) {
   .app-header__inner {
@@ -268,7 +307,13 @@ img, svg { max-width: 100%; height: auto; }
 }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s4); }
 .stat__label { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.15rem; }
-.stat__value { font-size: 1.4rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stat__value {
+  font-size: clamp(1.1rem, 4vw, 1.4rem);
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
 
 /* ---- Badges ---- */
 .badge {
@@ -375,7 +420,7 @@ img, svg { max-width: 100%; height: auto; }
 /* ---- Landing ---- */
 .hero { padding-block: clamp(2rem, 6vw, 4rem); }
 .hero__eyebrow { color: var(--primary-hover); font-weight: 700; letter-spacing: 0.02em; font-size: 0.85rem; text-transform: uppercase; }
-.hero h1 { font-size: clamp(2rem, 5vw, 2.75rem); }
+.hero h1 { font-size: clamp(1.35rem, 5vw, 2.75rem); }
 .trust-row { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s4); }
 .cta-grid { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: var(--s6); }
 .cta-card {
@@ -390,6 +435,7 @@ img, svg { max-width: 100%; height: auto; }
 
 @media (max-width: 640px) {
   h1 { font-size: 1.4rem; }
+  .trust-row { display: none; } /* tagline already states the same trust points */
   .page-toolbar { flex-direction: column; align-items: stretch; }
   .page-toolbar__actions { width: 100%; }
   .page-toolbar__actions .btn { flex: 1 1 auto; }

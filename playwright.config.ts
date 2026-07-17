@@ -21,6 +21,11 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile-chrome", use: { ...devices["Pixel 5"] } },
+    // iPhone viewport via Chromium — WebKit needs OS libs unavailable in CI sandboxes.
+    {
+      name: "mobile-iphone",
+      use: { ...devices["iPhone 12"], browserName: "chromium" },
+    },
   ],
   webServer: [
     {

@@ -90,7 +90,7 @@ export default function OpsPage() {
   return (
     <>
       <AppHeader current="/ops" />
-      <main className="page" style={{ maxWidth: 960 }}>
+      <main id="main-content" tabIndex={-1} className="page page--wide">
         <div className="page-toolbar">
           <h1 className="page-toolbar__title">{th.ops.title}</h1>
           <div className="page-toolbar__actions">
@@ -127,7 +127,7 @@ export default function OpsPage() {
             {!loading && pending.length === 0 && <li className="empty">{th.common.none}</li>}
             {pending.map((p) => (
               <li key={p.id} data-testid={`pending-${p.id}`}>
-                <Badge variant={p.kind}>{p.kind}</Badge>
+                <Badge variant={p.kind} />
                 <span className="row__main">
                   {p.name} <code className="row__id">{p.id.slice(0, 8)}…</code>
                 </span>
@@ -149,7 +149,7 @@ export default function OpsPage() {
             {!loading && cases.length === 0 && <li className="empty">{th.common.none}</li>}
             {cases.map((c) => (
               <li key={c.id} data-testid={`case-${c.id}`}>
-                <Badge variant={c.kind}>{c.kind}</Badge>
+                <Badge variant={c.kind} />
                 <span className="row__main">
                   <span className="muted">{c.state}</span>{" "}
                   {c.refId && <code className="row__id">{c.refId.slice(0, 8)}…</code>}

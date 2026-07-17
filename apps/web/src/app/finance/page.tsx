@@ -96,7 +96,7 @@ export default function FinancePage() {
   return (
     <>
       <AppHeader current="/finance" />
-      <main className="page" style={{ maxWidth: 1040 }}>
+      <main id="main-content" tabIndex={-1} className="page page--finance">
         <div className="page-toolbar">
           <h1 className="page-toolbar__title">{th.finance.title}</h1>
           <div className="page-toolbar__actions">
