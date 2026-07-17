@@ -465,9 +465,12 @@ export class MarketplaceController {
   @Post("shifts/:id/offer")
   async offerToProfessional(
     @Param("id") shiftId: string,
-    @Body() dto: { professionalId: string },
+    @Body() raw: { professionalId: string },
     @CurrentUser() user?: TokenPayload,
   ) {
+    const dto = validateBody<{ professionalId: string }>(raw, {
+      professionalId: { type: "string", maxLen: 64 },
+    });
     const shift = await this.requireOpenShift(shiftId);
     // OFF-01: only a clinic owner/admin of THIS workspace may send a binding offer. The
     // role now comes from the caller's membership; it used to be `dto.actorRole` defaulting

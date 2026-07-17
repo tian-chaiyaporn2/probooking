@@ -74,12 +74,15 @@ export default function OpsPage() {
     );
   }
 
+  // Narrowed after the login gate — nested handlers close over this, not `string | null`.
+  const auth = token;
+
   async function verify(kind: "clinic" | "professional", id: string) {
     setBusy(true);
     try {
-      if (kind === "clinic") await verifyClinic(id, token);
-      else await verifyProfessional(id, token);
-      await load(token);
+      if (kind === "clinic") await verifyClinic(id, auth);
+      else await verifyProfessional(id, auth);
+      await load(auth);
       toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
@@ -91,8 +94,8 @@ export default function OpsPage() {
   async function resolve(bookingId: string) {
     setBusy(true);
     try {
-      await resolveHold(bookingId, token);
-      await load(token);
+      await resolveHold(bookingId, auth);
+      await load(auth);
       toast.success("ปลดการระงับแล้ว");
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
@@ -107,7 +110,7 @@ export default function OpsPage() {
       <main className="page" style={{ maxWidth: 960 }}>
         <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
           <h1 style={{ margin: 0 }}>{th.ops.title}</h1>
-          <Button data-testid="refresh" onClick={() => void load(token)} disabled={busy} icon={<RefreshIcon />}>
+          <Button data-testid="refresh" onClick={() => void load(auth)} disabled={busy} icon={<RefreshIcon />}>
             {th.common.refresh}
           </Button>
         </div>
