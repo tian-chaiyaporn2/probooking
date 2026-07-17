@@ -4,9 +4,10 @@ Feature: Offer expiry, soft hold, payment, and atomic confirmation
   prefunding and final eligibility, and is atomic.
 
   Scenario: Acceptance creates a soft hold, not a booking
-    Given a user with role "professional"
-    When acceptance is applied to the offer
+    Given a shift with a pending offer awaiting acceptance
+    When the professional accepts the offer into a soft hold
     Then the offer awaits payment rather than becoming a booking
+    And no booking exists for that offer
 
   Scenario: An offer cannot convert before payment
     Given a user with role "professional"
@@ -17,3 +18,11 @@ Feature: Offer expiry, soft hold, payment, and atomic confirmation
     When durable prefunding arrives after expiry
     Then no booking is created
     And the payment enters refund or payment-exception handling
+
+  Scenario: Urgent offer expires in 2 hours or by shift start whichever sooner
+    Given an urgent offer sent at a known time before a near shift start
+    Then the effective offer expiry is the earlier of the 2-hour timer and shift start
+
+  Scenario: Standard offer expires in 12 hours or by shift start whichever sooner
+    Given a standard offer sent at a known time well before shift start
+    Then the effective offer expiry is sent-at plus 12 hours

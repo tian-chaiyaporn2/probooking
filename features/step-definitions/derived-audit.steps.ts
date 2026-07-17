@@ -76,8 +76,7 @@ Given("any privileged change is executed", async function (this: ProBookingWorld
   this.state.store = store;
 });
 
-Then(
-  "an immutable audit record captures actor, authority, time, before, and after",
+Then("an immutable audit record captures actor, authority, time, before, and after",
   async function (this: ProBookingWorld) {
     const [rec] = await this.state.store.listAudit();
     assert.ok(rec, "expected an audit record");
@@ -92,5 +91,27 @@ Then(
     const all = await this.state.store.listAudit();
     assert.equal(all.length, 2);
     assert.equal(all.find((r: { action: string }) => r.action === "verify_professional")?.actor, "+66000000001");
+  },
+);
+
+Given("a confirmed booking and an open support case", async function (this: ProBookingWorld) {
+  this.state.store = newStore();
+  this.state.seed = await seedConfirmedBooking(this.state.store);
+  this.state.case = await this.state.store.createSupportCase(
+    this.state.seed.bookingId,
+    "completion_review",
+    "ops metrics fixture",
+  );
+});
+
+When("Ops metrics are requested", async function (this: ProBookingWorld) {
+  this.state.metrics = await this.state.store.getMetrics();
+});
+
+Then(
+  "metrics count at least one confirmed booking and one open case",
+  function (this: ProBookingWorld) {
+    assert.ok(this.state.metrics.bookings.confirmed >= 1);
+    assert.ok(this.state.metrics.cases.open >= 1);
   },
 );

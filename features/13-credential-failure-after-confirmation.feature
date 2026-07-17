@@ -5,10 +5,12 @@ Feature: Credential or insurance failure after confirmation
 
   Scenario: Licence expiry before shift end holds the booking
     Given a confirmed booking whose professional licence will expire before shift end
-    When the credential is detected as invalid
-    Then the booking is placed on Hold for Operations review
+    When the licence expiry is recorded and Operations holds the booking
+    Then offer eligibility reports the licence does not cover the shift
+    And the booking is placed on Hold for Operations review
 
   Scenario: Required insurance lapse holds the booking
     Given a confirmed booking that requires insurance
     When the insurance becomes Expired before shift end
-    Then the booking is placed on Hold for Operations review
+    Then insurance status is Expired
+    And the booking is placed on Hold for Operations review

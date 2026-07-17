@@ -1,7 +1,7 @@
-import { Given, Then } from "@cucumber/cucumber";
+import { Given, When, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
 import { aggregateRating, canLeaveReview, countsTowardPublicReputation } from "@probook/domain";
-import { newStore, seedConfirmedBooking } from "../support/store.js";
+import { newStore, seedConfirmedBooking, completeAndPay } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
 /** Area 12 (§9.4-12): review rights, cold-start rating, related-party exclusion (REV-01..05). */
@@ -32,6 +32,101 @@ Given("a professional with two published reviews", function (this: ProBookingWor
 
 Then("no aggregate rating or rating-based sorting is shown", function (this: ProBookingWorld) {
   assert.equal(this.state.rating, null); // REV-04: hidden until ≥3 published reviews
+});
+
+Given(
+  "a professional with three completed bookings and published review pairs",
+  async function (this: ProBookingWorld) {
+    this.state.store = newStore();
+    // First booking creates the professional; subsequent bookings reuse them.
+    const first = await seedConfirmedBooking(this.state.store);
+    this.state.professionalId = first.professionalId;
+    await completeAndPay(this.state.store, first);
+    await this.state.store.createReview({
+      bookingId: first.bookingId,
+      authorId: first.clinicId,
+      subjectId: first.professionalId,
+      score: 5,
+      tags: [],
+    });
+    await this.state.store.createReview({
+      bookingId: first.bookingId,
+      authorId: first.professionalId,
+      subjectId: first.clinicId,
+      score: 4,
+      tags: [],
+    });
+
+    for (const score of [4, 5]) {
+      const next = await seedConfirmedBooking(this.state.store, {
+        professionalId: this.state.professionalId,
+      });
+      await completeAndPay(this.state.store, next);
+      await this.state.store.createReview({
+        bookingId: next.bookingId,
+        authorId: next.clinicId,
+        subjectId: next.professionalId,
+        score,
+        tags: [],
+      });
+      await this.state.store.createReview({
+        bookingId: next.bookingId,
+        authorId: next.professionalId,
+        subjectId: next.clinicId,
+        score: 5,
+        tags: [],
+      });
+    }
+  },
+);
+
+When("the subject rating is requested", async function (this: ProBookingWorld) {
+  this.state.rating = await this.state.store.getSubjectRating(this.state.professionalId);
+});
+
+Then("an aggregate rating is returned", function (this: ProBookingWorld) {
+  assert.ok(this.state.rating);
+  assert.equal(this.state.rating.count, 3);
+  assert.ok(this.state.rating.average >= 4);
+});
+
+Then("with only two published scores it remains hidden", async function (this: ProBookingWorld) {
+  // Separate store with only two published scores on a different professional — cold-start gate.
+  const store = newStore();
+  const first = await seedConfirmedBooking(store);
+  await completeAndPay(store, first);
+  await store.createReview({
+    bookingId: first.bookingId,
+    authorId: first.clinicId,
+    subjectId: first.professionalId,
+    score: 5,
+    tags: [],
+  });
+  await store.createReview({
+    bookingId: first.bookingId,
+    authorId: first.professionalId,
+    subjectId: first.clinicId,
+    score: 4,
+    tags: [],
+  });
+  const second = await seedConfirmedBooking(store, { professionalId: first.professionalId });
+  await completeAndPay(store, second);
+  await store.createReview({
+    bookingId: second.bookingId,
+    authorId: second.clinicId,
+    subjectId: second.professionalId,
+    score: 4,
+    tags: [],
+  });
+  await store.createReview({
+    bookingId: second.bookingId,
+    authorId: second.professionalId,
+    subjectId: second.clinicId,
+    score: 5,
+    tags: [],
+  });
+  const rating = await store.getSubjectRating(first.professionalId);
+  assert.equal(rating, null); // REV-04: still below 3 published scores on the subject
 });
 
 Given("a related-party booking", function (this: ProBookingWorld) {

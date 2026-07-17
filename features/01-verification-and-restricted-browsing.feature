@@ -12,5 +12,5 @@ Feature: Verification and restricted browsing
   Scenario: Public profile separates verified from self-declared facts
     Given a professional with a verified licence and a self-declared bio
     When a clinic views the public profile
-    Then verified facts are labelled with a last-checked date
+    Then verified facts are labelled as platform-verified
     And self-declared content is clearly distinguished

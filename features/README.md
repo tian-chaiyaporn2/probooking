@@ -21,13 +21,30 @@ Plan Immediate Action #1 ("Convert Phase 0 and Phase 1 PRD requirements into BDD
 | 13 | Credential/insurance failure after confirmation | `13-credential-failure-after-confirmation.feature` |
 | 14 | Derived customer status & immutable audit | `14-derived-status-and-audit.feature` |
 
+Case suites (success / edge / error): `15`–`20`.
+
 ## Running
 
 ```bash
-pnpm test:bdd            # all features
+pnpm test:bdd            # CI gate — excludes @wip
+pnpm test:bdd:all        # includes @wip (expected pending until product hooks land)
 pnpm test:bdd -- features/05-offer-expiry-and-confirmation.feature
 ```
 
-Steps live in `features/step-definitions/`. Many steps can exercise `@probook/domain`
-directly (pure, no I/O); integration steps drive the API. Tag `@wip` for unimplemented
-scenarios so they can be excluded from CI gates.
+Steps live in `features/step-definitions/`. Many steps exercise `@probook/domain`
+directly (pure, no I/O); stateful scenarios drive the in-memory MarketplaceRepository
+via `features/support/store.ts`. Tag `@wip` for unimplemented product paths so they
+stay out of the CI gate; stubs in `wip-pending.steps.ts` return pending.
+
+## Coverage honesty
+
+Scenarios assert real store/domain outcomes wherever hooks exist (search filters,
+availability round-trip, invitations, contact reveal, message round-trip,
+auto-accept deadline + once-only payout, Ops `completion_review` cases, hold
+blocks payout until resolve, rating cold-start via published reviews, conservation
+from stored booking amounts and cancel reconcile, OFF-03/04 soft-hold + expiry
+timers, LOC-02 satang checkout, REP-01 history, REP-03 metrics, arrival evidence).
+Remaining `@wip` gaps need product work first: soft-hold overlap, open-to-requests
+matching, location/availability search filters, clinic-confirm without pro submit
+(CMP-04), overtime/shortened payable (CMP-05), PAY-10 refund split, and REV-05
+related-party exclusion in the store.

@@ -7,7 +7,7 @@ Feature: Confirmation eligibility and atomic booking — success/edge/error case
     Given an eligible confirmation
     When the offer is confirmed
     Then a booking is created
-    And captured funds conserve
+    And captured funds conserve from the stored booking amounts
 
   Scenario: Edge — a duplicate confirmation returns the same booking (idempotent)
     Given an eligible confirmation

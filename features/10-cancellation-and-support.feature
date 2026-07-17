@@ -19,3 +19,9 @@ Feature: Cancellation, no-show, partial work, and support outcomes
   Scenario: Partial work routes to support
     Given a shift with partial work
     Then the outcome is resolved by support
+
+  Scenario: Arrival is recorded before an after-arrival cancellation
+    Given a confirmed booking ready for arrival
+    When the professional records arrival
+    Then the booking shows arrived
+    And cancelling after arrival at full compensation conserves captured funds

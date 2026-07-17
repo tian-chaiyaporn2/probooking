@@ -542,6 +542,12 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (!detail) throw new Error("booking not found");
     // Idempotency parity with the Prisma Payout idempotencyKey unique constraint.
     if (detail.payoutState === "Paid") throw new ConflictError("payout already recorded");
+    // Parity with Prisma's claim: `state: AwaitingCompletion, heldAt: null`. Paying out a
+    // held or not-yet-completed booking must conflict here too, or the memory store would
+    // silently pass a VER-06 regression the real one rejects.
+    if (detail.state !== "AwaitingCompletion" || detail.heldAt !== null) {
+      throw new ConflictError("booking is no longer awaiting completion (concurrent update)");
+    }
     detail.state = "ServiceCompleted";
     detail.payoutState = "Paid";
     this.appendEvent(input.bookingId, "Payout", input.payoutAmount, input.idempotencyKey);
@@ -651,6 +657,17 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async setLicenceValidUntil(professionalId: string, validUntil: number | null): Promise<void> {
     if (validUntil === null) this.licenceValidUntil.delete(professionalId);
     else this.licenceValidUntil.set(professionalId, validUntil);
+  }
+
+  /** Test seam: mark insurance Expired so post-confirmation VER-05/06 paths are reachable. */
+  async expireInsurance(professionalId: string): Promise<InsuranceStatus> {
+    const existing = this.insurance.get(professionalId);
+    const status: InsuranceStatus = {
+      state: "Expired",
+      validUntil: existing?.validUntil ?? Date.now() - 1,
+    };
+    this.insurance.set(professionalId, status);
+    return status;
   }
 
   async getBookingContact(bookingId: string): Promise<BookingContact | null> {
