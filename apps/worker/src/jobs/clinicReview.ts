@@ -15,37 +15,32 @@ export interface ReviewSweepResult {
 /**
  * CMP-04 sweep. When the professional never submits completion, a booking sits in
  * Confirmed/InProgress. 48h after the scheduled shift end, Operations must review it.
- * This finds those bookings (whose shift ended > 48h ago) that don't already have a
- * review case, and triggers the API's controlled flag-inactive action to open one.
- * Idempotent: bookings already cased are excluded, and flag-inactive itself dedupes.
+ * Already-cased bookings are excluded in SQL (NOT EXISTS) so a backlog of stuck
+ * Confirmed rows cannot fill the batch and starve new due bookings forever.
  */
 export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSweepResult> {
   const cutoff = new Date(now - CLINIC_COMPLETION_REVIEW_AFTER);
-  const candidates = await prisma.booking.findMany({
-    where: {
-      state: { in: ["Confirmed", "InProgress"] },
-      shift: { endsAt: { lte: cutoff } },
-    },
-    select: { id: true },
-    // The candidate set here grows monotonically (a booking nobody completes stays
-    // Confirmed forever), so an unbounded fetch degrades every pass as history accumulates.
-    take: BATCH,
-  });
+  // SupportCase uses polymorphic refType/refId (no Booking relation), so NOT EXISTS.
+  const candidates = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT b.id
+    FROM "Booking" b
+    INNER JOIN "Shift" s ON s.id = b."shiftId"
+    WHERE b.state IN ('Confirmed', 'InProgress')
+      AND s."endsAt" <= ${cutoff}
+      AND NOT EXISTS (
+        SELECT 1 FROM "SupportCase" sc
+        WHERE sc."refType" = 'Booking'
+          AND sc."refId" = b.id
+          AND sc.kind = ${REVIEW_KIND}
+      )
+    ORDER BY s."endsAt" ASC
+    LIMIT ${BATCH}
+  `;
   if (candidates.length === 0) return { due: 0, flagged: 0, failed: 0 };
-
-  // Exclude bookings that already have a completion-review case. Scope the lookup to
-  // this pass's candidates so the scan stays bounded as historical cases accumulate.
-  const candidateIds = candidates.map((c) => c.id);
-  const cased = await prisma.supportCase.findMany({
-    where: { refType: "Booking", kind: REVIEW_KIND, refId: { in: candidateIds } },
-    select: { refId: true },
-  });
-  const casedIds = new Set(cased.map((c) => c.refId));
-  const due = candidates.filter((c) => !casedIds.has(c.id));
 
   let flagged = 0;
   let failed = 0;
-  for (const booking of due) {
+  for (const booking of candidates) {
     try {
       const res = await fetch(`${API_BASE}/bookings/${booking.id}/flag-inactive`, {
         method: "POST",
@@ -64,5 +59,5 @@ export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSw
       console.error(`[clinic-review] ${booking.id} failed: ${(e as Error).message}`);
     }
   }
-  return { due: due.length, flagged, failed };
+  return { due: candidates.length, flagged, failed };
 }

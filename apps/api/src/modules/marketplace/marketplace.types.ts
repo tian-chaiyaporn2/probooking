@@ -461,11 +461,29 @@ export interface MarketplaceRepository {
   // --- Availability & professional search (AVL, SRC) ---
   addAvailability(professionalId: string, startsAt: number, endsAt: number, openToRequests: boolean): Promise<AvailabilityBlock>;
   listAvailability(professionalId: string): Promise<AvailabilityBlock[]>;
-  /** AVL-03/§6.3: does the professional have a confirmed booking overlapping [startsAt, endsAt]? */
-  hasScheduleOverlap(professionalId: string, startsAt: number, endsAt: number): Promise<boolean>;
+  /** AVL-03/§6.3: does the professional have a conflicting booking or soft hold overlapping [startsAt, endsAt)? */
+  hasScheduleOverlap(
+    professionalId: string,
+    startsAt: number,
+    endsAt: number,
+    opts?: { excludeOfferId?: string },
+  ): Promise<boolean>;
   searchProfessionals(filters: ProfessionalFilters): Promise<ProfessionalSearchResult[]>;
-  /** Transition an offer's state (and optionally set fundingDueAt). Returns the updated record. */
-  setOfferState(id: string, state: OfferState, fundingDueAt?: number): Promise<OfferRecord | null>;
+  /**
+   * Transition an offer's state (and optionally set fundingDueAt).
+   * When `from` is set, the write is conditional on the current state (accept TOCTOU).
+   * Returns null if the offer is missing or the conditional claim fails.
+   */
+  setOfferState(
+    id: string,
+    state: OfferState,
+    opts?: { fundingDueAt?: number; from?: OfferState },
+  ): Promise<OfferRecord | null>;
+  /**
+   * OFF-03: move past-deadline PendingResponse / AwaitingPayment offers to Expired.
+   * Returns how many offers were expired this pass.
+   */
+  expireStaleOffers(now: number): Promise<number>;
   /**
    * Atomically (BKG-02) transition the offer to Converted AND create the Booking and
    * its Payment Protected money records (PaymentOrder + FinancialAllocation + a
@@ -494,10 +512,15 @@ export interface MarketplaceRepository {
    * Execute a pending approval: mark it Executed and write its immutable Refund event, in
    * one transaction. The Pending precondition is asserted as part of the write, so two
    * approvers racing produce one execution rather than two refunds.
+   * Also enforces remaining refundable headroom (PAY-08) against prior Refund events.
    */
   executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }>;
 
   getBooking(id: string): Promise<BookingDetail | null>;
+  /** Sum of Refund financial events for a booking (PAY-08 remaining headroom). */
+  sumRefunded(bookingId: string): Promise<number>;
+  /** Sum of Payout financial events for a booking (receipt / partial cancel). */
+  sumPaidOut(bookingId: string): Promise<number>;
   /**
    * CAN-03: did the professional actually arrive for this booking? Answered from the
    * recorded attendance trail — arrival decides a 100% payout, so it must be an observed

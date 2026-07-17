@@ -4,6 +4,7 @@ import { autoAcceptSweep } from "./jobs/autoAccept.js";
 import { clinicCompletionReviewSweep } from "./jobs/clinicReview.js";
 import { reviewPublishSweep } from "./jobs/reviewPublish.js";
 import { reminderSweep } from "./jobs/reminders.js";
+import { expireOffersSweep } from "./jobs/expireOffers.js";
 
 /**
  * ProBooking worker. Runs time-driven jobs (§7.2): auto-accept (CMP-03), clinic
@@ -29,6 +30,10 @@ async function tick(): Promise<void> {
   const now = Date.now();
   // Each sweep is isolated so a DB error in one (e.g. review-publish) can't skip the
   // rest of the pass (e.g. reminders / auto-accept).
+  await runSweep("expire-offers", async () => {
+    const ex = await expireOffersSweep(now);
+    if (ex.expired > 0) console.log(`[expire-offers] expired=${ex.expired}`);
+  });
   await runSweep("auto-accept", async () => {
     const aa = await autoAcceptSweep(now);
     if (aa.due > 0 || aa.failed > 0) {
@@ -58,12 +63,15 @@ async function tick(): Promise<void> {
 
 /** Set once a shutdown signal arrives; the loop drains rather than dying mid-pass. */
 let stopping = false;
+/** Resolves when the in-flight tick (if any) finishes — shutdown waits on this. */
+let tickDone: Promise<void> = Promise.resolve();
 
 async function main(): Promise<void> {
   console.log(
     `ProBooking worker starting — auto-accept sweep${runOnce ? " (--once)" : ` every ${SWEEP_MS}ms`}`,
   );
-  await tick();
+  tickDone = tick();
+  await tickDone;
   if (runOnce) {
     await prisma.$disconnect();
     process.exit(0);
@@ -77,25 +85,28 @@ async function main(): Promise<void> {
       // `.catch` before `.finally`: an unhandled rejection here would terminate the process
       // and the loop would never re-arm — auto-accept (i.e. payouts) would stop silently.
       // runSweep already absorbs per-sweep errors; this covers anything thrown outside them.
-      void tick()
+      tickDone = tick()
         .catch((e) => console.error("[worker] tick failed:", (e as Error)?.message ?? e))
         .finally(loop);
+      void tickDone;
     }, SWEEP_MS);
   };
   loop();
 }
 
 /**
- * Drain on shutdown: an orchestrator sends SIGTERM on every redeploy. Exiting mid-pass is
- * safe for correctness (every action is idempotent) but truncates the pass at an arbitrary
- * booking and drops the connection pool without closing it.
+ * Drain on shutdown: an orchestrator sends SIGTERM on every redeploy. Wait for the
+ * current pass to finish so we don't cut connections mid-batch.
  */
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
     console.log(`[worker] ${signal} received — finishing current pass, then exiting`);
-    void prisma.$disconnect().finally(() => process.exit(0));
+    void tickDone
+      .catch(() => undefined)
+      .then(() => prisma.$disconnect())
+      .finally(() => process.exit(0));
   });
 }
 

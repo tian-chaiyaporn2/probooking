@@ -4,6 +4,8 @@ import {
   cancellationOutcome,
   payableFromFraction,
   effectiveOfferExpiry,
+  effectiveFundingExpiry,
+  isExpired,
   autoAcceptDueAt,
   completionReviewDueAt,
   isUrgentEligible,
@@ -111,6 +113,12 @@ describe("cancellation policy (CAN-01..05)", () => {
       cancellationOutcome({ actor: "professional", reason: "ordinary", hoursBeforeStart: 0, arrived: true }),
     ).toEqual({ fraction: 0 });
   });
+
+  it("rejects non-finite hoursBeforeStart", () => {
+    expect(() =>
+      cancellationOutcome({ actor: "clinic", reason: "ordinary", hoursBeforeStart: Number.NaN, arrived: false }),
+    ).toThrow(RangeError);
+  });
 });
 
 describe("offer expiry (OFF-03)", () => {
@@ -124,6 +132,18 @@ describe("offer expiry (OFF-03)", () => {
     const sentAt = 0;
     const shiftStart = 100 * 60 * 60 * 1000; // far away
     expect(effectiveOfferExpiry(sentAt, shiftStart, "urgent")).toBe(OFFER_TIMERS.urgentExpiry);
+  });
+
+  it("funding window is capped by shift start", () => {
+    const acceptedAt = 0;
+    const shiftStart = OFFER_TIMERS.fundingWindow / 2;
+    expect(effectiveFundingExpiry(acceptedAt, shiftStart)).toBe(shiftStart);
+    expect(effectiveFundingExpiry(acceptedAt, 100 * 60 * 60 * 1000)).toBe(OFFER_TIMERS.fundingWindow);
+  });
+
+  it("isExpired is inclusive of the deadline instant", () => {
+    expect(isExpired(100, 100)).toBe(true);
+    expect(isExpired(99, 100)).toBe(false);
   });
 });
 
