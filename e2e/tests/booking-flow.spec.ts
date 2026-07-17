@@ -505,7 +505,7 @@ test("§6.4: a refund needs two different authorized people (dual-control guard)
   // PAY-08 still binds at proposal: a refund beyond the captured funds is refused outright.
   expect((await page.request.post(`${api}/finance/refunds`, {
     data: { bookingId, amount: 99_999_999, reason: "too much" }, headers: fin1Auth,
-  })).status()).toBe(500); // conservation/allocation guard throws before anything is written
+  })).status()).toBe(400); // PAY-08 refuses before anything is written (client error, not 500)
 
   // §6.4: the initiator cannot approve their own request.
   const self = await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, { headers: fin1Auth });

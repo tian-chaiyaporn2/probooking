@@ -491,12 +491,37 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     }
     const booking = this.bookings.get(req.refId);
     if (!booking) throw new Error("no payment allocation for booking");
+    const alreadyRefunded = this.events
+      .filter((e) => e.bookingId === req.refId && e.type === "Refund")
+      .reduce((s, e) => s + e.amount, 0);
+    if (alreadyRefunded + req.amount > booking.captured) {
+      throw new ConflictError(
+        `ALLOCATION_EXCEEDED: refund of ${req.amount} exceeds remaining ${booking.captured - alreadyRefunded}`,
+      );
+    }
     req.state = "Executed";
     req.executorId = input.executorId;
     req.executorRole = input.executorRole;
     req.decidedAt = Date.now();
     this.appendEvent(req.refId, "Refund", req.amount, input.idempotencyKey);
     return { refund: req.amount, bookingId: req.refId };
+  }
+
+  async refundAvailable(bookingId: string): Promise<number> {
+    const booking = this.bookings.get(bookingId);
+    if (!booking) return 0;
+    const refunded = this.events
+      .filter((e) => e.bookingId === bookingId && e.type === "Refund")
+      .reduce((s, e) => s + e.amount, 0);
+    const pending = [...this.approvals.values()]
+      .filter(
+        (a) =>
+          a.refId === bookingId &&
+          a.state === "Pending" &&
+          a.capability === "finance.execute_refund",
+      )
+      .reduce((s, a) => s + a.amount, 0);
+    return Math.max(0, booking.captured - refunded - pending);
   }
 
   async getBooking(id: string): Promise<BookingDetail | null> {
@@ -566,8 +591,10 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async createSupportCase(bookingId: string, kind: string, _subject: string): Promise<ReviewCase> {
+    const key = `${bookingId}:${kind}`;
+    if (this.supportCases.has(key)) throw new ConflictError("support case already exists");
     const c: ReviewCase = { id: randomUUID(), state: "Open", bookingId };
-    this.supportCases.set(`${bookingId}:${kind}`, c);
+    this.supportCases.set(key, c);
     return c;
   }
 

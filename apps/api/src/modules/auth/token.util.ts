@@ -62,13 +62,34 @@ export function verifyToken(token: string): TokenPayload | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [header, body, sig] = parts;
+  // Reject tokens that claim a different algorithm before verifying the HMAC — otherwise a
+  // crafted `alg: none` / RS256 header would still be accepted as long as the signature
+  // bytes happened to match an HS256 of the same body (or an empty sig path).
+  try {
+    const hdr = JSON.parse(Buffer.from(header ?? "", "base64url").toString()) as {
+      alg?: string;
+      typ?: string;
+    };
+    if (hdr.alg !== "HS256") return null;
+  } catch {
+    return null;
+  }
   const expected = createHmac("sha256", secret()).update(`${header}.${body}`).digest("base64url");
   const a = Buffer.from(sig ?? "");
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
-    const payload = JSON.parse(Buffer.from(body ?? "", "base64url").toString()) as TokenPayload;
-    return payload.exp >= Math.floor(Date.now() / 1000) ? payload : null;
+    const payload = JSON.parse(Buffer.from(body ?? "", "base64url").toString()) as Partial<TokenPayload>;
+    if (
+      typeof payload.sub !== "string" ||
+      typeof payload.role !== "string" ||
+      typeof payload.exp !== "number" ||
+      typeof payload.iat !== "number" ||
+      typeof payload.jti !== "string"
+    ) {
+      return null;
+    }
+    return payload.exp >= Math.floor(Date.now() / 1000) ? (payload as TokenPayload) : null;
   } catch {
     return null;
   }

@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { buildCheckout, conserves, satang, withinAllocation, type Satang } from "@probook/domain";
 
 /**
@@ -21,7 +21,10 @@ export class PaymentsService {
   /** PAY-07: reconciliation guard used by Finance's daily reconcile (PAY-11). */
   assertConserved(input: Parameters<typeof conserves>[0]): void {
     if (!conserves(input)) {
-      throw new Error("CONSERVATION_VIOLATION: captured funds do not equal allocations (PAY-07)");
+      // Domain money failures are client errors (bad state / bad amount), not 500s.
+      throw new BadRequestException(
+        "CONSERVATION_VIOLATION: captured funds do not equal allocations (PAY-07)",
+      );
     }
   }
 
@@ -32,7 +35,7 @@ export class PaymentsService {
    */
   assertWithinAllocation(amount: Satang, available: Satang, what: string): void {
     if (!withinAllocation(amount, available)) {
-      throw new Error(
+      throw new BadRequestException(
         `ALLOCATION_EXCEEDED: ${what} of ${amount} exceeds available ${available} (PAY-08)`,
       );
     }

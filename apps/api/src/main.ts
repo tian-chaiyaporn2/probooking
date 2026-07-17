@@ -66,6 +66,8 @@ async function bootstrap() {
 
   const port = Number(process.env.API_PORT ?? 4000);
   await app.listen(port);
+  // Drain Nest on SIGTERM so Prisma's pool is closed rather than killed mid-query on redeploy.
+  app.enableShutdownHooks();
   // eslint-disable-next-line no-console
   console.log(`ProBooking API listening on :${port}`);
 }

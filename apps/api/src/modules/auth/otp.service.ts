@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { randomInt } from "node:crypto";
+import { randomInt, timingSafeEqual } from "node:crypto";
 import { maskPhone } from "../marketplace/privacy.util.js";
 
 /**
@@ -77,7 +77,11 @@ export class OtpService {
   verify(phone: string, code: string): boolean {
     const rec = this.codes.get(phone);
     if (!rec || rec.exp < Date.now()) return false;
-    if (rec.code === code) {
+    // Constant-time compare: a naive `===` leaks how many leading digits matched via timing.
+    const a = Buffer.from(rec.code);
+    const b = Buffer.from(code);
+    const ok = a.length === b.length && timingSafeEqual(a, b);
+    if (ok) {
       this.codes.delete(phone); // single-use
       return true;
     }

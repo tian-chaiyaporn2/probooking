@@ -498,6 +498,13 @@ export interface MarketplaceRepository {
    */
   executeApproval(input: ExecuteApprovalInput): Promise<{ refund: number; bookingId: string }>;
 
+  /**
+   * PAY-08: satang still available to refund on this booking — captured minus executed
+   * Refund events minus Pending dual-control proposals. Returns 0 when there is no
+   * payment order yet.
+   */
+  refundAvailable(bookingId: string): Promise<number>;
+
   getBooking(id: string): Promise<BookingDetail | null>;
   /**
    * CAN-03: did the professional actually arrive for this booking? Answered from the

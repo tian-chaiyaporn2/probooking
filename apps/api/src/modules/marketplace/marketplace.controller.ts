@@ -101,10 +101,10 @@ export class MarketplaceController {
     @Body() raw: { branchName: string; licenceNo: string; address: string; ownerPhone: string },
   ) {
     const dto = validateBody<typeof raw>(raw, {
-      branchName: { type: "string", maxLen: 200 },
-      licenceNo: { type: "string", maxLen: 100 },
-      address: { type: "string", maxLen: 500 },
-      ownerPhone: { type: "string", maxLen: 32 },
+      branchName: { type: "string", minLen: 1, maxLen: 200 },
+      licenceNo: { type: "string", minLen: 1, maxLen: 100 },
+      address: { type: "string", minLen: 1, maxLen: 500 },
+      ownerPhone: { type: "string", minLen: 8, maxLen: 32 },
     });
     try {
       return await this.repo.registerClinic(dto);
@@ -120,10 +120,10 @@ export class MarketplaceController {
     @Body() raw: { displayName: string; profession: string; phone: string; payoutRef: string },
   ) {
     const dto = validateBody<typeof raw>(raw, {
-      displayName: { type: "string", maxLen: 200 },
+      displayName: { type: "string", minLen: 1, maxLen: 200 },
       profession: { type: "string", enum: ["physician", "dentist"] },
-      phone: { type: "string", maxLen: 32 },
-      payoutRef: { type: "string", maxLen: 100 },
+      phone: { type: "string", minLen: 8, maxLen: 32 },
+      payoutRef: { type: "string", minLen: 1, maxLen: 100 },
     });
     try {
       return await this.repo.registerProfessional(dto);
@@ -533,13 +533,13 @@ export class MarketplaceController {
       amount: { type: "number", int: true, positive: true },
       reason: { type: "string", maxLen: 500 },
     });
-    const booking = await this.requireBooking(dto.bookingId);
+    await this.requireBooking(dto.bookingId);
     // PAY-08 at proposal time: refuse to record a request that could never be executed.
-    this.payments.assertWithinAllocation(
-      satang(dto.amount),
-      satang(booking.captured),
-      "refund",
-    );
+    // Cap against *remaining* funds (captured − prior refunds − other Pending proposals),
+    // not the original capture — otherwise two dual-control refunds of `captured` each
+    // over-refund 2× after both execute.
+    const available = await this.repo.refundAvailable(dto.bookingId);
+    this.payments.assertWithinAllocation(satang(dto.amount), satang(available), "refund");
     const approval = await this.repo.createApproval({
       capability: "finance.execute_refund",
       refType: "Booking",
@@ -587,10 +587,15 @@ export class MarketplaceController {
       );
     }
 
-    const booking = await this.requireBooking(approval.refId);
+    await this.requireBooking(approval.refId);
+    // Re-check remaining at approve time (other refunds may have landed since proposal).
+    // This Pending row is still Pending, so refundAvailable includes its own amount — add
+    // it back so the executor can approve the proposal that reserved those funds.
+    const availableIncludingThis =
+      (await this.repo.refundAvailable(approval.refId)) + approval.amount;
     this.payments.assertWithinAllocation(
       satang(approval.amount),
-      satang(booking.captured),
+      satang(availableIncludingThis),
       "refund",
     );
 
@@ -709,6 +714,11 @@ export class MarketplaceController {
     // Only the professional the offer was made to may accept it. There was no check at all:
     // any caller could accept on a stranger's behalf and bind them to a shift.
     await this.requireProfessional(user, offer.professionalId);
+    // OFF-03: a wall-clock-expired offer must not re-enter AwaitingPayment and keep
+    // blocking OFF-02 until the worker sweep runs.
+    if (Date.now() > offer.expiresAt) {
+      throw new BadRequestException("offer has expired");
+    }
     // OFF-04: acceptance -> AwaitingPayment (soft hold), never straight to a booking.
     let nextState;
     try {
@@ -764,7 +774,10 @@ export class MarketplaceController {
       // VER-06 holds attach to bookings; confirm creates the booking, so none exist yet.
       hasBlockingHold: false,
       hasScheduleOverlap: overlap,
-      offerExpired: Date.now() > offer.expiresAt, // §6.3: late payment after expiry never books
+      // OFF-03: late payment after offer expiry OR after the 30-min funding window never books.
+      offerExpired:
+        Date.now() > offer.expiresAt ||
+        (offer.fundingDueAt !== null && Date.now() > offer.fundingDueAt),
     };
 
     try {
@@ -1017,12 +1030,22 @@ export class MarketplaceController {
     if (existing) {
       return { id, caseId: existing.id, state: existing.state, created: false };
     }
-    const created = await this.repo.createSupportCase(
-      id,
-      "completion_review",
-      "Clinic inactivity — completion needs Operations review (CMP-04)",
-    );
-    return { id, caseId: created.id, state: created.state, created: true };
+    try {
+      const created = await this.repo.createSupportCase(
+        id,
+        "completion_review",
+        "Clinic inactivity — completion needs Operations review (CMP-04)",
+      );
+      await this.audit(user, "flag_inactive", "booking", id, { caseId: created.id });
+      return { id, caseId: created.id, state: created.state, created: true };
+    } catch (e) {
+      if (isConflict(e)) {
+        const raced = await this.repo.findSupportCase(id, "completion_review");
+        if (raced) return { id, caseId: raced.id, state: raced.state, created: false };
+        throw new ConflictException("support case already exists");
+      }
+      throw e;
+    }
   }
 
   @UseGuards(AuthGuard)
@@ -1185,6 +1208,11 @@ export class MarketplaceController {
             throw new BadRequestException("staff must state which party is reviewing");
           })()
         : party;
+    // Clinic reviews are an official reputation act — clinic_staff membership alone is
+    // not enough (they cannot bind terms or move money either).
+    if (by === "clinic" && party === "clinic") {
+      await this.requireClinicAuthority(user, booking.clinicWorkspaceId, "clinic.confirm_completion");
+    }
     // REV-01/05: only a completed paid booking creates review rights (cancelled or
     // unfinished bookings never reach ServiceCompleted, so they earn no reputation).
     if (!canLeaveReview(booking.state)) {
@@ -1344,7 +1372,15 @@ export class MarketplaceController {
     workspaceId: string,
     capability: Capability,
   ): Promise<Role> {
-    if (this.isStaff(user)) return "administrator";
+    // Cross-tenant staff support (ADM-01) is for operations/administrator only. Finance
+    // holds money capabilities of its own and must not inherit clinic.pay / send_offer via
+    // the old "any staff" bypass.
+    if (user?.role === "operations" || user?.role === "administrator") {
+      return "administrator";
+    }
+    if (user?.role === "finance") {
+      throw new ForbiddenException(`role finance cannot ${capability}`);
+    }
     const me = await this.identityOf(user);
     const membership = me.memberships.find((m) => m.workspaceId === workspaceId);
     if (!membership) throw new ForbiddenException("not a member of this clinic workspace");

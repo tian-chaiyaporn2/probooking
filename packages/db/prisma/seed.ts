@@ -32,8 +32,8 @@ async function registerClinic(
   const clinic = await prisma.clinicWorkspace.create({
     data: {
       branchName,
-      licenceNo,
-      address,
+      licenceNo: encryptField(licenceNo),
+      address: encryptField(address),
       verification: verified ? "Verified" : "Submitted",
     },
   });

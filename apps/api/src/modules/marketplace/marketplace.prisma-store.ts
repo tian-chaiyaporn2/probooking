@@ -7,7 +7,7 @@ import {
   ratingFromCounts,
   DEFAULT_SERVICE_FEE_BPS,
 } from "@probook/domain";
-import { ConflictError } from "./errors.util.js";
+import { ConflictError, isConflict } from "./errors.util.js";
 import { encryptField, decryptField, blindIndex } from "./field-crypto.js";
 
 /** Shape of the fields a terms snapshot freezes. Structural, so both Shift reads fit. */
@@ -675,9 +675,21 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
 
       const po = await tx.paymentOrder.findUnique({
         where: { bookingId: req.refId },
-        include: { allocation: true },
+        include: { allocation: true, events: true },
       });
       if (!po?.allocation) throw new Error("no payment allocation for booking");
+
+      // PAY-08 inside the transaction: prior refunds (and this claim) must not exceed
+      // captured. Pending proposals for *other* approvals are not deducted here — this
+      // row was already claimed, so competing Pending rows will fail their own claim.
+      const alreadyRefunded = po.events
+        .filter((e) => e.type === "Refund")
+        .reduce((s, e) => s + e.amount, 0);
+      if (alreadyRefunded + req.amount > po.captured) {
+        throw new ConflictError(
+          `ALLOCATION_EXCEEDED: refund of ${req.amount} exceeds remaining ${po.captured - alreadyRefunded}`,
+        );
+      }
 
       // PAY-05/06: the money moves as an immutable event, exactly like every other path —
       // staff never edit a balance. PAY-04 idempotency is the unique key.
@@ -695,6 +707,20 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       });
       return { refund: req.amount, bookingId: req.refId };
     });
+  }
+
+  async refundAvailable(bookingId: string): Promise<number> {
+    const po = await prisma.paymentOrder.findUnique({
+      where: { bookingId },
+      include: { events: { where: { type: "Refund" }, select: { amount: true } } },
+    });
+    if (!po) return 0;
+    const refunded = po.events.reduce((s, e) => s + e.amount, 0);
+    const pending = await prisma.approvalRequest.aggregate({
+      where: { refType: "Booking", refId: bookingId, state: "Pending", capability: "finance.execute_refund" },
+      _sum: { amount: true },
+    });
+    return Math.max(0, po.captured - refunded - (pending._sum.amount ?? 0));
   }
 
   async getBooking(id: string): Promise<BookingDetail | null> {
@@ -868,10 +894,15 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async createSupportCase(bookingId: string, kind: string, subject: string): Promise<ReviewCase> {
-    const c = await prisma.supportCase.create({
-      data: { subject, kind, state: "Open", refType: "Booking", refId: bookingId },
-    });
-    return { id: c.id, state: "Open", bookingId };
+    try {
+      const c = await prisma.supportCase.create({
+        data: { subject, kind, state: "Open", refType: "Booking", refId: bookingId },
+      });
+      return { id: c.id, state: "Open", bookingId };
+    } catch (e) {
+      if (isConflict(e)) throw new ConflictError("support case already exists");
+      throw e;
+    }
   }
 
   async cancelBooking(input: CancelInput): Promise<CancelResult> {

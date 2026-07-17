@@ -11,10 +11,10 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:
  *
  * AES-256-GCM: authenticated, so a tampered ciphertext fails to decrypt rather than
  * returning garbage. Each value gets a fresh random IV, so equal plaintexts do not produce
- * equal ciphertexts — which is also why this is NOT used on `User.phone`: that column is the
- * unique OTP login key and must be looked up by value. Encrypting a lookup key needs
- * deterministic encryption or a separate blind index (HMAC), which is a larger change;
- * phone stays plaintext for now, masked in logs, and noted in the schema.
+ * equal ciphertexts — which is also why phone lookup uses a separate blind index
+ * (`blindIndex` / `phoneHash`): the ciphertext cannot be queried by value, but the HMAC
+ * of the normalized phone can. Licence numbers, addresses, and message bodies are encrypted
+ * the same way; phones are encrypted *and* hashed for login.
  *
  * Format: `enc:v1:<base64(iv|tag|ciphertext)>`. The version prefix lets reads tell an
  * encrypted value from a legacy plaintext one, so decryption degrades gracefully over rows
