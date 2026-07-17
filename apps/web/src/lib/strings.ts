@@ -1,7 +1,6 @@
 /**
- * Thai UI copy (LOC-01: the platform launches in Thai). Centralised so the staff- and
- * user-facing surfaces render Thai under <html lang="th">. Numbers/brand stay as-is; the
- * /flow page is a developer/e2e demo harness and is intentionally left in English.
+ * Thai UI copy (LOC-01: the platform launches in Thai). Centralised so every
+ * user-facing surface renders Thai under <html lang="th">.
  */
 export const th = {
   brand: "ProBooking",
@@ -22,6 +21,8 @@ export const th = {
   },
   a11y: {
     skipToContent: "ข้ามไปยังเนื้อหาหลัก",
+    dismiss: "ปิด",
+    notifications: "การแจ้งเตือน",
   },
   badge: {
     clinic: "คลินิก",
@@ -61,5 +62,45 @@ export const th = {
     colUndistributed: "ยังไม่กระจาย",
     colConserved: "สมดุล",
     showing: (shown: number, total: number) => `แสดง ${shown} จาก ${total} รายการ`,
+    conservedYes: "สมดุล",
+    conservedNo: "รายการผิดปกติ",
+    exportStarted: "กำลังดาวน์โหลด finance-export.csv",
+  },
+  flow: {
+    title: "ProBooking — ขั้นตอนการจอง",
+    description:
+      "ลงทะเบียนและตรวจสอบคลินิกกับบุคลากร สร้างข้อเสนอที่ผูกพัน ยอมรับ (soft hold) ยืนยันการจอง เสร็จสิ้นและจ่ายเงินให้บุคลากร แล้วให้รีวิว",
+    run: "รันขั้นตอนการจอง",
+    bookingId: "รหัสการจอง",
+    bookingConfirmed: "ยืนยันการจองแล้ว",
+    compensation: "ค่าตอบแทน",
+    serviceFee: "ค่าบริการ (12%)",
+    tax: "ภาษี",
+    total: "รวม",
+    completePayout: "เสร็จสิ้นและจ่ายเงิน",
+    paidOut: "จ่ายเงินแล้ว",
+    payoutToProfessional: (state: string) => `ให้บุคลากร (การจอง ${state})`,
+    leaveReviews: "ให้รีวิว (ทั้งสองฝ่าย)",
+    reviewsPublished: "เผยแพร่รีวิวแล้ว",
+    ratingShown: (avg: string, count: number) => `คะแนนบุคลากร: ${avg} (${count} รีวิว)`,
+    ratingHidden: "คะแนนบุคลากร: ยังไม่แสดง (ต้องมี 3 รีวิว)",
+    steps: {
+      registered: "ลงทะเบียนแล้ว",
+      verified: "ตรวจสอบโดยปฏิบัติการ",
+      shiftPosted: "โพสต์เวรแล้ว",
+      applied: "บุคลากรสมัครแล้ว",
+      offerCreated: "สร้างข้อเสนอแล้ว",
+      accepted: "บุคลากรยอมรับแล้ว",
+      confirmed: "ยืนยันการจองแล้ว",
+    },
+    stepDetail: {
+      registered: (state: string) => `คลินิก + บุคลากร (สถานะ ${state})`,
+      verified: "คลินิก + บุคลากร → ตรวจสอบแล้ว",
+      shiftPosted: (state: string) => `เวรเปิดรับ (${state})`,
+      applied: "ส่งใบสมัครแล้ว (ไม่ผูกพัน)",
+      offerCreated: (state: string, fee: string) => `สถานะ=${state}, ค่าบริการ=${fee}`,
+      accepted: (state: string) => `สถานะ=${state} (soft hold, ยังไม่ใช่การจอง)`,
+      confirmed: (state: string) => `สถานะ=${state}`,
+    },
   },
 } as const;

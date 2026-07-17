@@ -19,7 +19,7 @@ export default function Home() {
         <section className="hero">
           <div className="hero__eyebrow">{th.home.phase}</div>
           <h1>{th.home.tagline}</h1>
-          <p className="lead muted" style={{ maxWidth: "48ch" }}>
+          <p className="lead muted lead--narrow">
             {th.home.description}
           </p>
           <div className="trust-row">

@@ -335,14 +335,6 @@ img, svg { max-width: 100%; height: auto; }
   overflow-x: auto; -webkit-overflow-scrolling: touch;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
 }
-/* Hint that wide tables scroll horizontally on tablet/desktop. */
-.table-scroll::after {
-  content: "";
-  position: sticky; float: right; right: 0; top: 0;
-  width: 2rem; height: 100%; margin-inline-start: -2rem;
-  background: linear-gradient(to left, var(--surface), transparent);
-  pointer-events: none;
-}
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; min-width: 36rem; }
 .data-table thead th {
   text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
@@ -377,7 +369,6 @@ img, svg { max-width: 100%; height: auto; }
 @media (max-width: 767px) {
   .data-table-desktop { display: none; }
   .data-cards { display: flex; }
-  .table-scroll::after { display: none; }
 }
 
 /* ---- Item rows (ops queues): proper columns, no button/line-height collision ---- */
@@ -401,6 +392,22 @@ img, svg { max-width: 100%; height: auto; }
 .kv-list__label { color: var(--muted); }
 .kv-list__value { font-variant-numeric: tabular-nums; text-align: right; }
 .kv-list li.kv-list--total { font-weight: 600; color: var(--ink); padding-top: 0.5rem; }
+.kv-list--spaced { margin-top: var(--s2); }
+
+/* Flow demo + result blocks */
+.flow-steps { margin: var(--s5) 0 0; padding-inline-start: 1.25rem; line-height: 1.8; }
+.card--result { margin-top: var(--s4); border-color: var(--primary); }
+.stack-gap { margin-top: var(--s4); }
+.stack-gap + .stack-gap { margin-top: var(--s4); }
+.status-line { font-weight: 600; margin-bottom: 0.35rem; }
+.status-line--success { color: var(--success); }
+.caption { font-size: 0.875rem; margin-top: 0.25rem; }
+.lead--narrow { max-width: 48ch; }
+.section-heading { margin-top: var(--s6); }
+.section-block { margin-top: var(--s5); }
+.skeleton--stat { height: 4.125rem; }
+.skeleton--row { display: block; height: 0.9rem; border-radius: 4px; }
+.skeleton--card { display: block; height: 4.5rem; }
 
 /* ---- Empty + loading states ---- */
 .empty { padding: var(--s6); text-align: center; color: var(--muted); }

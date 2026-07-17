@@ -30,7 +30,7 @@ export function DataTable<T>({ columns, rows, rowKey, loading, loadingRows = 6, 
         {loading ? (
           Array.from({ length: Math.min(loadingRows, 4) }).map((_, i) => (
             <div key={i} className="data-card">
-              <span className="skeleton" style={{ display: "block", height: "4.5rem" }} />
+              <span className="skeleton skeleton--card" />
             </div>
           ))
         ) : rows.length === 0 ? (
@@ -69,7 +69,7 @@ export function DataTable<T>({ columns, rows, rowKey, loading, loadingRows = 6, 
                 <tr key={i}>
                   {columns.map((c) => (
                     <td key={c.key}>
-                      <span className="skeleton" style={{ display: "block", height: "0.9rem", borderRadius: 4 }} />
+                      <span className="skeleton skeleton--row" />
                     </td>
                   ))}
                 </tr>

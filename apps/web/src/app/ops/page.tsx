@@ -102,7 +102,7 @@ export default function OpsPage() {
 
         <div className="stat-grid" data-testid="ops-metrics">
           {loading || !metrics ? (
-            Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
+            Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton skeleton--stat" />)
           ) : (
             <>
               <Stat label={th.ops.metricShifts} value={`${metrics.shifts.total} (${metrics.shifts.open})`} />
@@ -119,7 +119,7 @@ export default function OpsPage() {
           )}
         </div>
 
-        <h2 style={{ marginTop: "var(--s6)" }}>
+        <h2 className="section-heading">
           {th.ops.pending} ({pending.length})
         </h2>
         <div className="card">
@@ -141,7 +141,7 @@ export default function OpsPage() {
           </ul>
         </div>
 
-        <h2 style={{ marginTop: "var(--s6)" }}>
+        <h2 className="section-heading">
           {th.ops.openCases} ({cases.length})
         </h2>
         <div className="card">

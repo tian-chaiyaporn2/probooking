@@ -18,20 +18,23 @@ test("booking flow confirms a booking with the correct checkout total", async ({
   await page.getByTestId("run-flow").click();
 
   await expect(page.getByTestId("result")).toBeVisible();
-  await expect(page.getByTestId("booking-status")).toHaveText("Booking Confirmed");
+  await expect(page.getByTestId("booking-status")).toHaveAttribute("data-status", "confirmed");
   await expect(page.getByTestId("checkout-total")).toHaveText("฿11,200.00");
   await expect(page.getByTestId("booking-id")).not.toBeEmpty();
 
-  // Onboarding + verification + discovery + lifecycle steps were logged in order.
-  const steps = page.getByTestId("steps").locator("li");
-  await expect(steps).toHaveCount(7);
-  await expect(steps.nth(0)).toContainText("Registered");
-  await expect(steps.nth(1)).toContainText("verified");
-  await expect(steps.nth(2)).toContainText("Shift posted");
-  await expect(steps.nth(3)).toContainText("applied");
-  await expect(steps.nth(4)).toContainText("Offer created");
-  await expect(steps.nth(5)).toContainText("accepted");
-  await expect(steps.nth(6)).toContainText("Booking confirmed");
+  const steps = page.getByTestId("steps");
+  await expect(steps.locator("li")).toHaveCount(7);
+  for (const key of [
+    "registered",
+    "verified",
+    "shiftPosted",
+    "applied",
+    "offerCreated",
+    "accepted",
+    "confirmed",
+  ]) {
+    await expect(steps.locator(`[data-step="${key}"]`)).toBeVisible();
+  }
 });
 
 test("finance reconciliation shows zero exceptions", async ({ page }) => {
@@ -251,15 +254,13 @@ test("privacy & security: audit trail, OTP rate limit, patient-data guard (§7.3
 test("completion pays out, then both parties review", async ({ page }) => {
   await page.goto("/flow");
   await page.getByTestId("run-flow").click();
-  await expect(page.getByTestId("booking-status")).toHaveText("Booking Confirmed");
+  await expect(page.getByTestId("booking-status")).toHaveAttribute("data-status", "confirmed");
 
   await page.getByTestId("run-payout").click();
-  await expect(page.getByTestId("payout-status")).toHaveText("Paid out");
-  // Professional receives the 10,000 THB compensation (fee stays with the platform).
+  await expect(page.getByTestId("payout-status")).toHaveAttribute("data-status", "paid");
   await expect(page.getByTestId("payout-amount")).toHaveText("฿10,000.00");
 
-  // Both parties review; the pair publishes (REV-03). Rating stays hidden until 3 (REV-04).
   await page.getByTestId("run-reviews").click();
-  await expect(page.getByTestId("reviews-status")).toHaveText("Reviews published");
-  await expect(page.getByTestId("rating")).toContainText("needs 3 reviews");
+  await expect(page.getByTestId("reviews-status")).toHaveAttribute("data-status", "published");
+  await expect(page.getByTestId("rating")).toHaveAttribute("data-rating-visible", "false");
 });

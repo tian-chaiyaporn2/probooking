@@ -60,7 +60,7 @@ export default function FinancePage() {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 0);
-      toast.success("กำลังดาวน์โหลด finance-export.csv");
+      toast.success(th.finance.exportStarted);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -86,9 +86,9 @@ export default function FinancePage() {
       header: th.finance.colConserved,
       render: (r) =>
         r.conserved ? (
-          <span className="badge badge--success" aria-label="conserved">✓</span>
+          <span className="badge badge--success" aria-label={th.finance.conservedYes}>✓</span>
         ) : (
-          <span className="badge badge--warn" aria-label="exception">✗ {th.finance.exceptions}</span>
+          <span className="badge badge--warn" aria-label={th.finance.conservedNo}>✗ {th.finance.exceptions}</span>
         ),
     },
   ];
@@ -111,7 +111,7 @@ export default function FinancePage() {
 
         <div className="stat-grid" data-testid="fin-summary">
           {loading || !s ? (
-            Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
+            Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton skeleton--stat" />)
           ) : (
             <>
               <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
@@ -128,7 +128,7 @@ export default function FinancePage() {
           )}
         </div>
 
-        <div style={{ marginTop: "var(--s5)" }}>
+        <div className="section-block">
           <DataTable
             columns={columns}
             rows={shown}
@@ -139,7 +139,7 @@ export default function FinancePage() {
           />
         </div>
         {rows.length > MAX_ROWS && (
-          <p data-testid="rows-truncated" className="muted" style={{ fontSize: "0.8rem", marginTop: "var(--s3)" }}>
+          <p data-testid="rows-truncated" className="muted caption">
             {th.finance.showing(shown.length, rows.length)}
           </p>
         )}

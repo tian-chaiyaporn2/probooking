@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { Button } from "../../components/Button";
+import { StatusLine } from "../../components/StatusLine";
 import { useToast } from "../../components/Toast";
 import {
   registerClinic,
@@ -25,13 +26,21 @@ import {
   type Payout,
   type Rating,
 } from "../../lib/api";
+import { th } from "../../lib/strings";
 
-type Step = { label: string; detail: string };
+type StepKey =
+  | "registered"
+  | "verified"
+  | "shiftPosted"
+  | "applied"
+  | "offerCreated"
+  | "accepted"
+  | "confirmed";
+
+type Step = { key: StepKey; label: string; detail: string };
 
 /**
- * Phase 0 booking-flow demo. Drives the API: create offer -> accept (soft hold) ->
- * confirm (eligibility + prefunding) -> Confirmed booking. Exists to verify the
- * vertical slice end to end (and is the target of the Playwright e2e).
+ * Phase 0 booking-flow demo. Drives the API end to end (target of Playwright e2e).
  */
 export default function FlowPage() {
   const [steps, setSteps] = useState<Step[]>([]);
@@ -55,10 +64,9 @@ export default function FlowPage() {
     setPayout(null);
     setReviewsPublished(false);
     setRating(null);
-    const log = (label: string, detail: string) =>
-      setSteps((s) => [...s, { label, detail }]);
+    const log = (key: StepKey, label: string, detail: string) =>
+      setSteps((s) => [...s, { key, label, detail }]);
     try {
-      // Onboard + verify a clinic and professional (unique phones per run).
       const uniq = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
       const clinic = await registerClinic({
         branchName: "Sukhumvit Clinic",
@@ -72,30 +80,33 @@ export default function FlowPage() {
         phone: `+66p${uniq}`,
         payoutRef: "xxxx-1234",
       });
-      log("Registered", `clinic + professional (both ${clinic.verification})`);
+      log("registered", th.flow.steps.registered, th.flow.stepDetail.registered(clinic.verification));
 
-      // The verify calls are operations-guarded; obtain an ops token for the demo.
       const { token } = await getDevToken("operations");
       setAuthToken(token);
       await verifyClinic(clinic.id);
       await verifyProfessional(pro.id);
       setProfessionalId(pro.id);
-      log("Operations verified", "clinic + professional → Verified");
+      log("verified", th.flow.steps.verified, th.flow.stepDetail.verified);
 
       const shift = await postShift({ clinicWorkspaceId: clinic.id, compensation: 1_000_000 });
-      log("Shift posted", `open shift (${shift.state})`);
+      log("shiftPosted", th.flow.steps.shiftPosted, th.flow.stepDetail.shiftPosted(shift.state));
 
       await applyToShift(shift.shiftId, pro.id);
-      log("Professional applied", "application submitted (non-binding)");
+      log("applied", th.flow.steps.applied, th.flow.stepDetail.applied);
 
       const offer = await offerToProfessional(shift.shiftId, pro.id);
-      log("Offer created", `state=${offer.state}, fee=${formatThb(offer.checkout.serviceFee)}`);
+      log(
+        "offerCreated",
+        th.flow.steps.offerCreated,
+        th.flow.stepDetail.offerCreated(offer.state, formatThb(offer.checkout.serviceFee)),
+      );
 
       const accepted = await acceptOffer(offer.id);
-      log("Professional accepted", `state=${accepted.state} (soft hold, not a booking)`);
+      log("accepted", th.flow.steps.accepted, th.flow.stepDetail.accepted(accepted.state));
 
       const confirmed = await confirmOffer(offer.id, true);
-      log("Booking confirmed", `state=${confirmed.booking.state}`);
+      log("confirmed", th.flow.steps.confirmed, th.flow.stepDetail.confirmed(confirmed.booking.state));
       setCheckout(confirmed.checkout);
       setBookingId(confirmed.booking.id);
     } catch (e) {
@@ -109,9 +120,8 @@ export default function FlowPage() {
     if (!bookingId) return;
     setPayingOut(true);
     try {
-      await completeBooking(bookingId); // professional marks completion
-      const result = await acceptCompletion(bookingId); // accept + initiate payout
-      setPayout(result);
+      await completeBooking(bookingId);
+      setPayout(await acceptCompletion(bookingId));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -123,11 +133,10 @@ export default function FlowPage() {
     if (!bookingId || !professionalId) return;
     setReviewing(true);
     try {
-      // Both parties review; the second submission publishes the pair (REV-03).
       await createReview(bookingId, { by: "professional", score: 5 });
       const r = await createReview(bookingId, { by: "clinic", score: 5 });
       setReviewsPublished(r.published);
-      setRating(await getRating(professionalId)); // hasRating false until 3 reviews (REV-04)
+      setRating(await getRating(professionalId));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -137,99 +146,101 @@ export default function FlowPage() {
 
   return (
     <>
-    <AppHeader current="/flow" />
-    <main id="main-content" tabIndex={-1} className="page page--narrow">
-      <h1>ProBooking — booking flow</h1>
-      <p className="muted">
-        Onboard and verify a clinic and professional, create a binding offer, accept it
-        (soft hold), confirm the booking, complete it and pay out the professional, then
-        leave reviews.
-      </p>
+      <AppHeader current="/flow" />
+      <main id="main-content" tabIndex={-1} className="page page--narrow">
+        <h1>{th.flow.title}</h1>
+        <p className="muted">{th.flow.description}</p>
 
-      <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
-        Run booking flow
-      </Button>
+        <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
+          {th.flow.run}
+        </Button>
 
-      <ol data-testid="steps" style={{ marginTop: "1.5rem", lineHeight: 1.8 }}>
-        {steps.map((s, i) => (
-          <li key={i}>
-            <strong>{s.label}</strong> — <span>{s.detail}</span>
-          </li>
-        ))}
-      </ol>
+        <ol data-testid="steps" className="flow-steps">
+          {steps.map((s) => (
+            <li key={s.key} data-step={s.key}>
+              <strong>{s.label}</strong> — <span>{s.detail}</span>
+            </li>
+          ))}
+        </ol>
 
-      {bookingId && (
-        <div
-          data-testid="result"
-          className="card card--pad"
-          style={{ marginTop: "1rem", borderColor: "var(--primary)" }}
-        >
-          <div data-testid="booking-status" style={{ fontWeight: 600, color: "var(--success)" }}>
-            Booking Confirmed
-          </div>
-          <div>Booking ID: <code data-testid="booking-id">{bookingId}</code></div>
-          {checkout && (
-            <ul className="kv-list" style={{ marginTop: "0.5rem" }}>
-              <li>
-                <span className="kv-list__label">Compensation</span>
-                <span className="kv-list__value">{formatThb(checkout.compensation)}</span>
-              </li>
-              <li>
-                <span className="kv-list__label">Service fee (12%)</span>
-                <span className="kv-list__value">{formatThb(checkout.serviceFee)}</span>
-              </li>
-              <li>
-                <span className="kv-list__label">Tax</span>
-                <span className="kv-list__value">{formatThb(checkout.tax)}</span>
-              </li>
-              <li className="kv-list--total">
-                <span className="kv-list__label">Total</span>
-                <span className="kv-list__value" data-testid="checkout-total">{formatThb(checkout.total)}</span>
-              </li>
-            </ul>
-          )}
-
-          <div style={{ marginTop: "1rem" }}>
-            {!payout ? (
-              <Button data-testid="run-payout" variant="primary" busy={payingOut} onClick={runPayout}>
-                Complete &amp; pay out
-              </Button>
-            ) : (
-              <div data-testid="payout">
-                <span data-testid="payout-status" style={{ fontWeight: 600, color: "var(--success)" }}>
-                  Paid out
-                </span>{" "}
-                — <span data-testid="payout-amount">{formatThb(payout.payoutAmount)}</span> to the
-                professional (booking {payout.bookingState})
-              </div>
+        {bookingId && (
+          <div data-testid="result" className="card card--pad card--result">
+            <StatusLine testid="booking-status" status="confirmed">
+              {th.flow.bookingConfirmed}
+            </StatusLine>
+            <div>
+              {th.flow.bookingId}: <code data-testid="booking-id">{bookingId}</code>
+            </div>
+            {checkout && (
+              <ul className="kv-list kv-list--spaced">
+                <li>
+                  <span className="kv-list__label">{th.flow.compensation}</span>
+                  <span className="kv-list__value">{formatThb(checkout.compensation)}</span>
+                </li>
+                <li>
+                  <span className="kv-list__label">{th.flow.serviceFee}</span>
+                  <span className="kv-list__value">{formatThb(checkout.serviceFee)}</span>
+                </li>
+                <li>
+                  <span className="kv-list__label">{th.flow.tax}</span>
+                  <span className="kv-list__value">{formatThb(checkout.tax)}</span>
+                </li>
+                <li className="kv-list--total">
+                  <span className="kv-list__label">{th.flow.total}</span>
+                  <span className="kv-list__value" data-testid="checkout-total">
+                    {formatThb(checkout.total)}
+                  </span>
+                </li>
+              </ul>
             )}
-          </div>
 
-          {payout && (
-            <div style={{ marginTop: "1rem" }}>
-              {!reviewsPublished ? (
-                <Button data-testid="run-reviews" variant="primary" busy={reviewing} onClick={runReviews}>
-                  Leave reviews (both parties)
+            <div className="stack-gap">
+              {!payout ? (
+                <Button data-testid="run-payout" variant="primary" busy={payingOut} onClick={runPayout}>
+                  {th.flow.completePayout}
                 </Button>
               ) : (
-                <div data-testid="reviews">
-                  <span data-testid="reviews-status" style={{ fontWeight: 600, color: "var(--success)" }}>
-                    Reviews published
-                  </span>
-                  {rating && (
-                    <div data-testid="rating" style={{ color: "var(--muted)", marginTop: "0.25rem" }}>
-                      {rating.hasRating
-                        ? `Professional rating: ${rating.average} (${rating.count} reviews)`
-                        : "Professional rating: not shown yet (needs 3 reviews)"}
-                    </div>
-                  )}
+                <div data-testid="payout">
+                  <StatusLine testid="payout-status" status="paid">
+                    {th.flow.paidOut}
+                  </StatusLine>
+                  <p className="muted caption">
+                    — <span data-testid="payout-amount">{formatThb(payout.payoutAmount)}</span>{" "}
+                    {th.flow.payoutToProfessional(payout.bookingState)}
+                  </p>
                 </div>
               )}
             </div>
-          )}
-        </div>
-      )}
-    </main>
+
+            {payout && (
+              <div className="stack-gap">
+                {!reviewsPublished ? (
+                  <Button data-testid="run-reviews" variant="primary" busy={reviewing} onClick={runReviews}>
+                    {th.flow.leaveReviews}
+                  </Button>
+                ) : (
+                  <div data-testid="reviews">
+                    <StatusLine testid="reviews-status" status="published">
+                      {th.flow.reviewsPublished}
+                    </StatusLine>
+                    {rating && (
+                      <div
+                        data-testid="rating"
+                        data-rating-visible={rating.hasRating ? "true" : "false"}
+                        className="muted caption"
+                      >
+                        {rating.hasRating
+                          ? th.flow.ratingShown(String(rating.average), rating.count ?? 0)
+                          : th.flow.ratingHidden}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
     </>
   );
 }
