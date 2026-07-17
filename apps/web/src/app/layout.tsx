@@ -25,9 +25,11 @@ export const metadata = {
 };
 
 // Responsive: opt every page into device-width scaling (no forced desktop layout on mobile).
+// viewportFit: cover unlocks env(safe-area-inset-*) for notched phones.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f4faf8" },
     { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
