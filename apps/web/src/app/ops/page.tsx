@@ -28,7 +28,7 @@ import {
 } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
-import { th } from "../../lib/strings";
+import { th, getThaiErrorMessage } from "../../lib/strings";
 
 /**
  * Operations dashboard (ADM-01). Internal tool that calls controlled API actions:
@@ -50,7 +50,7 @@ export default function OpsPage() {
       setCases(c.cases);
       setMetrics(m);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -68,7 +68,7 @@ export default function OpsPage() {
     return (
       <>
         <AppHeader current="/ops" />
-        <StaffLogin surface="Operations" onToken={setToken} />
+        <StaffLogin surface="operations" onToken={setToken} />
       </>
     );
   }
@@ -81,7 +81,7 @@ export default function OpsPage() {
       await load();
       toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -94,7 +94,7 @@ export default function OpsPage() {
       await load();
       toast.success("ปลดการระงับแล้ว");
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setBusy(false);
     }
