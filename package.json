@@ -21,6 +21,7 @@
     "e2e:install": "playwright install chromium",
     "db:generate": "pnpm --filter @probook/db generate",
     "db:migrate": "pnpm --filter @probook/db migrate",
+    "db:seed": "pnpm --filter @probook/db seed",
     "db:studio": "pnpm --filter @probook/db studio",
     "typecheck": "pnpm -r typecheck",
     "deploy:pages": "bash scripts/deploy-web.sh"
