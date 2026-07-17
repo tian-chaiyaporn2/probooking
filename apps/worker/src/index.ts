@@ -6,10 +6,10 @@ import { reviewPublishSweep } from "./jobs/reviewPublish.js";
 import { reminderSweep } from "./jobs/reminders.js";
 
 /**
- * ProBooking worker. Runs time-driven jobs (§7.2): the CMP-03 auto-accept sweep and
- * the CMP-04 clinic-inactivity review sweep. A polling loop keeps the worker runnable
- * without Redis; for scale these would become durable repeatable jobs (e.g. BullMQ)
- * without changing the job logic.
+ * ProBooking worker. Runs time-driven jobs (§7.2): auto-accept (CMP-03), clinic
+ * completion review (CMP-04), review publish (REV-03), and shift reminders (NOT-01).
+ * A polling loop keeps the worker runnable without Redis; for scale these would become
+ * durable repeatable jobs (e.g. BullMQ) without changing the job logic.
  *
  * Flags: `--once` runs a single pass and exits (used by tests / cron-style triggers).
  */

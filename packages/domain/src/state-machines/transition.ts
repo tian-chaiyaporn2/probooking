@@ -33,8 +33,3 @@ export function assertTransition<S extends string>(
   }
   return to;
 }
-
-/** Terminal states have no outgoing transitions. */
-export function terminalStates<S extends string>(map: TransitionMap<S>): S[] {
-  return (Object.keys(map) as S[]).filter((s) => map[s].length === 0);
-}

@@ -28,8 +28,8 @@ export class OtpRateLimitError extends Error {
 /**
  * State is in-process, like the ThrottleGuard's: correct for one instance, per-instance
  * behind a load balancer — where the 30s interval and the single-use guarantee both weaken
- * (a code becomes replayable against a second replica). `REDIS_URL` is already in the env
- * for when that matters; this is a Phase-1 limitation, recorded rather than implied.
+ * (a code becomes replayable against a second replica). `REDIS_URL` is reserved in
+ * `.env.example` for when that matters; this is a Phase-1 limitation, recorded rather than implied.
  */
 @Injectable()
 export class OtpService {

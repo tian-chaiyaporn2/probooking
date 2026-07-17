@@ -13,7 +13,7 @@ import { verifyToken, type TokenPayload } from "./token.util.js";
 import { TokenRevocationService } from "./token-revocation.service.js";
 import { StaffDirectory } from "./staff-directory.js";
 
-export const ROLES_KEY = "roles";
+const ROLES_KEY = "roles";
 /** Restrict a handler to the given platform roles (§3). Empty = any authenticated user. */
 export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
 
