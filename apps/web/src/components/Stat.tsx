@@ -7,7 +7,7 @@ export function Stat({
   hint,
   icon,
   testid,
-  tone,
+  tone = "default",
 }: {
   label: string;
   value: string;

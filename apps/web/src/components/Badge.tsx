@@ -1,16 +1,19 @@
 import type { ReactNode } from "react";
+import { resolveBadgeTone, type BadgeTone, type ResolvedBadgeTone } from "../lib/tones";
 
-/** Semantic pill. `variant` maps a domain kind to a restrained color. */
-export function Badge({ children, variant = "muted" }: { children: ReactNode; variant?: string }): ReactNode {
-  const cls =
-    variant === "clinic"
-      ? "badge--info"
-      : variant === "professional"
-        ? "badge--accent"
-        : variant === "credential_hold"
-          ? "badge--warn"
-          : variant === "success"
-            ? "badge--success"
-            : "badge--muted";
-  return <span className={`badge ${cls}`}>{children}</span>;
+const TONE_CLASS: Record<ResolvedBadgeTone, string> = {
+  muted: "badge--muted",
+  info: "badge--info",
+  accent: "badge--accent",
+  warning: "badge--warning",
+  success: "badge--success",
+  danger: "badge--danger",
+};
+
+/** Semantic pill. Pages map domain kinds via `badgeToneForKind` from `lib/tones`. */
+export function Badge({ children, tone = "muted" }: { children: ReactNode; tone?: BadgeTone }): ReactNode {
+  const resolved = resolveBadgeTone(tone);
+  return <span className={`badge ${TONE_CLASS[resolved]}`}>{children}</span>;
 }
+
+export type { BadgeTone };

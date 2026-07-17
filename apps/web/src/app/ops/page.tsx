@@ -16,6 +16,10 @@ import { AppHeader } from "../../components/AppHeader";
 import { Stat } from "../../components/Stat";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
+import { PageHeader } from "../../components/PageHeader";
+import { SectionBlock } from "../../components/SectionBlock";
+import { EmptyState } from "../../components/EmptyState";
+import { Skeleton, StatSkeletonGrid } from "../../components/Skeleton";
 import {
   RefreshIcon,
   CalendarIcon,
@@ -24,10 +28,14 @@ import {
   AlertIcon,
   ShieldCheckIcon,
   WalletIcon,
+  ClinicIcon,
+  StethoscopeIcon,
+  InboxIcon,
 } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
+import { badgeToneForKind } from "../../lib/tones";
 
 /**
  * Operations dashboard (ADM-01). Internal tool that calls controlled API actions:
@@ -45,11 +53,14 @@ export default function OpsPage() {
   const loadSeq = useRef(0);
 
   const signOut = useCallback(() => {
+    loadSeq.current += 1;
     setToken(null);
     setMetrics(null);
     setPending([]);
     setCases([]);
     setLoadError(null);
+    setLoading(false);
+    setBusy(false);
   }, []);
 
   const load = useCallback(async () => {
@@ -95,10 +106,12 @@ export default function OpsPage() {
   }
 
   async function verify(kind: "clinic" | "professional", id: string) {
+    if (!token) return;
+    const auth = token;
     setBusy(true);
     try {
-      if (kind === "clinic") await verifyClinic(id, token!);
-      else await verifyProfessional(id, token!);
+      if (kind === "clinic") await verifyClinic(id, auth);
+      else await verifyProfessional(id, auth);
       await load();
       toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
     } catch (e) {
@@ -109,9 +122,11 @@ export default function OpsPage() {
   }
 
   async function resolve(bookingId: string) {
+    if (!token) return;
+    const auth = token;
     setBusy(true);
     try {
-      await resolveHold(bookingId, token!);
+      await resolveHold(bookingId, auth);
       await load();
       toast.success("ปลดการระงับแล้ว");
     } catch (e) {
@@ -124,108 +139,141 @@ export default function OpsPage() {
   return (
     <>
       <AppHeader current="/ops" />
-      <main className="page" style={{ maxWidth: 960 }}>
-        <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: 0 }}>{th.ops.title}</h1>
-          <div className="actions">
-            <Button data-testid="refresh" onClick={() => void load()} disabled={busy || loading} icon={<RefreshIcon />}>
-              {th.common.refresh}
-            </Button>
-            <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
-              {th.staffLogin.signOut}
-            </Button>
-          </div>
-        </div>
+      <main id="main" className="page page--ops">
+        <PageHeader
+          title={th.ops.title}
+          subtitle={th.ops.subtitle}
+          actions={
+            <>
+              <Button data-testid="refresh" onClick={() => void load()} disabled={busy || loading} icon={<RefreshIcon />}>
+                {th.common.refresh}
+              </Button>
+              <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
+                {th.staffLogin.signOut}
+              </Button>
+            </>
+          }
+        />
 
-        {loadError && !metrics && (
-          <p role="alert" style={{ color: "var(--danger)" }}>
+        {loadError && (
+          <p role="alert" className="form-error">
             {loadError}
           </p>
         )}
 
-        <div className="stat-grid" data-testid="ops-metrics">
-          {loading && !metrics ? (
-            Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
-          ) : metrics ? (
-            <>
-              <Stat
-                label={th.ops.metricShifts}
-                value={String(metrics.shifts.total)}
-                hint={`${metrics.shifts.open} ${th.ops.openSuffix}`}
-                icon={<CalendarIcon />}
-              />
-              <Stat label={th.ops.metricBookings} value={String(metrics.bookings.total)} icon={<UsersIcon />} />
-              <Stat label={th.ops.metricCompleted} value={String(metrics.bookings.completed)} icon={<CheckIcon />} />
-              <Stat
-                label={th.ops.metricHeld}
-                value={String(metrics.bookings.held)}
-                icon={<AlertIcon />}
-                tone={metrics.bookings.held > 0 ? "danger" : "default"}
-              />
-              <Stat label={th.ops.metricCases} value={String(metrics.cases.open)} icon={<ShieldCheckIcon />} />
-              <Stat
-                label={th.ops.metricExceptions}
-                value={String(metrics.money.reconciliationExceptions)}
-                icon={<WalletIcon />}
-                tone={metrics.money.reconciliationExceptions === 0 ? "success" : "danger"}
-              />
-            </>
-          ) : null}
-        </div>
+        {loading && !metrics ? (
+          <StatSkeletonGrid count={6} testid="ops-metrics" />
+        ) : (
+          <div className="stat-grid" data-testid="ops-metrics">
+            {metrics ? (
+              <>
+                <Stat
+                  label={th.ops.metricShifts}
+                  value={String(metrics.shifts.total)}
+                  hint={`${metrics.shifts.open} ${th.ops.openSuffix}`}
+                  icon={<CalendarIcon />}
+                />
+                <Stat label={th.ops.metricBookings} value={String(metrics.bookings.total)} icon={<UsersIcon />} />
+                <Stat label={th.ops.metricCompleted} value={String(metrics.bookings.completed)} icon={<CheckIcon />} />
+                <Stat
+                  label={th.ops.metricHeld}
+                  value={String(metrics.bookings.held)}
+                  icon={<AlertIcon />}
+                  tone={metrics.bookings.held > 0 ? "danger" : "default"}
+                />
+                <Stat label={th.ops.metricCases} value={String(metrics.cases.open)} icon={<ShieldCheckIcon />} />
+                <Stat
+                  label={th.ops.metricExceptions}
+                  value={String(metrics.money.reconciliationExceptions)}
+                  icon={<WalletIcon />}
+                  tone={metrics.money.reconciliationExceptions === 0 ? "success" : "danger"}
+                />
+              </>
+            ) : null}
+          </div>
+        )}
 
-        <h2 style={{ marginTop: "var(--s6)" }}>
-          {th.ops.pending} ({pending.length})
-        </h2>
-        <div className="card">
-          <ul data-testid="pending-list" className="rowlist">
-            {!loading && pending.length === 0 && <li className="empty">{th.common.none}</li>}
-            {pending.map((p) => (
-              <li key={p.id} data-testid={`pending-${p.id}`}>
-                <span className={`row__avatar row__avatar--${p.kind}`} aria-hidden>
-                  {p.kind === "clinic" ? "🏥" : "🩺"}
-                </span>
-                <span className="row__main">
-                  <span className="row__name">{p.name}</span>
-                  <span className="row__sub">
-                    <Badge variant={p.kind}>{th.ops.kind[p.kind]}</Badge>
-                    <code className="row__id">{p.id.slice(0, 8)}…</code>
+        <SectionBlock title={th.ops.pending} count={pending.length}>
+          <div className="card">
+            <ul data-testid="pending-list" className="rowlist" aria-busy={loading || undefined}>
+              {loading && pending.length === 0 &&
+                Array.from({ length: 3 }).map((_, i) => (
+                  <li key={i} className="rowlist__skeleton" aria-hidden>
+                    <Skeleton variant="avatar" />
+                    <span className="row__main">
+                      <Skeleton variant="line" />
+                      <Skeleton variant="line-short" />
+                    </span>
+                  </li>
+                ))}
+              {!loading && pending.length === 0 && (
+                <EmptyState as="li" title={th.ops.emptyPending} icon={<InboxIcon />} />
+              )}
+              {pending.map((p) => (
+                <li key={p.id} data-testid={`pending-${p.id}`}>
+                  <span className={`row__avatar row__avatar--${p.kind}`} aria-hidden>
+                    {p.kind === "clinic" ? <ClinicIcon /> : <StethoscopeIcon />}
                   </span>
-                </span>
-                <span className="row__actions">
-                  <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify(p.kind, p.id)}>
-                    {th.ops.verify}
-                  </Button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <h2 style={{ marginTop: "var(--s6)" }}>
-          {th.ops.openCases} ({cases.length})
-        </h2>
-        <div className="card">
-          <ul data-testid="cases-list" className="rowlist">
-            {!loading && cases.length === 0 && <li className="empty">{th.common.none}</li>}
-            {cases.map((c) => (
-              <li key={c.id} data-testid={`case-${c.id}`}>
-                <Badge variant={c.kind}>{c.kind}</Badge>
-                <span className="row__main">
-                  <span className="muted">{c.state}</span>{" "}
-                  {c.refId && <code className="row__id">{c.refId.slice(0, 8)}…</code>}
-                </span>
-                {c.kind === "credential_hold" && c.refId && (
+                  <span className="row__main">
+                    <span className="row__name">{p.name}</span>
+                    <span className="row__sub">
+                      <Badge tone={badgeToneForKind(p.kind)}>{th.ops.kind[p.kind]}</Badge>
+                      <code className="row__id">{p.id.slice(0, 8)}…</code>
+                    </span>
+                  </span>
                   <span className="row__actions">
-                    <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(c.refId as string)}>
-                      {th.ops.resolveHold}
+                    <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify(p.kind, p.id)}>
+                      {th.ops.verify}
                     </Button>
                   </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SectionBlock>
 
+        <SectionBlock title={th.ops.openCases} count={cases.length}>
+          <div className="card">
+            <ul data-testid="cases-list" className="rowlist" aria-busy={loading || undefined}>
+              {loading && cases.length === 0 &&
+                Array.from({ length: 2 }).map((_, i) => (
+                  <li key={i} className="rowlist__skeleton" aria-hidden>
+                    <Skeleton variant="chip" />
+                    <span className="row__main">
+                      <Skeleton variant="line" />
+                    </span>
+                  </li>
+                ))}
+              {!loading && cases.length === 0 && (
+                <EmptyState as="li" title={th.ops.emptyCases} icon={<CheckIcon />} />
+              )}
+              {cases.map((c) => {
+                const refId = c.refId;
+                return (
+                  <li key={c.id} data-testid={`case-${c.id}`}>
+                    <Badge tone={badgeToneForKind(c.kind)}>{th.ops.caseKind[c.kind] ?? c.kind}</Badge>
+                    <span className="row__main">
+                      <span className="row__name">{c.subject || (th.ops.caseState[c.state] ?? c.state)}</span>
+                      <span className="row__sub">
+                        {c.subject ? (
+                          <span className="muted">{th.ops.caseState[c.state] ?? c.state}</span>
+                        ) : null}
+                        {refId && <code className="row__id">{refId.slice(0, 8)}…</code>}
+                      </span>
+                    </span>
+                    {c.kind === "credential_hold" && refId ? (
+                      <span className="row__actions">
+                        <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(refId)}>
+                          {th.ops.resolveHold}
+                        </Button>
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </SectionBlock>
       </main>
     </>
   );

@@ -89,3 +89,24 @@ export const UsersIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M3 20a6 6 0 0 1 12 0M16 6a3 3 0 0 1 0 6M21 20a6 6 0 0 0-3-5.2" />
   </svg>
 );
+
+export const ClinicIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M10 10h4M12 8v4" />
+  </svg>
+);
+
+export const StethoscopeIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M6 3v7a4 4 0 0 0 8 0V3M6 3h2M12 3h2" />
+    <path d="M18 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
+    <path d="M14 10a6 6 0 0 0 7 5.9" />
+  </svg>
+);
+
+export const InboxIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M22 12h-6l-2 3H10l-2-3H2" />
+    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" />
+  </svg>
+);

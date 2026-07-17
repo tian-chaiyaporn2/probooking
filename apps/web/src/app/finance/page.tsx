@@ -10,9 +10,13 @@ import {
 } from "../../lib/api";
 import { AppHeader } from "../../components/AppHeader";
 import { Stat } from "../../components/Stat";
+import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { DataTable, type Column } from "../../components/DataTable";
-import { RefreshIcon, DownloadIcon } from "../../components/icons";
+import { PageHeader } from "../../components/PageHeader";
+import { SectionBlock } from "../../components/SectionBlock";
+import { StatSkeletonGrid } from "../../components/Skeleton";
+import { RefreshIcon, DownloadIcon, CheckIcon, AlertIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
@@ -23,15 +27,19 @@ const MAX_ROWS = 25;
 export default function FinancePage() {
   const [data, setData] = useState<Reconciliation | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const toast = useToast();
   const loadSeq = useRef(0);
 
   const signOut = useCallback(() => {
+    loadSeq.current += 1;
     setToken(null);
     setData(null);
     setLoadError(null);
+    setLoading(false);
+    setExporting(false);
   }, []);
 
   const load = useCallback(async () => {
@@ -62,8 +70,11 @@ export default function FinancePage() {
   }, [token, load]);
 
   async function exportCsv() {
+    if (!token) return;
+    const auth = token;
+    setExporting(true);
     try {
-      const csv = await fetchFinanceExport(token!);
+      const csv = await fetchFinanceExport(auth);
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;
@@ -76,6 +87,8 @@ export default function FinancePage() {
       toast.success("กำลังดาวน์โหลด finance-export.csv");
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -94,9 +107,13 @@ export default function FinancePage() {
       header: th.finance.colConserved,
       render: (r) =>
         r.conserved ? (
-          <span className="badge badge--success" aria-label="conserved">✓</span>
+          <Badge tone="success">
+            <CheckIcon /> {th.finance.conservedYes}
+          </Badge>
         ) : (
-          <span className="badge badge--warn" aria-label="exception">✗ {th.finance.exceptions}</span>
+          <Badge tone="warning">
+            <AlertIcon /> {th.finance.conservedNo}
+          </Badge>
         ),
     },
   ];
@@ -113,59 +130,72 @@ export default function FinancePage() {
   return (
     <>
       <AppHeader current="/finance" />
-      <main className="page" style={{ maxWidth: 1040 }}>
-        <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: 0 }}>{th.finance.title}</h1>
-          <div className="actions">
-            <Button data-testid="refresh" onClick={() => void load()} icon={<RefreshIcon />}>
-              {th.common.refresh}
-            </Button>
-            <Button data-testid="export-csv" variant="primary" onClick={() => void exportCsv()} icon={<DownloadIcon />}>
-              {th.finance.exportCsv}
-            </Button>
-            <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
-              {th.staffLogin.signOut}
-            </Button>
-          </div>
-        </div>
+      <main id="main" className="page page--finance">
+        <PageHeader
+          title={th.finance.title}
+          subtitle={th.finance.subtitle}
+          actions={
+            <>
+              <Button data-testid="refresh" onClick={() => void load()} disabled={loading || exporting} icon={<RefreshIcon />}>
+                {th.common.refresh}
+              </Button>
+              <Button
+                data-testid="export-csv"
+                variant="primary"
+                onClick={() => void exportCsv()}
+                busy={exporting}
+                disabled={loading}
+                icon={<DownloadIcon />}
+              >
+                {th.finance.exportCsv}
+              </Button>
+              <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
+                {th.staffLogin.signOut}
+              </Button>
+            </>
+          }
+        />
 
-        {loadError && !s && (
-          <p role="alert" style={{ color: "var(--danger)" }}>
+        {loadError && (
+          <p role="alert" className="form-error">
             {loadError}
           </p>
         )}
 
-        <div className="stat-grid" data-testid="fin-summary">
-          {loading && !s ? (
-            Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
-          ) : s ? (
-            <>
-              <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
-              <Stat label={th.finance.captured} value={formatThb(s.captured)} />
-              <Stat label={th.finance.payouts} value={formatThb(s.payouts)} />
-              <Stat label={th.finance.refunds} value={formatThb(s.refunds)} />
-              <Stat
-                label={th.finance.exceptions}
-                value={String(s.exceptions)}
-                testid="fin-exceptions"
-                tone={s.exceptions === 0 ? "success" : "danger"}
-              />
-            </>
-          ) : null}
-        </div>
+        {loading && !s ? (
+          <StatSkeletonGrid count={5} testid="fin-summary" />
+        ) : (
+          <div className="stat-grid" data-testid="fin-summary">
+            {s ? (
+              <>
+                <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
+                <Stat label={th.finance.captured} value={formatThb(s.captured)} />
+                <Stat label={th.finance.payouts} value={formatThb(s.payouts)} />
+                <Stat label={th.finance.refunds} value={formatThb(s.refunds)} />
+                <Stat
+                  label={th.finance.exceptions}
+                  value={String(s.exceptions)}
+                  testid="fin-exceptions"
+                  tone={s.exceptions === 0 ? "success" : "danger"}
+                />
+              </>
+            ) : null}
+          </div>
+        )}
 
-        <div style={{ marginTop: "var(--s5)" }}>
+        <SectionBlock id="finance-recon" title={th.finance.reconciliation} count={s ? rows.length : undefined}>
           <DataTable
             columns={columns}
             rows={shown}
             rowKey={(r) => r.paymentOrderId}
             loading={loading}
-            empty={th.common.none}
+            empty={th.common.emptyTable}
             bodyTestid="reconciliation-rows"
+            caption={th.a11y.reconciliationTable}
           />
-        </div>
+        </SectionBlock>
         {rows.length > MAX_ROWS && (
-          <p data-testid="rows-truncated" className="muted" style={{ fontSize: "0.8rem", marginTop: "var(--s3)" }}>
+          <p data-testid="rows-truncated" className="muted table-truncated">
             {th.finance.showing(shown.length, rows.length)}
           </p>
         )}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "../components/AppHeader";
-import { Badge } from "../components/Badge";
+import { ButtonLink, ButtonAnchor } from "../components/Button";
 import { ShieldCheckIcon, CalendarIcon, WalletIcon, ArrowRightIcon } from "../components/icons";
 import { th } from "../lib/strings";
 
@@ -14,32 +14,26 @@ export default function Home() {
   return (
     <>
       <AppHeader current="/" />
-      <main className="page" style={{ maxWidth: 1080 }}>
+      <main id="main" className="page page--wide">
         <section className="hero">
           <div>
+            <p className="hero__brand">{th.brand}</p>
             <span className="hero__eyebrow">
               <ShieldCheckIcon /> {th.home.phase}
             </span>
             <h1>{th.home.tagline}</h1>
             <p className="lead muted">{th.home.description}</p>
-            <div className="trust-row">
-              {th.home.trust.map((t) => (
-                <Badge key={t} variant="success">
-                  ✓ {t}
-                </Badge>
-              ))}
-            </div>
             <div className="hero__actions">
-              <Link href="/flow" className="btn btn--primary btn--lg" data-testid="hero-flow-link">
+              <ButtonLink href="/flow" variant="primary" size="lg" data-testid="hero-flow-link">
                 {th.home.ctaPrimary} <ArrowRightIcon />
-              </Link>
-              <a href="#how" className="btn btn--ghost btn--lg">
+              </ButtonLink>
+              <ButtonAnchor href="#how" variant="ghost" size="lg">
                 {th.home.ctaSecondary}
-              </a>
+              </ButtonAnchor>
             </div>
           </div>
 
-          {/* A stylized "Payment Protected" booking, so the hero shows the product, not just copy. */}
+          {/* Product moment: the protected booking checkout the marketplace actually settles. */}
           <div className="hero__visual" aria-hidden>
             <div className="mockcard">
               <div className="mockcard__row">
@@ -48,7 +42,7 @@ export default function Home() {
                   <div className="mockcard__name">พญ. ธนพร ก.</div>
                   <div className="mockcard__meta">อายุรแพทย์ · ตรวจสอบแล้ว</div>
                 </div>
-                <span className="mockcard__stamp" style={{ marginInlineStart: "auto" }}>
+                <span className="mockcard__stamp mockcard__stamp--end">
                   <ShieldCheckIcon /> ยืนยันแล้ว
                 </span>
               </div>
@@ -79,9 +73,19 @@ export default function Home() {
           </div>
         </section>
 
+        <p className="trust-line" aria-label={th.home.trust.join(" · ")}>
+          {th.home.trust.map((t, i) => (
+            <span key={t}>
+              {i > 0 && <span className="trust-line__dot" aria-hidden>·</span>}
+              {t}
+            </span>
+          ))}
+        </p>
+
         <section>
           <div className="section-head">
             <h2>{th.home.surfacesTitle}</h2>
+            <p>{th.home.surfacesSubtitle}</p>
           </div>
           <div className="cta-grid">
             {SURFACES.map((c) => (
@@ -97,7 +101,15 @@ export default function Home() {
           </div>
         </section>
 
-        <footer className="footer">ProBooking · เฟส 0 · กรุงเทพฯ และปริมณฑล</footer>
+        <footer className="footer">
+          <span className="footer__brand">
+            <span className="brand__mark" aria-hidden>
+              P
+            </span>
+            ProBooking
+          </span>
+          <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+        </footer>
       </main>
     </>
   );

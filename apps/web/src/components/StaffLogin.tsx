@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
+import { Field, Input } from "./Field";
+import { ShieldCheckIcon, WalletIcon } from "./icons";
 
 const OPS_ROLES = new Set(["operations", "administrator"]);
 const FINANCE_ROLES = new Set(["finance", "administrator"]);
@@ -36,6 +38,14 @@ export function StaffLogin({
   const [stage, setStage] = useState<"phone" | "code">("phone");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+  const errorId = "staff-login-error";
+
+  useEffect(() => {
+    if (stage === "phone") phoneRef.current?.focus();
+    else codeRef.current?.focus();
+  }, [stage]);
 
   function roleAllowed(role: string): boolean {
     return surface === "operations" ? OPS_ROLES.has(role) : FINANCE_ROLES.has(role);
@@ -81,80 +91,89 @@ export function StaffLogin({
   }
 
   return (
-    <div className="card card--pad" style={{ maxWidth: 380, margin: "2rem auto" }}>
-      <h2 style={{ marginTop: 0 }}>{th.staffLogin.title[surface]}</h2>
-      <p className="muted" style={{ fontSize: "0.9rem" }}>
-        {th.staffLogin.description}
-      </p>
-      {stage === "phone" ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (phone) void sendCode();
-          }}
-        >
-          <input
-            aria-label={th.staffLogin.phoneLabel}
-            inputMode="tel"
-            placeholder="+66…"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            style={inputStyle}
-          />
-          <Button type="submit" variant="primary" busy={busy} disabled={!phone}>
-            {th.staffLogin.sendCode}
-          </Button>
-        </form>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code) void submitCode();
-          }}
-        >
-          <input
-            aria-label={th.staffLogin.codeLabel}
-            inputMode="numeric"
-            placeholder={th.staffLogin.codePlaceholder}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            style={inputStyle}
-          />
-          <div className="actions">
-            <Button type="submit" variant="primary" busy={busy} disabled={!code}>
-              {th.staffLogin.signIn}
+    <main id="main" className="page">
+      <div className="auth-card">
+        <div className="auth-card__mark" aria-hidden>
+          {surface === "operations" ? <ShieldCheckIcon /> : <WalletIcon />}
+        </div>
+        <h2>{th.staffLogin.title[surface]}</h2>
+        <p className="lead muted">{th.staffLogin.description}</p>
+        {stage === "phone" ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (phone) void sendCode();
+            }}
+          >
+            <Field label={th.staffLogin.phoneLabel} htmlFor="staff-phone">
+              <Input
+                id="staff-phone"
+                name="phone"
+                ref={phoneRef}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
+                inputMode="tel"
+                autoComplete="tel"
+                autoFocus
+                required
+                placeholder="+66…"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </Field>
+            <Button type="submit" variant="primary" busy={busy} disabled={!phone.trim()}>
+              {th.staffLogin.sendCode}
             </Button>
-            <Button
-              type="button"
-              variant="subtle"
-              disabled={busy}
-              onClick={() => {
-                setCode("");
-                setError(null);
-                setStage("phone");
-              }}
-            >
-              {th.staffLogin.requestNewCode}
-            </Button>
-          </div>
-        </form>
-      )}
-      {error && (
-        <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem", marginTop: "0.75rem" }}>
-          {error}
-        </p>
-      )}
-    </div>
+          </form>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (code.length >= 6) void submitCode();
+            }}
+          >
+            <Field label={th.staffLogin.codeLabel} htmlFor="staff-otp">
+              <Input
+                id="staff-otp"
+                name="otp"
+                ref={codeRef}
+                otp
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                required
+                placeholder="••••••"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              />
+            </Field>
+            <div className="actions">
+              <Button type="submit" variant="primary" busy={busy} disabled={code.length < 6}>
+                {th.staffLogin.signIn}
+              </Button>
+              <Button
+                type="button"
+                variant="subtle"
+                disabled={busy}
+                onClick={() => {
+                  setCode("");
+                  setError(null);
+                  setStage("phone");
+                }}
+              >
+                {th.staffLogin.requestNewCode}
+              </Button>
+            </div>
+          </form>
+        )}
+        {error && (
+          <p id={errorId} role="alert" className="form-error">
+            {error}
+          </p>
+        )}
+      </div>
+    </main>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "0.6rem 0.75rem",
-  marginBottom: "0.75rem",
-  borderRadius: 8,
-  border: "1px solid var(--line)",
-  background: "var(--bg)",
-  color: "var(--text)",
-  fontSize: "1rem",
-};

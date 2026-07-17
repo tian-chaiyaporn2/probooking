@@ -1,0 +1,122 @@
+/* Design tokens: color, type, space, radius, shadow, safe-area. */
+
+/* ============================================================================
+   ProBooking design tokens + base components — "clinical trust" direction.
+   Calm teal primary, soft atmospheric ground, Thai-first typography, restrained motion.
+   Pages reference these tokens/classes instead of ad-hoc inline hex + spacing.
+   ============================================================================ */
+
+:root {
+  /* Brand + neutrals */
+  --primary: #0d9488;        /* teal-600 */
+  --primary-hover: #0f766e;  /* teal-700 */
+  --primary-050: #f0fdfa;    /* teal-50 wash */
+  --ink: #0f172a;            /* slate-900 */
+  --text: #1e293b;           /* slate-800 */
+  --muted: #64748b;          /* slate-500 */
+  --line: #e2e8f0;           /* slate-200 */
+  --bg: #f4faf8;             /* soft clinical wash */
+  --bg-accent: #e6f4f1;
+  --surface: #ffffff;
+
+  /* Semantic */
+  --success: #059669;
+  --success-050: #ecfdf5;
+  --warning: #b45309;
+  --warning-050: #fffbeb;
+  --danger: #dc2626;
+  --danger-050: #fef2f2;
+  --info: #0369a1;
+  --info-050: #f0f9ff;
+  --accent: #0f766e;         /* stay in family — no purple drift */
+  --accent-050: #f0fdfa;
+
+  /* Space (4px grid), radius, shadow */
+  --s1: 0.25rem; --s2: 0.5rem; --s3: 0.75rem; --s4: 1rem;
+  --s5: 1.5rem; --s6: 2rem; --s7: 3rem; --s8: 4rem;
+  --radius-sm: 8px; --radius: 12px; --radius-lg: 20px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow: 0 2px 8px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(13, 148, 136, 0.06);
+  --ring: 0 0 0 3px rgba(13, 148, 136, 0.35);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /*
+   * Type scale — Thai-first.
+   * Thai needs ~10–15% more line-height than Latin to clear tone marks, and body
+   * tracking must stay 0 (positive tracking breaks vowel–consonant binding).
+   * Negative tracking is reserved for Latin-only brand marks (e.g. "ProBooking").
+   */
+  --text-xs: 0.75rem;      /* 12 — captions, badges */
+  --text-sm: 0.8125rem;    /* 13 — meta, hints */
+  --text-md: 0.875rem;     /* 14 — tables, secondary UI */
+  --text-base: 1.0625rem;  /* 17 — body (Thai optically smaller than Latin) */
+  --text-lg: 1.125rem;     /* 18 — lead / emphasis */
+  --text-xl: 1.25rem;      /* 20 — section titles */
+  --text-2xl: 1.5rem;      /* 24 — page titles */
+  --text-3xl: 1.75rem;     /* 28 — large titles */
+  --leading-tight: 1.35;   /* headings — room for stacked vowels/tones */
+  --leading-snug: 1.45;
+  --leading-normal: 1.65;  /* body */
+  --leading-relaxed: 1.75;
+  --tracking-none: 0;
+  --tracking-brand: -0.02em;   /* Latin brand wordmark only */
+  --tracking-display: -0.03em; /* Latin display only (hero brand) */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  /* Notch / home-indicator insets. `constant()` first for iOS 11.0–11.1; `env()` wins after. */
+  --safe-top: 0px;
+  --safe-right: 0px;
+  --safe-bottom: 0px;
+  --safe-left: 0px;
+  --safe-top: constant(safe-area-inset-top, 0px);
+  --safe-right: constant(safe-area-inset-right, 0px);
+  --safe-bottom: constant(safe-area-inset-bottom, 0px);
+  --safe-left: constant(safe-area-inset-left, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --touch-min: 2.75rem; /* 44px — Apple HIG / WCAG touch target */
+  --surface-2: var(--bg); /* subtle wash behind ghost controls */
+  --radius-xs: 4px;
+  --radius-pill: 999px;
+  --shadow-primary: 0 1px 2px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(13, 148, 136, 0.28);
+  --page-max: 820px;
+}
+
+/* Dark theme — set by pre-paint script + ThemeToggle via data-theme.
+   Media fallback keeps OS dark working if JS never runs (no data-theme yet). */
+:root[data-theme="dark"] {
+  --primary: #2dd4bf; --primary-hover: #5eead4; --primary-050: rgba(45, 212, 191, 0.14);
+  --ink: #f1f5f9; --text: #dbe4ef; --muted: #94a3b8; --line: #24303f;
+  --bg: #0b1220; --bg-accent: #0f1a2a; --surface: #111a2b; --surface-2: #0f1a2a;
+  --success: #34d399; --success-050: rgba(52, 211, 153, 0.15);
+  --warning: #fbbf24; --warning-050: rgba(251, 191, 36, 0.15);
+  --danger: #f87171; --danger-050: rgba(248, 113, 113, 0.15);
+  --info: #38bdf8; --info-050: rgba(56, 189, 248, 0.15);
+  --accent: #5eead4; --accent-050: rgba(45, 212, 191, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.35);
+  --shadow-primary: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(45, 212, 191, 0.22);
+  --ring: 0 0 0 3px rgba(45, 212, 191, 0.4);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --primary: #2dd4bf; --primary-hover: #5eead4; --primary-050: rgba(45, 212, 191, 0.14);
+    --ink: #f1f5f9; --text: #dbe4ef; --muted: #94a3b8; --line: #24303f;
+    --bg: #0b1220; --bg-accent: #0f1a2a; --surface: #111a2b; --surface-2: #0f1a2a;
+    --success: #34d399; --success-050: rgba(52, 211, 153, 0.15);
+    --warning: #fbbf24; --warning-050: rgba(251, 191, 36, 0.15);
+    --danger: #f87171; --danger-050: rgba(248, 113, 113, 0.15);
+    --info: #38bdf8; --info-050: rgba(56, 189, 248, 0.15);
+    --accent: #5eead4; --accent-050: rgba(45, 212, 191, 0.14);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.35);
+    --shadow-primary: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(45, 212, 191, 0.22);
+    --ring: 0 0 0 3px rgba(45, 212, 191, 0.4);
+    color-scheme: dark;
+  }
+}

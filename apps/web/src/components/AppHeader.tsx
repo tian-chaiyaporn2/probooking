@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { th } from "../lib/strings";
 import { ThemeToggle } from "./ThemeToggle";
@@ -13,27 +13,81 @@ const LINKS = [
   { href: "/flow", label: th.nav.flow },
 ] as const;
 
+/** Keep in sync with max-width: 959px drawer breakpoint in pages.css. */
+const DRAWER_MQ = "(min-width: 960px)";
+
 /**
  * Shared app shell header: brand + section nav + theme toggle.
  *
- * On narrow screens the nav used to wrap onto its own row and push the theme toggle below
- * the brand — a two-row header that looked broken. It now collapses into a drawer behind a
- * menu button, which is closed on Escape, on backdrop tap, and on navigation.
+ * On phone and tablet the nav collapses into a drawer behind a menu button. The drawer
+ * closes on Escape, backdrop tap, resize into the desktop band, and navigation; scroll
+ * is locked on <html> while open; Tab cycles inside the panel.
  */
 export function AppHeader({ current }: { current?: string }) {
   const [open, setOpen] = useState(false);
+  const drawerId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const drawer = drawerRef.current;
+    const main = document.getElementById("main");
+    if (main) main.inert = true;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (e.key !== "Tab" || !drawer) return;
+      const focusables = Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1);
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     document.addEventListener("keydown", onKey);
-    // Lock body scroll while the drawer is open.
-    document.body.style.overflow = "hidden";
+    // Lock scroll on <html> — locking body alone can shrink the fixed containing
+    // block in WebKit/Blink and collapse the drawer to content height.
+    const root = document.documentElement;
+    const prevOverflow = root.style.overflow;
+    root.style.overflow = "hidden";
+    closeRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      root.style.overflow = prevOverflow;
+      if (main) main.inert = false;
+      toggleRef.current?.focus();
     };
   }, [open]);
+
+  // If the viewport grows into the desktop nav band, dismiss the drawer so it
+  // cannot linger as an invisible overlay after orientation change.
+  useEffect(() => {
+    const mq = window.matchMedia(DRAWER_MQ);
+    const onChange = () => {
+      if (mq.matches) setOpen(false);
+    };
+    onChange();
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    }
+    // Safari < 14
+    mq.addListener(onChange);
+    return () => mq.removeListener(onChange);
+  }, []);
 
   return (
     <header className="app-header">
@@ -57,10 +111,12 @@ export function AppHeader({ current }: { current?: string }) {
         <div className="app-header__right">
           <ThemeToggle />
           <button
+            ref={toggleRef}
             type="button"
             className="nav-toggle"
             aria-label={open ? th.a11y.closeMenu : th.a11y.openMenu}
             aria-expanded={open}
+            aria-controls={drawerId}
             onClick={() => setOpen((v) => !v)}
           >
             {open ? <CloseIcon /> : <MenuIcon />}
@@ -68,11 +124,30 @@ export function AppHeader({ current }: { current?: string }) {
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile / tablet drawer */}
       {open && (
         <>
           <button className="nav-backdrop" aria-label={th.a11y.closeMenu} onClick={() => setOpen(false)} />
-          <nav className="app-nav--drawer" aria-label={th.a11y.primaryNav}>
+          <nav
+            ref={drawerRef}
+            id={drawerId}
+            className="app-nav--drawer"
+            aria-label={th.a11y.primaryNav}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="app-nav--drawer__top">
+              <span className="app-nav--drawer__title">{th.a11y.primaryNav}</span>
+              <button
+                ref={closeRef}
+                type="button"
+                className="nav-drawer-close"
+                aria-label={th.a11y.closeMenu}
+                onClick={() => setOpen(false)}
+              >
+                <CloseIcon />
+              </button>
+            </div>
             {LINKS.map((l) => (
               <Link
                 key={l.href}
@@ -83,6 +158,7 @@ export function AppHeader({ current }: { current?: string }) {
                 {l.label}
               </Link>
             ))}
+            <p className="app-nav--drawer__foot">{th.home.phase}</p>
           </nav>
         </>
       )}
