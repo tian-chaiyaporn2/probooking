@@ -191,10 +191,12 @@ img, svg { max-width: 100%; height: auto; }
 .app-nav a[aria-current="page"] { color: var(--primary-hover); background: var(--primary-050); }
 .app-nav-toggle { flex: none; }
 
+.theme-toggle__placeholder { display: inline-block; width: 1.05em; height: 1.05em; }
+
 .app-nav-backdrop {
   display: block;
   position: fixed; inset: 0; z-index: 9;
-  border: none; padding: 0; margin: 0;
+  padding: 0; margin: 0;
   background: color-mix(in srgb, var(--ink) 40%, transparent);
   cursor: default;
 }
@@ -314,6 +316,9 @@ img, svg { max-width: 100%; height: auto; }
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+
+.stat__value--success { color: var(--success); }
+.stat__value--danger { color: var(--danger); }
 
 /* ---- Badges ---- */
 .badge {

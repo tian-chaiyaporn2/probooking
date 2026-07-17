@@ -12,11 +12,12 @@ export function Stat({
   testid?: string;
   tone?: "default" | "success" | "danger";
 }): ReactNode {
-  const color = tone === "success" ? "var(--success)" : tone === "danger" ? "var(--danger)" : "var(--ink)";
+  const toneClass =
+    tone === "success" ? "stat__value--success" : tone === "danger" ? "stat__value--danger" : "";
   return (
     <div className="stat">
       <div className="stat__label">{label}</div>
-      <div className="stat__value" data-testid={testid} style={{ color }}>
+      <div className={`stat__value${toneClass ? ` ${toneClass}` : ""}`} data-testid={testid}>
         {value}
       </div>
     </div>

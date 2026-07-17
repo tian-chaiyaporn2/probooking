@@ -36,6 +36,7 @@ export const th = {
     flow: "เดโม",
     openMenu: "เปิดเมนู",
     closeMenu: "ปิดเมนู",
+    primary: "เมนูหลัก",
   },
   ops: {
     title: "แดชบอร์ดฝ่ายปฏิบัติการ",
@@ -47,6 +48,9 @@ export const th = {
     metricExceptions: "รายการกระทบยอดผิดปกติ",
     pending: "รอการตรวจสอบ",
     verify: "ตรวจสอบ",
+    verifiedToast: (kind: "clinic" | "professional") =>
+      kind === "clinic" ? "คลินิกผ่านการตรวจสอบแล้ว" : "บุคลากรผ่านการตรวจสอบแล้ว",
+    resolvedToast: "ปลดการระงับแล้ว",
     openCases: "เคสที่เปิดอยู่",
     resolveHold: "ปลดการระงับ",
   },

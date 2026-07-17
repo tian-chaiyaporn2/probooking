@@ -16,7 +16,7 @@ test("pages are responsive — no horizontal page overflow on a small screen", a
 test("mobile nav opens and closes", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const nav = page.getByRole("navigation", { name: "Primary" });
+  const nav = page.getByRole("navigation", { name: "เมนูหลัก" });
   const toggle = page.getByRole("button", { name: "เปิดเมนู" });
   await expect(toggle).toBeVisible();
   await expect(nav.getByRole("link", { name: "ปฏิบัติการ" })).not.toBeVisible();

@@ -5,18 +5,23 @@ import { SunIcon, MoonIcon } from "./icons";
 
 type Theme = "light" | "dark";
 
+function resolveTheme(attr: Theme | undefined): Theme {
+  if (attr === "dark" || attr === "light") return attr;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 /** Reads the resolved theme (set pre-paint by the layout script) and toggles/persists it. */
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
     const attr = document.documentElement.dataset.theme as Theme | undefined;
-    const system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    setTheme(attr ?? system);
+    setTheme(resolveTheme(attr));
   }, []);
 
   function toggle() {
-    const next: Theme = theme === "dark" ? "light" : "dark";
+    const current = theme ?? resolveTheme(document.documentElement.dataset.theme as Theme | undefined);
+    const next: Theme = current === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.dataset.theme = next;
     try {
@@ -26,17 +31,19 @@ export function ThemeToggle() {
     }
   }
 
-  const isDark = theme === "dark";
+  const resolved = theme ?? null;
+  const isDark = resolved === "dark";
   return (
     <button
+      type="button"
       className="btn btn--ghost btn--icon"
       onClick={toggle}
       aria-label={isDark ? "สลับเป็นโหมดสว่าง" : "สลับเป็นโหมดมืด"}
-      aria-pressed={isDark}
+      aria-pressed={resolved === null ? undefined : isDark}
       title={isDark ? "โหมดสว่าง" : "โหมดมืด"}
     >
       {/* Render nothing until mounted to avoid a hydration/icon mismatch. */}
-      {theme === null ? <span style={{ width: "1.05em" }} /> : isDark ? <SunIcon /> : <MoonIcon />}
+      {resolved === null ? <span className="theme-toggle__placeholder" aria-hidden /> : isDark ? <SunIcon /> : <MoonIcon />}
     </button>
   );
 }

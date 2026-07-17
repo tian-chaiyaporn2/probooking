@@ -13,7 +13,7 @@ const notoSansThai = Noto_Sans_Thai({
 
 export const metadata = {
   title: "ProBooking",
-  description: "Verified. Available. Bookable. Payment Protected.",
+  description: "ตรวจสอบแล้ว • พร้อมทำงาน • จองได้ • คุ้มครองการชำระเงิน",
 };
 
 // Responsive: opt every page into device-width scaling (no forced desktop layout on mobile).

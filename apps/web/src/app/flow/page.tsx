@@ -151,7 +151,14 @@ export default function FlowPage() {
         <h1>{th.flow.title}</h1>
         <p className="muted">{th.flow.description}</p>
 
-        <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
+        <Button
+          data-testid="run-flow"
+          variant="primary"
+          size="lg"
+          busy={running}
+          disabled={payingOut || reviewing}
+          onClick={run}
+        >
           {th.flow.run}
         </Button>
 

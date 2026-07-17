@@ -21,6 +21,10 @@ interface Props<T> {
 
 /** Generic data table with a stacked card layout on phones. */
 export function DataTable<T>({ columns, rows, rowKey, loading, loadingRows = 6, empty, bodyTestid }: Props<T>) {
+  if (columns.length === 0) {
+    return <div className="empty card card--pad">{empty ?? null}</div>;
+  }
+
   const titleCol = columns.find((c) => c.mobileTitle) ?? columns[0]!;
   const detailCols = columns.filter((c) => c !== titleCol);
 

@@ -65,7 +65,7 @@ export default function OpsPage() {
       if (kind === "clinic") await verifyClinic(id);
       else await verifyProfessional(id);
       await load();
-      toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
+      toast.success(th.ops.verifiedToast(kind));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -79,7 +79,7 @@ export default function OpsPage() {
       await ensureOpsToken();
       await resolveHold(bookingId);
       await load();
-      toast.success("ปลดการระงับแล้ว");
+      toast.success(th.ops.resolvedToast);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

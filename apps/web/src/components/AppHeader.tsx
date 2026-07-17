@@ -56,11 +56,9 @@ export function AppHeader({ current }: { current?: string }) {
   return (
     <>
       {menuOpen && (
-        <button
-          type="button"
+        <div
           className="app-nav-backdrop"
           aria-hidden="true"
-          tabIndex={-1}
           onClick={() => setMenuOpen(false)}
         />
       )}
@@ -76,7 +74,7 @@ export function AppHeader({ current }: { current?: string }) {
           <nav
             id="primary-nav"
             className={`app-nav${menuOpen ? " app-nav--open" : ""}`}
-            aria-label="Primary"
+            aria-label={th.nav.primary}
           >
             {LINKS.map((l) => (
               <Link
