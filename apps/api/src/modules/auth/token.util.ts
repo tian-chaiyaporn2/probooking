@@ -9,6 +9,8 @@ export interface TokenPayload {
   sub: string;
   role: string;
   exp: number; // unix seconds
+  iat: number; // issued-at (unix seconds) — lets us revoke everything issued before a cutoff
+  jti: string; // unique token id — lets a single token be revoked (logout)
 }
 
 /**
@@ -42,9 +44,16 @@ export function assertSigningSecretConfigured(): void {
   secret();
 }
 
-export function signToken(payload: Omit<TokenPayload, "exp">, ttlSeconds = 3600): string {
+export function signToken(payload: Omit<TokenPayload, "exp" | "iat" | "jti">, ttlSeconds = 3600): string {
+  const now = Math.floor(Date.now() / 1000);
+  const full: TokenPayload = {
+    ...payload,
+    iat: now,
+    exp: now + ttlSeconds,
+    jti: randomBytes(16).toString("hex"),
+  };
   const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const body = b64url(JSON.stringify({ ...payload, exp: Math.floor(Date.now() / 1000) + ttlSeconds }));
+  const body = b64url(JSON.stringify(full));
   const sig = createHmac("sha256", secret()).update(`${header}.${body}`).digest("base64url");
   return `${header}.${body}.${sig}`;
 }

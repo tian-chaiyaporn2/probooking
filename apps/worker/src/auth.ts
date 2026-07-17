@@ -23,11 +23,16 @@ export function workerToken(): string | null {
   // authenticated, or a fallback secret existing at all.
   if (!secret) return null;
   const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const now = Math.floor(Date.now() / 1000);
   const body = b64url(
     JSON.stringify({
       sub: "worker",
       role: "worker",
-      exp: Math.floor(Date.now() / 1000) + TTL_SECONDS,
+      iat: now,
+      exp: now + TTL_SECONDS,
+      // Fresh id per token; the worker re-mints every few minutes, so revocation is moot,
+      // but the shape matches the API's TokenPayload.
+      jti: `worker-${now}`,
     }),
   );
   const sig = createHmac("sha256", secret).update(`${header}.${body}`).digest("base64url");
