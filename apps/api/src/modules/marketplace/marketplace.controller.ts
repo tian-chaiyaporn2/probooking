@@ -740,8 +740,6 @@ export class MarketplaceController {
     if (overlap) {
       throw new BadRequestException("schedule overlap (AVL-03)");
     }
-
-    }
     // OFF-04: acceptance -> AwaitingPayment (soft hold), never straight to a booking.
     let nextState;
     try {
