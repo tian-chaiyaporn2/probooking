@@ -13,19 +13,31 @@ export const DEMO_PHONES = {
   drWanida: "+66920000002",
   drPrasert: "+66920000003",
   drPending: "+66920000004",
+  drSuspended: "+66920000005",
 } as const;
 
 export interface DemoSeedResult {
   clinics: { sukhumvit: string; rama: string; pending: string };
-  professionals: { somchai: string; wanida: string; prasert: string; pending: string };
+  professionals: {
+    somchai: string;
+    wanida: string;
+    prasert: string;
+    pending: string;
+    suspended: string;
+  };
   shifts: { openStandard: string; openUrgent: string; withApplication: string; insuranceRequired: string };
-  offers: { awaitingPayment: string };
+  offers: { pendingResponse: string; awaitingPayment: string; expired: string };
   bookings: {
     completed: string;
     confirmedWithMessages: string;
     awaitingCompletion: string;
+    awaitingCompletionOverdue: string;
     held: string;
     cancelled: string;
+    partialCancel: string;
+    completionReview: string;
+    reminderDue: string;
+    unpublishedReview: string;
   };
 }
 
@@ -115,6 +127,16 @@ export async function seedDemoFixtures(
   });
   await store.verifyProfessional(prasert.id);
 
+  // Verified but suspended — demonstrates VER-04/06 without blocking other fixtures.
+  const suspended = await store.registerProfessional({
+    displayName: "นพ. ถูกระงับ",
+    profession: "physician",
+    phone: DEMO_PHONES.drSuspended,
+    payoutRef: "xxxx-4444",
+  });
+  await store.verifyProfessional(suspended.id);
+  await store.suspendCredential(suspended.id);
+
   // Insurance evidence for dentistry shifts (VER-05).
   await store.submitInsurance(wanida.id, now + 365 * DAY);
   await store.verifyInsurance(wanida.id);
@@ -177,6 +199,41 @@ export async function seedDemoFixtures(
     expiresAt: now + 2 * HOUR,
   });
   await store.setOfferState(awaitingOffer.id, "AwaitingPayment", now + HOUR);
+
+  // --- PendingResponse offer (OFF-01, not yet accepted) ---
+  const pendingShift = await store.postShift({
+    clinicWorkspaceId: clinicB.id,
+    category: "general",
+    compensation: 700_000,
+    urgency: "standard",
+    shiftStart: now + 11 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(pendingShift.shiftId, wanida.id);
+  const pendingOffer = await store.createOfferForShift({
+    shiftId: pendingShift.shiftId,
+    professionalId: wanida.id,
+    sentAt: now - 30 * 60 * 1000,
+    expiresAt: now + 2 * HOUR,
+  });
+
+  // --- Expired offer (OFF-03 terminal state) ---
+  const expiredShift = await store.postShift({
+    clinicWorkspaceId: clinicA.id,
+    category: "general",
+    compensation: 650_000,
+    urgency: "standard",
+    shiftStart: now + 12 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(expiredShift.shiftId, prasert.id);
+  const expiredOffer = await store.createOfferForShift({
+    shiftId: expiredShift.shiftId,
+    professionalId: prasert.id,
+    sentAt: now - 3 * DAY,
+    expiresAt: now - 2 * DAY,
+  });
+  await store.setOfferState(expiredOffer.id, "Expired");
 
   // --- Completed + paid booking (finance reconciliation, REP-01/02) ---
   const completedShift = await store.postShift({
@@ -307,6 +364,154 @@ export async function seedDemoFixtures(
     refundKey: `refund:${cancelled.booking.id}`,
   });
 
+  // --- Partial cancellation (CAN-01: 50% payable, clinic ordinary <24h) ---
+  const partialShift = await store.postShift({
+    clinicWorkspaceId: clinicB.id,
+    category: "general",
+    compensation: 1_000_000,
+    urgency: "standard",
+    shiftStart: now + 5 * HOUR,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(partialShift.shiftId, somchai.id);
+  const partialOffer = await store.createOfferForShift({
+    shiftId: partialShift.shiftId,
+    professionalId: somchai.id,
+    sentAt: now - 2 * DAY,
+    expiresAt: now - 2 * DAY + HOUR,
+  });
+  await store.setOfferState(partialOffer.id, "AwaitingPayment", now - 2 * DAY + HOUR);
+  const partialCancel = await confirmFromOffer(store, partialOffer.id, 1_000_000);
+  const partialCheckout = buildCheckout(satang(1_000_000));
+  const partialPayable = 500_000; // 50% of compensation
+  await store.cancelBooking({
+    bookingId: partialCancel.booking.id,
+    payable: partialPayable,
+    refund: partialCheckout.total - partialPayable,
+    payoutKey: `payout:${partialCancel.booking.id}:cancel`,
+    refundKey: `refund:${partialCancel.booking.id}`,
+  });
+
+  // --- cancellation_support case (CAN: force_majeure routes to ops) ---
+  const supportShift = await store.postShift({
+    clinicWorkspaceId: clinicA.id,
+    category: "general",
+    compensation: 550_000,
+    urgency: "standard",
+    shiftStart: now + 14 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(supportShift.shiftId, wanida.id);
+  const supportOffer = await store.createOfferForShift({
+    shiftId: supportShift.shiftId,
+    professionalId: wanida.id,
+    sentAt: now - DAY,
+    expiresAt: now + DAY,
+  });
+  await store.setOfferState(supportOffer.id, "AwaitingPayment", now + HOUR);
+  const supportBooking = await confirmFromOffer(store, supportOffer.id, 550_000);
+  await store.createSupportCase(
+    supportBooking.booking.id,
+    "cancellation_support",
+    "Cancellation requires support (reason: force_majeure)",
+  );
+
+  // --- completion_review case (CMP-04: shift ended >48h, still Confirmed) ---
+  const reviewShift = await store.postShift({
+    clinicWorkspaceId: clinicB.id,
+    category: "general",
+    compensation: 720_000,
+    urgency: "standard",
+    shiftStart: now - 4 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(reviewShift.shiftId, wanida.id);
+  const reviewOffer = await store.createOfferForShift({
+    shiftId: reviewShift.shiftId,
+    professionalId: wanida.id,
+    sentAt: now - 6 * DAY,
+    expiresAt: now - 6 * DAY + HOUR,
+  });
+  await store.setOfferState(reviewOffer.id, "AwaitingPayment", now - 6 * DAY + HOUR);
+  const completionReview = await confirmFromOffer(store, reviewOffer.id, 720_000);
+  await store.createSupportCase(
+    completionReview.booking.id,
+    "completion_review",
+    "Clinic inactivity — professional never marked completion",
+  );
+
+  // --- Confirmed booking in 24h reminder window (NOT-01) ---
+  const reminderShift = await store.postShift({
+    clinicWorkspaceId: clinicA.id,
+    category: "general",
+    compensation: 680_000,
+    urgency: "standard",
+    shiftStart: now + 12 * HOUR,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(reminderShift.shiftId, prasert.id);
+  const reminderOffer = await store.createOfferForShift({
+    shiftId: reminderShift.shiftId,
+    professionalId: prasert.id,
+    sentAt: now - 2 * DAY,
+    expiresAt: now - 2 * DAY + HOUR,
+  });
+  await store.setOfferState(reminderOffer.id, "AwaitingPayment", now - 2 * DAY + HOUR);
+  const reminderDue = await confirmFromOffer(store, reminderOffer.id, 680_000);
+
+  // --- AwaitingCompletion past auto-accept deadline (CMP-03 worker target) ---
+  const overdueShift = await store.postShift({
+    clinicWorkspaceId: clinicB.id,
+    category: "general",
+    compensation: 640_000,
+    urgency: "standard",
+    shiftStart: now - 3 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(overdueShift.shiftId, somchai.id);
+  const overdueOffer = await store.createOfferForShift({
+    shiftId: overdueShift.shiftId,
+    professionalId: somchai.id,
+    sentAt: now - 5 * DAY,
+    expiresAt: now - 5 * DAY + HOUR,
+  });
+  await store.setOfferState(overdueOffer.id, "AwaitingPayment", now - 5 * DAY + HOUR);
+  const awaitingCompletionOverdue = await confirmFromOffer(store, overdueOffer.id, 640_000);
+  await store.markCompletion(awaitingCompletionOverdue.booking.id);
+
+  // --- Unpublished review (REV-03: one party reviewed, awaiting counterpart) ---
+  const unpubShift = await store.postShift({
+    clinicWorkspaceId: clinicA.id,
+    category: "general",
+    compensation: 480_000,
+    urgency: "standard",
+    shiftStart: now - 8 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(unpubShift.shiftId, wanida.id);
+  const unpubOffer = await store.createOfferForShift({
+    shiftId: unpubShift.shiftId,
+    professionalId: wanida.id,
+    sentAt: now - 10 * DAY,
+    expiresAt: now - 10 * DAY + HOUR,
+  });
+  await store.setOfferState(unpubOffer.id, "AwaitingPayment", now - 10 * DAY + HOUR);
+  const unpublishedReview = await confirmFromOffer(store, unpubOffer.id, 480_000);
+  await store.markCompletion(unpublishedReview.booking.id);
+  await store.recordPayout({
+    bookingId: unpublishedReview.booking.id,
+    payoutAmount: 480_000,
+    idempotencyKey: `payout:${unpublishedReview.booking.id}`,
+  });
+  await store.createReview({
+    bookingId: unpublishedReview.booking.id,
+    authorId: clinicA.id,
+    subjectId: wanida.id,
+    score: 4,
+    tags: ["thorough"],
+    text: "รอรีวิวจากทีม",
+  });
+
   // --- Extra completed bookings so Dr. Prasert reaches the 3-review cold-start threshold (REV-04) ---
   for (let i = 0; i < 2; i++) {
     const extraShift = await store.postShift({
@@ -355,6 +560,7 @@ export async function seedDemoFixtures(
       wanida: wanida.id,
       prasert: prasert.id,
       pending: pendingPro.id,
+      suspended: suspended.id,
     },
     shifts: {
       openStandard: openStandard.shiftId,
@@ -362,13 +568,22 @@ export async function seedDemoFixtures(
       withApplication: withApplication.shiftId,
       insuranceRequired: insuranceRequired.shiftId,
     },
-    offers: { awaitingPayment: awaitingOffer.id },
+    offers: {
+      pendingResponse: pendingOffer.id,
+      awaitingPayment: awaitingOffer.id,
+      expired: expiredOffer.id,
+    },
     bookings: {
       completed: completed.booking.id,
       confirmedWithMessages: confirmedWithMessages.booking.id,
       awaitingCompletion: awaitingCompletion.booking.id,
+      awaitingCompletionOverdue: awaitingCompletionOverdue.booking.id,
       held: held.booking.id,
       cancelled: cancelled.booking.id,
+      partialCancel: partialCancel.booking.id,
+      completionReview: completionReview.booking.id,
+      reminderDue: reminderDue.booking.id,
+      unpublishedReview: unpublishedReview.booking.id,
     },
   };
 }

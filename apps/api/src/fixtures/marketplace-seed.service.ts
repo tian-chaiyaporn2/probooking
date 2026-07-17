@@ -39,8 +39,9 @@ export class MarketplaceSeedService implements OnModuleInit {
     const result = await seedDemoFixtures(this.repo);
     this.repo.markSeeded();
     this.logger.log(
-      `Demo fixtures loaded: ${Object.keys(result.bookings).length} bookings, ` +
-        `${Object.keys(result.shifts).length} shifts, pending verifications ready`,
+      `Demo fixtures loaded: ${Object.keys(result.bookings).length} booking scenarios, ` +
+        `${Object.keys(result.offers).length} offer states, ` +
+        `${Object.keys(result.professionals).length} professionals`,
     );
   }
 }

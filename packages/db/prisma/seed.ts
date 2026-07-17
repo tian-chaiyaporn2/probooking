@@ -17,6 +17,7 @@ const PHONES = {
   drWanida: "+66920000002",
   drPrasert: "+66920000003",
   drPending: "+66920000004",
+  drSuspended: "+66920000005",
 } as const;
 
 async function registerClinic(
@@ -181,6 +182,17 @@ async function main() {
     "xxxx-3333",
     true,
   );
+  const suspended = await registerProfessional(
+    "นพ. ถูกระงับ",
+    "physician",
+    PHONES.drSuspended,
+    "xxxx-4444",
+    true,
+  );
+  await prisma.credential.updateMany({
+    where: { professionalId: suspended.id, kind: "licence" },
+    data: { state: "Suspended" },
+  });
 
   await prisma.insuranceEvidence.create({
     data: {
@@ -241,6 +253,46 @@ async function main() {
       sentAt: new Date(now),
       expiresAt: new Date(now + 2 * HOUR),
       fundingDueAt: new Date(now + HOUR),
+    },
+  });
+
+  const pendingShift = await postShift(
+    clinicB.id,
+    "general",
+    700_000,
+    "standard",
+    new Date(now + 11 * DAY),
+    false,
+  );
+  await prisma.application.create({ data: { shiftId: pendingShift.id, professionalId: wanida.id } });
+  const pendingOffer = await prisma.offer.create({
+    data: {
+      shiftId: pendingShift.id,
+      professionalId: wanida.id,
+      state: "PendingResponse",
+      termsSnapshot: {},
+      sentAt: new Date(now - 30 * 60 * 1000),
+      expiresAt: new Date(now + 2 * HOUR),
+    },
+  });
+
+  const expiredShift = await postShift(
+    clinicA.id,
+    "general",
+    650_000,
+    "standard",
+    new Date(now + 12 * DAY),
+    false,
+  );
+  await prisma.application.create({ data: { shiftId: expiredShift.id, professionalId: prasert.id } });
+  const expiredOffer = await prisma.offer.create({
+    data: {
+      shiftId: expiredShift.id,
+      professionalId: prasert.id,
+      state: "Expired",
+      termsSnapshot: {},
+      sentAt: new Date(now - 3 * DAY),
+      expiresAt: new Date(now - 2 * DAY),
     },
   });
 
@@ -448,6 +500,235 @@ async function main() {
     });
   });
 
+  // Partial cancellation (50% payable)
+  const partialShift = await postShift(
+    clinicB.id,
+    "general",
+    1_000_000,
+    "standard",
+    new Date(now + 5 * HOUR),
+    false,
+  );
+  await prisma.application.create({ data: { shiftId: partialShift.id, professionalId: somchai.id } });
+  const partialOffer = await prisma.offer.create({
+    data: {
+      shiftId: partialShift.id,
+      professionalId: somchai.id,
+      state: "PendingResponse",
+      termsSnapshot: {},
+      sentAt: new Date(now - 2 * DAY),
+      expiresAt: new Date(now - 2 * DAY + HOUR),
+      fundingDueAt: new Date(now - 2 * DAY + HOUR),
+    },
+  });
+  const partialBooking = await confirmBooking(partialOffer.id, partialShift.id, somchai.id, 1_000_000);
+  const partialCheckout = buildCheckout(satang(1_000_000));
+  const partialPayable = 500_000;
+  const partialPo = await prisma.paymentOrder.findUniqueOrThrow({
+    where: { bookingId: partialBooking.id },
+    include: { allocation: true },
+  });
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.update({ where: { id: partialBooking.id }, data: { state: "Cancelled" } });
+    await tx.financialAllocation.update({
+      where: { paymentOrderId: partialPo.id },
+      data: { payoutState: "Paid", refundState: "PartiallyRefunded" },
+    });
+    await tx.financialEvent.createMany({
+      data: [
+        {
+          paymentOrderId: partialPo.id,
+          type: "Payout",
+          amount: partialPayable,
+          idempotencyKey: `payout:${partialBooking.id}:cancel`,
+        },
+        {
+          paymentOrderId: partialPo.id,
+          type: "Refund",
+          amount: partialCheckout.total - partialPayable,
+          idempotencyKey: `refund:${partialBooking.id}`,
+        },
+      ],
+    });
+  });
+
+  // cancellation_support case
+  const supportShift = await postShift(
+    clinicA.id,
+    "general",
+    550_000,
+    "standard",
+    new Date(now + 14 * DAY),
+    false,
+  );
+  await prisma.application.create({ data: { shiftId: supportShift.id, professionalId: wanida.id } });
+  const supportOffer = await prisma.offer.create({
+    data: {
+      shiftId: supportShift.id,
+      professionalId: wanida.id,
+      state: "PendingResponse",
+      termsSnapshot: {},
+      sentAt: new Date(now - DAY),
+      expiresAt: new Date(now + DAY),
+      fundingDueAt: new Date(now + HOUR),
+    },
+  });
+  const supportBooking = await confirmBooking(supportOffer.id, supportShift.id, wanida.id, 550_000);
+  await prisma.supportCase.create({
+    data: {
+      subject: "Cancellation requires support (reason: force_majeure)",
+      kind: "cancellation_support",
+      state: "Open",
+      refType: "Booking",
+      refId: supportBooking.id,
+    },
+  });
+
+  // completion_review case (shift ended >48h ago)
+  const reviewShift = await postShift(
+    clinicB.id,
+    "general",
+    720_000,
+    "standard",
+    new Date(now - 4 * DAY),
+    false,
+  );
+  await prisma.application.create({ data: { shiftId: reviewShift.id, professionalId: wanida.id } });
+  const reviewOffer = await prisma.offer.create({
+    data: {
+      shiftId: reviewShift.id,
+      professionalId: wanida.id,
+      state: "PendingResponse",
+      termsSnapshot: {},
+      sentAt: new Date(now - 6 * DAY),
+      expiresAt: new Date(now - 6 * DAY + HOUR),
+      fundingDueAt: new Date(now - 6 * DAY + HOUR),
+    },
+  });
+  const completionReviewBooking = await confirmBooking(
+    reviewOffer.id,
+    reviewShift.id,
+    wanida.id,
+    720_000,
+  );
+  await prisma.supportCase.create({
+    data: {
+      subject: "Clinic inactivity — professional never marked completion",
+      kind: "completion_review",
+      state: "Open",
+      refType: "Booking",
+      refId: completionReviewBooking.id,
+    },
+  });
+
+  // Confirmed booking in 24h reminder window
+  const reminderShift = await postShift(
+    clinicA.id,
+    "general",
+    680_000,
+    "standard",
+    new Date(now + 12 * HOUR),
+    false,
+  );
+  await prisma.application.create({ data: { shiftId: reminderShift.id, professionalId: prasert.id } });
+  const reminderOffer = await prisma.offer.create({
+    data: {
+      shiftId: reminderShift.id,
+      professionalId: prasert.id,
+      state: "PendingResponse",
+      termsSnapshot: {},
+      sentAt: new Date(now - 2 * DAY),
+      expiresAt: new Date(now - 2 * DAY + HOUR),
+      fundingDueAt: new Date(now - 2 * DAY + HOUR),
+    },
+  });
+  await confirmBooking(reminderOffer.id, reminderShift.id, prasert.id, 680_000);
+
+  // AwaitingCompletion past auto-accept deadline (CMP-03 worker)
+  const overdueShift = await postShift(
+    clinicB.id,
+    "general",
+    640_000,
+    "standard",
+    new Date(now - 3 * DAY),
+    false,
+  );
+  await prisma.application.create({ data: { shiftId: overdueShift.id, professionalId: somchai.id } });
+  const overdueOffer = await prisma.offer.create({
+    data: {
+      shiftId: overdueShift.id,
+      professionalId: somchai.id,
+      state: "PendingResponse",
+      termsSnapshot: {},
+      sentAt: new Date(now - 5 * DAY),
+      expiresAt: new Date(now - 5 * DAY + HOUR),
+      fundingDueAt: new Date(now - 5 * DAY + HOUR),
+    },
+  });
+  const overdueBooking = await confirmBooking(overdueOffer.id, overdueShift.id, somchai.id, 640_000);
+  await prisma.booking.update({
+    where: { id: overdueBooking.id },
+    data: { state: "AwaitingCompletion", autoAcceptAt: new Date(now - DAY) },
+  });
+  await prisma.attendanceEvent.create({
+    data: { bookingId: overdueBooking.id, kind: "Completed", actorId: somchai.id },
+  });
+
+  // Unpublished review (>7 days old, REV-03 worker) + stale unpublished
+  const unpubShift = await postShift(
+    clinicA.id,
+    "general",
+    480_000,
+    "standard",
+    new Date(now - 8 * DAY),
+    false,
+  );
+  await prisma.application.create({ data: { shiftId: unpubShift.id, professionalId: wanida.id } });
+  const unpubOffer = await prisma.offer.create({
+    data: {
+      shiftId: unpubShift.id,
+      professionalId: wanida.id,
+      state: "PendingResponse",
+      termsSnapshot: {},
+      sentAt: new Date(now - 10 * DAY),
+      expiresAt: new Date(now - 10 * DAY + HOUR),
+      fundingDueAt: new Date(now - 10 * DAY + HOUR),
+    },
+  });
+  const unpubBooking = await confirmBooking(unpubOffer.id, unpubShift.id, wanida.id, 480_000);
+  await prisma.booking.update({
+    where: { id: unpubBooking.id },
+    data: { state: "ServiceCompleted" },
+  });
+  const unpubPo = await prisma.paymentOrder.findUniqueOrThrow({
+    where: { bookingId: unpubBooking.id },
+    include: { allocation: true },
+  });
+  await prisma.financialAllocation.update({
+    where: { paymentOrderId: unpubPo.id },
+    data: { payoutState: "Paid" },
+  });
+  await prisma.financialEvent.create({
+    data: {
+      paymentOrderId: unpubPo.id,
+      type: "Payout",
+      amount: 480_000,
+      idempotencyKey: `payout:${unpubBooking.id}`,
+    },
+  });
+  await prisma.review.create({
+    data: {
+      bookingId: unpubBooking.id,
+      authorId: clinicA.id,
+      subjectId: wanida.id,
+      score: 4,
+      tags: ["thorough"],
+      text: "รอรีวิวจากทีม",
+      createdAt: new Date(now - 8 * DAY),
+      publishedAt: null,
+    },
+  });
+
   // Extra completed bookings for 3-review cold-start threshold
   for (let i = 0; i < 2; i++) {
     const extraShift = await postShift(
@@ -514,7 +795,9 @@ async function main() {
   }
 
   console.log("Done — demo fixtures loaded.");
-  console.log(`  Awaiting-payment offer: ${awaitingOffer.id}`);
+  console.log(`  Offers: pending=${pendingOffer.id}, awaiting=${awaitingOffer.id}, expired=${expiredOffer.id}`);
+  console.log(`  Open cases: credential_hold, completion_review, cancellation_support`);
+  console.log(`  Worker targets: auto-accept overdue, review publish stale, reminder 24h`);
 }
 
 main()
