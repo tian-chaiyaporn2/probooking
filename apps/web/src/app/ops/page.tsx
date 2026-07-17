@@ -25,6 +25,9 @@ import {
   AlertIcon,
   ShieldCheckIcon,
   WalletIcon,
+  ClinicIcon,
+  StethoscopeIcon,
+  InboxIcon,
 } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
@@ -104,8 +107,11 @@ export default function OpsPage() {
     <>
       <AppHeader current="/ops" />
       <main className="page" style={{ maxWidth: 960 }}>
-        <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: 0 }}>{th.ops.title}</h1>
+        <div className="page-head">
+          <div>
+            <h1>{th.ops.title}</h1>
+            <p className="page-head__sub">{th.ops.subtitle}</p>
+          </div>
           <Button data-testid="refresh" onClick={() => void load()} disabled={busy} icon={<RefreshIcon />}>
             {th.common.refresh}
           </Button>
@@ -113,7 +119,7 @@ export default function OpsPage() {
 
         <div className="stat-grid" data-testid="ops-metrics">
           {loading || !metrics ? (
-            Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
+            Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 72 }} />)
           ) : (
             <>
               <Stat
@@ -146,11 +152,18 @@ export default function OpsPage() {
         </h2>
         <div className="card">
           <ul data-testid="pending-list" className="rowlist">
-            {!loading && pending.length === 0 && <li className="empty">{th.common.none}</li>}
+            {!loading && pending.length === 0 && (
+              <li className="empty">
+                <span className="empty__icon" aria-hidden>
+                  <InboxIcon />
+                </span>
+                <span className="empty__title">{th.ops.emptyPending}</span>
+              </li>
+            )}
             {pending.map((p) => (
               <li key={p.id} data-testid={`pending-${p.id}`}>
                 <span className={`row__avatar row__avatar--${p.kind}`} aria-hidden>
-                  {p.kind === "clinic" ? "🏥" : "🩺"}
+                  {p.kind === "clinic" ? <ClinicIcon /> : <StethoscopeIcon />}
                 </span>
                 <span className="row__main">
                   <span className="row__name">{p.name}</span>
@@ -174,7 +187,14 @@ export default function OpsPage() {
         </h2>
         <div className="card">
           <ul data-testid="cases-list" className="rowlist">
-            {!loading && cases.length === 0 && <li className="empty">{th.common.none}</li>}
+            {!loading && cases.length === 0 && (
+              <li className="empty">
+                <span className="empty__icon" aria-hidden>
+                  <CheckIcon />
+                </span>
+                <span className="empty__title">{th.ops.emptyCases}</span>
+              </li>
+            )}
             {cases.map((c) => (
               <li key={c.id} data-testid={`case-${c.id}`}>
                 <Badge variant={c.kind}>{c.kind}</Badge>
@@ -193,7 +213,6 @@ export default function OpsPage() {
             ))}
           </ul>
         </div>
-
       </main>
     </>
   );

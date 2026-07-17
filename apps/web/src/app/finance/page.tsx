@@ -77,9 +77,13 @@ export default function FinancePage() {
       header: th.finance.colConserved,
       render: (r) =>
         r.conserved ? (
-          <span className="badge badge--success" aria-label="conserved">✓</span>
+          <span className="badge badge--success" aria-label="conserved">
+            ✓
+          </span>
         ) : (
-          <span className="badge badge--warn" aria-label="exception">✗ {th.finance.exceptions}</span>
+          <span className="badge badge--warn" aria-label="exception">
+            ✗ {th.finance.exceptions}
+          </span>
         ),
     },
   ];
@@ -97,8 +101,11 @@ export default function FinancePage() {
     <>
       <AppHeader current="/finance" />
       <main className="page" style={{ maxWidth: 1040 }}>
-        <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: 0 }}>{th.finance.title}</h1>
+        <div className="page-head">
+          <div>
+            <h1>{th.finance.title}</h1>
+            <p className="page-head__sub">{th.finance.subtitle}</p>
+          </div>
           <div className="actions">
             <Button data-testid="refresh" onClick={() => void load()} icon={<RefreshIcon />}>
               {th.common.refresh}
@@ -111,7 +118,7 @@ export default function FinancePage() {
 
         <div className="stat-grid" data-testid="fin-summary">
           {loading || !s ? (
-            Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
+            Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 72 }} />)
           ) : (
             <>
               <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />

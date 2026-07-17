@@ -64,11 +64,9 @@ export function StaffLogin({
   }
 
   return (
-    <div className="card card--pad" style={{ maxWidth: 380, margin: "2rem auto" }}>
-      <h2 style={{ marginTop: 0 }}>{th.staffLogin.title[surface]}</h2>
-      <p className="muted" style={{ fontSize: "0.9rem" }}>
-        {th.staffLogin.description}
-      </p>
+    <div className="auth-card">
+      <h2>{th.staffLogin.title[surface]}</h2>
+      <p className="lead muted">{th.staffLogin.description}</p>
       {stage === "phone" ? (
         <form
           onSubmit={(e) => {
@@ -76,14 +74,21 @@ export function StaffLogin({
             if (phone) void sendCode();
           }}
         >
-          <input
-            aria-label={th.staffLogin.phoneLabel}
-            inputMode="tel"
-            placeholder="+66…"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            style={inputStyle}
-          />
+          <div className="field">
+            <label className="field__label" htmlFor="staff-phone">
+              {th.staffLogin.phoneLabel}
+            </label>
+            <input
+              id="staff-phone"
+              className="input"
+              aria-label={th.staffLogin.phoneLabel}
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="+66…"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
           <Button type="submit" variant="primary" busy={busy} disabled={!phone}>
             {th.staffLogin.sendCode}
           </Button>
@@ -95,14 +100,21 @@ export function StaffLogin({
             if (code) void submitCode();
           }}
         >
-          <input
-            aria-label={th.staffLogin.codeLabel}
-            inputMode="numeric"
-            placeholder={th.staffLogin.codePlaceholder}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            style={inputStyle}
-          />
+          <div className="field">
+            <label className="field__label" htmlFor="staff-otp">
+              {th.staffLogin.codeLabel}
+            </label>
+            <input
+              id="staff-otp"
+              className="input"
+              aria-label={th.staffLogin.codeLabel}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder={th.staffLogin.codePlaceholder}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+          </div>
           <div className="actions">
             <Button type="submit" variant="primary" busy={busy} disabled={!code}>
               {th.staffLogin.signIn}
@@ -123,21 +135,10 @@ export function StaffLogin({
         </form>
       )}
       {error && (
-        <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem", marginTop: "0.75rem" }}>
+        <p role="alert" className="form-error">
           {error}
         </p>
       )}
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "0.6rem 0.75rem",
-  marginBottom: "0.75rem",
-  borderRadius: 8,
-  border: "1px solid var(--line)",
-  background: "var(--bg)",
-  color: "var(--text)",
-  fontSize: "1rem",
-};

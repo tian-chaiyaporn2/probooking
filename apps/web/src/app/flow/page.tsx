@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
+import { CheckIcon } from "../../components/icons";
 import { th } from "../../lib/strings";
 import {
   registerClinic,
@@ -151,101 +152,114 @@ export default function FlowPage() {
 
   return (
     <>
-    <AppHeader current="/flow" />
-    <main className="page" style={{ maxWidth: 680 }}>
-      <span className="hero__eyebrow" style={{ marginBottom: "var(--s3)" }}>{th.home.phase}</span>
-      <h1>{th.flow.title}</h1>
-      <p className="lead muted" style={{ maxWidth: "52ch" }}>{th.flow.subtitle}</p>
+      <AppHeader current="/flow" />
+      <main className="page" style={{ maxWidth: 680 }}>
+        <div className="page-head">
+          <div>
+            <span className="hero__eyebrow">{th.home.phase}</span>
+            <h1>{th.flow.title}</h1>
+            <p className="page-head__sub">{th.flow.subtitle}</p>
+          </div>
+        </div>
 
-      <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
-        {th.flow.run}
-      </Button>
+        <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
+          {th.flow.run}
+        </Button>
 
-      {/* Preview the flow before it runs, so the page is not an empty button in a void. */}
-      {steps.length === 0 && !bookingId && (
-        <ol className="flow-preview" aria-hidden>
-          {th.home.steps.map((s, i) => (
-            <li key={s.t}>
-              <span className="flow-preview__num">{i + 1}</span>
-              <span><strong>{s.t}</strong> — <span className="muted">{s.d}</span></span>
+        {/* Preview the flow before it runs, so the page is not an empty button in a void. */}
+        {steps.length === 0 && !bookingId && (
+          <ol className="flow-preview" aria-hidden>
+            {th.home.steps.map((s, i) => (
+              <li key={s.t}>
+                <span className="flow-preview__num">{i + 1}</span>
+                <span>
+                  <strong>{s.t}</strong> — <span className="muted">{s.d}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        <ol data-testid="steps" className="flow-log">
+          {steps.map((s, i) => (
+            <li key={i} style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}>
+              <strong>{s.label}</strong> — <span>{s.detail}</span>
             </li>
           ))}
         </ol>
-      )}
 
-      <ol data-testid="steps" className="flow-log" style={{ marginTop: "1.5rem" }}>
-        {steps.map((s, i) => (
-          <li key={i}>
-            <strong>{s.label}</strong> — <span>{s.detail}</span>
-          </li>
-        ))}
-      </ol>
-
-      {bookingId && (
-        <div
-          data-testid="result"
-          className="card card--pad"
-          style={{ marginTop: "1rem", borderColor: "var(--primary)" }}
-        >
-          <div data-testid="booking-status" style={{ fontWeight: 600, color: "var(--success)" }}>
-            Booking Confirmed
-          </div>
-          <div>Booking ID: <code data-testid="booking-id">{bookingId}</code></div>
-          {checkout && (
-            <table style={{ marginTop: "0.5rem", borderCollapse: "collapse" }}>
-              <tbody>
-                <tr><td>Compensation</td><td style={{ paddingLeft: 16 }}>{formatThb(checkout.compensation)}</td></tr>
-                <tr><td>Service fee (12%)</td><td style={{ paddingLeft: 16 }}>{formatThb(checkout.serviceFee)}</td></tr>
-                <tr><td>Tax</td><td style={{ paddingLeft: 16 }}>{formatThb(checkout.tax)}</td></tr>
-                <tr style={{ fontWeight: 600 }}>
-                  <td>Total</td>
-                  <td data-testid="checkout-total" style={{ paddingLeft: 16 }}>{formatThb(checkout.total)}</td>
-                </tr>
-              </tbody>
-            </table>
-          )}
-
-          <div style={{ marginTop: "1rem" }}>
-            {!payout ? (
-              <Button data-testid="run-payout" variant="primary" busy={payingOut} onClick={runPayout}>
-                Complete &amp; pay out
-              </Button>
-            ) : (
-              <div data-testid="payout">
-                <span data-testid="payout-status" style={{ fontWeight: 600, color: "var(--success)" }}>
-                  Paid out
-                </span>{" "}
-                — <span data-testid="payout-amount">{formatThb(payout.payoutAmount)}</span> to the
-                professional (booking {payout.bookingState})
-              </div>
+        {bookingId && (
+          <div data-testid="result" className="flow-result">
+            <div data-testid="booking-status" className="flow-result__status">
+              <CheckIcon /> Booking Confirmed
+            </div>
+            <div className="flow-result__id">
+              Booking ID: <code data-testid="booking-id">{bookingId}</code>
+            </div>
+            {checkout && (
+              <table className="checkout">
+                <tbody>
+                  <tr>
+                    <td>Compensation</td>
+                    <td>{formatThb(checkout.compensation)}</td>
+                  </tr>
+                  <tr>
+                    <td>Service fee (12%)</td>
+                    <td>{formatThb(checkout.serviceFee)}</td>
+                  </tr>
+                  <tr>
+                    <td>Tax</td>
+                    <td>{formatThb(checkout.tax)}</td>
+                  </tr>
+                  <tr className="checkout__total">
+                    <td>Total</td>
+                    <td data-testid="checkout-total">{formatThb(checkout.total)}</td>
+                  </tr>
+                </tbody>
+              </table>
             )}
-          </div>
 
-          {payout && (
-            <div style={{ marginTop: "1rem" }}>
-              {!reviewsPublished ? (
-                <Button data-testid="run-reviews" variant="primary" busy={reviewing} onClick={runReviews}>
-                  Leave reviews (both parties)
+            <div className="flow-result__actions">
+              {!payout ? (
+                <Button data-testid="run-payout" variant="primary" busy={payingOut} onClick={runPayout}>
+                  Complete &amp; pay out
                 </Button>
               ) : (
-                <div data-testid="reviews">
-                  <span data-testid="reviews-status" style={{ fontWeight: 600, color: "var(--success)" }}>
-                    Reviews published
-                  </span>
-                  {rating && (
-                    <div data-testid="rating" style={{ color: "var(--muted)", marginTop: "0.25rem" }}>
-                      {rating.hasRating
-                        ? `Professional rating: ${rating.average} (${rating.count} reviews)`
-                        : "Professional rating: not shown yet (needs 3 reviews)"}
+                <div data-testid="payout">
+                  <span data-testid="payout-status" className="flow-result__status" style={{ marginBottom: 0 }}>
+                    <CheckIcon /> Paid out
+                  </span>{" "}
+                  — <span data-testid="payout-amount">{formatThb(payout.payoutAmount)}</span> to the
+                  professional (booking {payout.bookingState})
+                </div>
+              )}
+
+              {payout && (
+                <div>
+                  {!reviewsPublished ? (
+                    <Button data-testid="run-reviews" variant="primary" busy={reviewing} onClick={runReviews}>
+                      Leave reviews (both parties)
+                    </Button>
+                  ) : (
+                    <div data-testid="reviews">
+                      <span data-testid="reviews-status" className="flow-result__status" style={{ marginBottom: 0 }}>
+                        <CheckIcon /> Reviews published
+                      </span>
+                      {rating && (
+                        <div data-testid="rating" className="muted" style={{ marginTop: "0.35rem" }}>
+                          {rating.hasRating
+                            ? `Professional rating: ${rating.average} (${rating.count} reviews)`
+                            : "Professional rating: not shown yet (needs 3 reviews)"}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-      )}
-    </main>
+          </div>
+        )}
+      </main>
     </>
   );
 }
