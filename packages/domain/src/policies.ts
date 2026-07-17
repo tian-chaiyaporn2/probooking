@@ -71,6 +71,19 @@ export function effectiveOfferExpiry(
 }
 
 /**
+ * OFF-03 funding deadline after acceptance: earlier of acceptedAt + 30m and shift start.
+ * Mirrors `effectiveOfferExpiry` — funding must not outlive the shift.
+ */
+export function effectiveFundingExpiry(acceptedAt: number, shiftStart: number): number {
+  return Math.min(acceptedAt + OFFER_TIMERS.fundingWindow, shiftStart);
+}
+
+/** Inclusive expiry: the deadline instant itself is already expired (OFF-03). */
+export function isExpired(now: number, expiresAt: number): boolean {
+  return now >= expiresAt;
+}
+
+/**
  * Cancellation compensation policy (CAN-01..CAN-05).
  * Returns the professional's payable fraction (0..1) of scheduled compensation,
  * or the sentinel "support" when the outcome requires a support case.
@@ -94,6 +107,11 @@ export function cancellationOutcome(input: {
   arrived: boolean;
 }): CancelOutcome {
   const { actor, reason, hoursBeforeStart, arrived } = input;
+
+  // NaN/Infinity fall through comparisons unpredictably (e.g. NaN >= 24 is false → 50%).
+  if (!Number.isFinite(hoursBeforeStart)) {
+    throw new RangeError(`hoursBeforeStart must be finite, got ${hoursBeforeStart}`);
+  }
 
   // CAN-05: these always route to support regardless of actor/timing.
   if (

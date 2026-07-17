@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getOpsPending,
   getOpsCases,
@@ -38,30 +38,53 @@ export default function OpsPage() {
   const [pending, setPending] = useState<PendingVerification[]>([]);
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [metrics, setMetrics] = useState<MarketplaceMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const toast = useToast();
+  const loadSeq = useRef(0);
+
+  const signOut = useCallback(() => {
+    setToken(null);
+    setAuthToken(null);
+    setMetrics(null);
+    setPending([]);
+    setCases([]);
+    setLoadError(null);
+  }, []);
 
   const load = useCallback(async () => {
+    if (!token) return;
+    const seq = ++loadSeq.current;
+    setLoading(true);
+    setLoadError(null);
     try {
-      const [p, c, m] = await Promise.all([getOpsPending(), getOpsCases(), getMetrics()]);
+      const [p, c, m] = await Promise.all([
+        getOpsPending(token),
+        getOpsCases(token),
+        getMetrics(token),
+      ]);
+      if (seq !== loadSeq.current) return;
       setPending(p.pending);
       setCases(c.cases);
       setMetrics(m);
     } catch (e) {
-      toast.error(getThaiErrorMessage(e));
+      if (seq !== loadSeq.current) return;
+      const msg = getThaiErrorMessage(e);
+      setLoadError(msg);
+      toast.error(msg);
+      const raw = e instanceof Error ? e.message.toLowerCase() : "";
+      if (raw.includes("403") || raw.includes("401") || raw.includes("forbidden") || raw.includes("authentication")) {
+        signOut();
+      }
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [toast]);
+  }, [token, toast, signOut]);
 
-  // Authority now comes from a real staff sign-in, not a token the page minted for itself.
   useEffect(() => {
-    if (token) {
-      setAuthToken(token);
-      void load();
-    }
+    if (token) void load();
   }, [token, load]);
 
   if (!token) {
@@ -76,8 +99,8 @@ export default function OpsPage() {
   async function verify(kind: "clinic" | "professional", id: string) {
     setBusy(true);
     try {
-      if (kind === "clinic") await verifyClinic(id);
-      else await verifyProfessional(id);
+      if (kind === "clinic") await verifyClinic(id, token!);
+      else await verifyProfessional(id, token!);
       await load();
       toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
     } catch (e) {
@@ -90,7 +113,7 @@ export default function OpsPage() {
   async function resolve(bookingId: string) {
     setBusy(true);
     try {
-      await resolveHold(bookingId);
+      await resolveHold(bookingId, token!);
       await load();
       toast.success("ปลดการระงับแล้ว");
     } catch (e) {
@@ -106,15 +129,26 @@ export default function OpsPage() {
       <main className="page" style={{ maxWidth: 960 }}>
         <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
           <h1 style={{ margin: 0 }}>{th.ops.title}</h1>
-          <Button data-testid="refresh" onClick={() => void load()} disabled={busy} icon={<RefreshIcon />}>
-            {th.common.refresh}
-          </Button>
+          <div className="actions">
+            <Button data-testid="refresh" onClick={() => void load()} disabled={busy || loading} icon={<RefreshIcon />}>
+              {th.common.refresh}
+            </Button>
+            <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
+              {th.staffLogin.signOut}
+            </Button>
+          </div>
         </div>
 
+        {loadError && !metrics && (
+          <p role="alert" style={{ color: "var(--danger)" }}>
+            {loadError}
+          </p>
+        )}
+
         <div className="stat-grid" data-testid="ops-metrics">
-          {loading || !metrics ? (
+          {loading && !metrics ? (
             Array.from({ length: 6 }).map((_, i) => <div key={i} className="stat skeleton" style={{ height: 66 }} />)
-          ) : (
+          ) : metrics ? (
             <>
               <Stat
                 label={th.ops.metricShifts}
@@ -138,7 +172,7 @@ export default function OpsPage() {
                 tone={metrics.money.reconciliationExceptions === 0 ? "success" : "danger"}
               />
             </>
-          )}
+          ) : null}
         </div>
 
         <h2 style={{ marginTop: "var(--s6)" }}>

@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import {
   effectiveOfferExpiry,
-  OFFER_TIMERS,
+  effectiveFundingExpiry,
   can,
   type Role,
   type ShiftUrgency,
@@ -30,11 +30,11 @@ export class OffersService {
   }
 
   /**
-   * OFF-03/04: acceptance opens the 30-min funding window. The offer's actual
-   * PendingResponse -> AwaitingPayment transition is enforced by the caller against
-   * the real offer state (advanceOffer); this only computes the funding deadline.
+   * OFF-03/04: acceptance opens the 30-min funding window (capped by shift start).
+   * The offer's actual PendingResponse -> AwaitingPayment transition is enforced by
+   * the caller against the real offer state (advanceOffer); this only computes the deadline.
    */
-  fundingWindow(acceptedAt: number): { fundingDueAt: number } {
-    return { fundingDueAt: acceptedAt + OFFER_TIMERS.fundingWindow };
+  fundingWindow(acceptedAt: number, shiftStart: number): { fundingDueAt: number } {
+    return { fundingDueAt: effectiveFundingExpiry(acceptedAt, shiftStart) };
   }
 }

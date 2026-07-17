@@ -26,6 +26,7 @@ import {
   cancellationOutcome,
   payableFromFraction,
   isUrgentEligible,
+  isExpired,
   canLeaveReview,
   can,
   dualControlSatisfied,
@@ -166,9 +167,14 @@ export class MarketplaceController {
     return this.repo.submitInsurance(professionalId, validUntil);
   }
 
+  @UseGuards(AuthGuard)
   @Get("professionals/:id/insurance")
-  async insuranceStatus(@Param("id") professionalId: string) {
-    // VER-05 status: Verified | UnderReview | Expired | Unverified | NotProvided.
+  async insuranceStatus(
+    @Param("id") professionalId: string,
+    @CurrentUser() user?: TokenPayload,
+  ) {
+    // VER-05 status is party/staff-only — unauthenticated id guessing leaked insurance facts.
+    await this.requireProfessional(user, professionalId);
     return this.repo.getInsuranceStatus(professionalId);
   }
 
@@ -353,9 +359,10 @@ export class MarketplaceController {
     return this.repo.addAvailability(professionalId, startsAt, endsAt, dto.openToRequests ?? false);
   }
 
+  @UseGuards(AuthGuard)
   @Get("professionals/:id/availability")
   async listAvailability(@Param("id") professionalId: string) {
-    // AVL-02: only listed blocks count as available.
+    // AVL-02: authenticated browse only — schedule windows are not a public anonymous surface.
     return { availability: await this.repo.listAvailability(professionalId) };
   }
 
@@ -418,10 +425,13 @@ export class MarketplaceController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Get("shifts/:id/candidates")
-  async candidates(@Param("id") shiftId: string) {
+  async candidates(@Param("id") shiftId: string, @CurrentUser() user?: TokenPayload) {
     const shift = await this.repo.getShift(shiftId);
     if (!shift) throw new NotFoundException("shift not found");
+    // Applicant lists are commercial PII — clinic of record or staff only.
+    await this.requireClinicAuthority(user, shift.clinicWorkspaceId, "clinic.search_invite");
     return { candidates: await this.repo.listShiftCandidates(shiftId) };
   }
 
@@ -495,10 +505,11 @@ export class MarketplaceController {
       reason: { type: "string", maxLen: 500 },
     });
     const booking = await this.requireBooking(dto.bookingId);
-    // PAY-08 at proposal time: refuse to record a request that could never be executed.
+    // PAY-08 at proposal time: refuse against remaining headroom (prior refunds count).
+    const alreadyRefunded = await this.repo.sumRefunded(dto.bookingId);
     this.payments.assertWithinAllocation(
       satang(dto.amount),
-      satang(booking.captured),
+      satang(booking.captured - alreadyRefunded),
       "refund",
     );
     const approval = await this.repo.createApproval({
@@ -549,9 +560,10 @@ export class MarketplaceController {
     }
 
     const booking = await this.requireBooking(approval.refId);
+    const alreadyRefunded = await this.repo.sumRefunded(approval.refId);
     this.payments.assertWithinAllocation(
       satang(approval.amount),
-      satang(booking.captured),
+      satang(booking.captured - alreadyRefunded),
       "refund",
     );
 
@@ -569,7 +581,13 @@ export class MarketplaceController {
       });
       return { id, state: "Executed", ...result };
     } catch (e) {
-      if (isConflict(e)) throw new ConflictException("approval was already executed");
+      if (isConflict(e)) {
+        const msg = (e as Error).message;
+        if (msg.includes("refundable")) {
+          throw new BadRequestException(msg);
+        }
+        throw new ConflictException("approval was already executed");
+      }
       throw e;
     }
   }
@@ -670,6 +688,21 @@ export class MarketplaceController {
     // Only the professional the offer was made to may accept it. There was no check at all:
     // any caller could accept on a stranger's behalf and bind them to a shift.
     await this.requireProfessional(user, offer.professionalId);
+    const now = Date.now();
+    // OFF-03: a past-expiresAt offer cannot be accepted into a funding window.
+    if (isExpired(now, offer.expiresAt)) {
+      throw new BadRequestException("offer has expired (OFF-03)");
+    }
+    // AVL-03: soft holds and confirmed bookings both block overlapping acceptance.
+    const overlap = await this.repo.hasScheduleOverlap(
+      offer.professionalId,
+      offer.shiftStart,
+      offer.shiftStart + 4 * HOUR_MS,
+      { excludeOfferId: id },
+    );
+    if (overlap) {
+      throw new BadRequestException("schedule overlap (AVL-03)");
+    }
     // OFF-04: acceptance -> AwaitingPayment (soft hold), never straight to a booking.
     let nextState;
     try {
@@ -677,11 +710,18 @@ export class MarketplaceController {
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
-    const { fundingDueAt } = this.offers.fundingWindow(Date.now());
-    const updated = await this.repo.setOfferState(id, nextState, { fundingDueAt });
+    const { fundingDueAt } = this.offers.fundingWindow(now, offer.shiftStart);
+    // Conditional claim: concurrent expiry/withdrawal must not be overwritten.
+    const updated = await this.repo.setOfferState(id, nextState, {
+      fundingDueAt,
+      from: "PendingResponse",
+    });
+    if (!updated) {
+      throw new ConflictException("offer is no longer pending response");
+    }
     // NOT-01: acceptance opens the funding window — tell the clinic payment is required.
     await this.notifications.sms(offer.clinicWorkspaceId, "payment_required", { type: "Offer", id });
-    return { id, state: nextState, fundingDueAt: updated?.fundingDueAt ?? fundingDueAt };
+    return { id, state: nextState, fundingDueAt: updated.fundingDueAt ?? fundingDueAt };
   }
 
   @UseGuards(AuthGuard)
@@ -699,54 +739,62 @@ export class MarketplaceController {
     }
 
     const checkout = this.payments.checkout(satang(offer.compensation));
+    const now = Date.now();
 
-    // BKG-01 durable prefunding: the API collects the funds and observes the result. This
-    // was previously read from the request body (defaulting to `true`), which let any
-    // caller book a real shift — obligating a real payout — without paying. The capture is
-    // keyed on the offer so a retried confirm re-uses the same provider transaction.
-    const capture = await this.paymentProvider.capture({
-      orderRef: `collection:${offer.id}`,
-      amount: checkout.total,
-    });
+    // §6.3 gates BEFORE capture — collecting funds then failing eligibility left money
+    // stranded with no booking and no unwind.
+    if (offer.state !== "AwaitingPayment") {
+      throw new BadRequestException(`offer is ${offer.state}; must be AwaitingPayment to confirm`);
+    }
+    // OFF-03: after accept, the funding window (not the original response timer) is the clock.
+    const fundingDeadline = offer.fundingDueAt ?? offer.expiresAt;
+    const offerExpired = isExpired(now, fundingDeadline);
 
-    // §6.3: read the real verification facts + schedule overlap for this offer.
     const eligibility = await this.repo.getOfferEligibility(id);
     const overlap = await this.repo.hasScheduleOverlap(
       offer.professionalId,
       offer.shiftStart,
-      offer.shiftStart + 4 * HOUR_MS, // shift length (AVL-03)
+      offer.shiftStart + 4 * HOUR_MS,
+      { excludeOfferId: id },
     );
-    const ctx: ConfirmationContext = {
+
+    const preCaptureCtx: ConfirmationContext = {
       clinicActiveVerified: eligibility?.clinicVerified ?? false,
       professionalActiveVerified: eligibility?.professionalVerified ?? false,
-      // VER-04: read licence suspension/expiry at confirm time — a credential the
-      // professional held at offer time may have been suspended by Operations since.
       licenceValidThroughShiftEnd: eligibility?.licenceValidThroughShiftEnd ?? false,
+      // Phase-1: published shift categories are treated as supported for every verified pro.
       specialtyValidThroughShiftEnd: true,
       insuranceRequired: eligibility?.insuranceRequired ?? false,
-      insuranceValidThroughShiftEnd: eligibility?.insuranceValidThroughShiftEnd ?? true,
+      // Fail closed: unknown insurance facts must not book an insurance-required shift.
+      insuranceValidThroughShiftEnd: eligibility?.insuranceValidThroughShiftEnd ?? false,
       clinicServiceSupported: true,
       shiftCategorySupported: true,
       hasSuspension: !(eligibility?.professionalNotSuspended ?? false),
       hasBlockingHold: false,
       hasScheduleOverlap: overlap,
-      offerExpired: Date.now() > offer.expiresAt, // §6.3: late payment after expiry never books
-      durablePrefundingSucceeded: capture.succeeded,
+      offerExpired,
+      durablePrefundingSucceeded: true, // evaluated after capture
     };
 
     try {
-      this.bookings.assertEligible(ctx); // §6.3 gate — throws NOT_ELIGIBLE with reasons
-      advanceOffer(offer.state, "Converted"); // throws if the offer was never accepted
+      this.bookings.assertEligible({ ...preCaptureCtx, durablePrefundingSucceeded: true });
+      advanceOffer(offer.state, "Converted");
     } catch (e) {
-      // A concurrent confirm may have already booked this offer — the overlap check
-      // then trips on that very booking. Return it idempotently instead of a 400.
       const won = await this.repo.getBookingByOffer(id);
       if (won) return { booking: won, checkout };
       throw new BadRequestException((e as Error).message);
     }
 
-    // PAY-07 conservation at confirmation: captured (total) equals the professional's
-    // protected compensation + platform fee + tax; nothing is paid out or refunded yet.
+    // BKG-01: capture only after eligibility (except prefunding itself) has passed.
+    const capture = await this.paymentProvider.capture({
+      orderRef: `collection:${offer.id}`,
+      amount: checkout.total,
+    });
+    if (!capture.succeeded) {
+      throw new BadRequestException("NOT_ELIGIBLE: prefunding_failed");
+    }
+
+    // PAY-07 conservation at confirmation.
     this.payments.assertConserved({
       captured: checkout.total,
       protectedRemainder: checkout.compensation,
@@ -758,7 +806,6 @@ export class MarketplaceController {
       adjustments: satang(0),
     });
 
-    // Offer -> Converted happens inside confirmBooking's transaction (BKG-02 atomic).
     try {
       const { booking, paymentOrderId } = await this.repo.confirmBooking({
         offerId: offer.id,
@@ -773,24 +820,23 @@ export class MarketplaceController {
         captured: checkout.total,
         idempotencyKey: `collection:${offer.id}`,
       });
-      // §6.4: a privileged/money action must be attributable. Confirm captures funds and
-      // creates a payment obligation, yet wrote no audit record at all — only the ops/*
-      // verification endpoints did, so a payout or booking left no actor trail.
       await this.audit(user, "confirm_booking", "booking", booking.id, {
         offerId: offer.id,
         captured: checkout.total,
         paymentOrderId,
       });
-      // NOT-01: confirmation — email all critical events; SMS the confirmation too.
       await this.notifications.email(offer.professionalId, "confirmed", { type: "Booking", id: booking.id });
       await this.notifications.email(offer.clinicWorkspaceId, "confirmed", { type: "Booking", id: booking.id });
       await this.notifications.sms(offer.professionalId, "confirmed", { type: "Booking", id: booking.id });
       return { booking, checkout, paymentOrderId };
     } catch (e) {
-      // A concurrent confirm may have won the race (unique offerId / collection key).
-      // If a booking now exists, return it idempotently rather than surfacing a 500.
-      const existing = await this.repo.getBookingByOffer(id);
-      if (existing) return { booking: existing, checkout };
+      const existingAfter = await this.repo.getBookingByOffer(id);
+      if (existingAfter) return { booking: existingAfter, checkout };
+      // Capture succeeded but booking did not — unwind so money is not stranded.
+      await this.paymentProvider.refund({
+        orderRef: `collection:${offer.id}`,
+        amount: checkout.total,
+      });
       throw e;
     }
   }
@@ -1191,6 +1237,9 @@ export class MarketplaceController {
     // REP-01: the booking's checkout breakdown + payout statement. A booking exists
     // only after confirmation, so the captured split is final (BKG-03 snapshots).
     const b = await this.requireBooking(id);
+    // Use recorded Payout events — after a partial cancel, compensation snapshot is not
+    // what was paid (e.g. 50% CAN-02).
+    const paidOut = await this.repo.sumPaidOut(id);
     return {
       bookingId: b.id,
       shiftId: b.shiftId,
@@ -1201,21 +1250,35 @@ export class MarketplaceController {
         tax: b.tax,
         total: b.compensation + b.serviceFee + b.tax,
       },
-      payout: { state: b.payoutState, amount: b.payoutState === "Paid" ? b.compensation : 0 },
+      payout: {
+        state: b.payoutState,
+        amount: b.payoutState === "Paid" ? paidOut : 0,
+      },
     };
   }
 
   @Get("professionals/:id/profile")
   async getProfile(@Param("id") id: string) {
-    // VER-03: return the profile split into self-declared claims vs verified facts.
+    // VER-03: public marketplace profile split into self-declared vs verified facts.
+    // No phone/payout PII is included — those stay behind authenticated contact endpoints.
     const profile = await this.repo.getProfessionalProfile(id);
     if (!profile) throw new NotFoundException("professional not found");
     return profile;
   }
 
+  @UseGuards(AuthGuard)
   @Get("offers/:id")
-  async getOffer(@Param("id") id: string) {
+  async getOffer(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
     const offer = await this.requireOffer(id);
+    // Offer terms are commercial — the professional, clinic of record, or staff only.
+    if (!this.isStaff(user)) {
+      const me = await this.identityOf(user);
+      const isPro = me.professionalId === offer.professionalId;
+      const isClinic = me.memberships.some((m) => m.workspaceId === offer.clinicWorkspaceId);
+      if (!isPro && !isClinic) {
+        throw new ForbiddenException("not a party to this offer");
+      }
+    }
     return { offer, booking: await this.repo.getBookingByOffer(id) };
   }
 

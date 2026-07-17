@@ -5,6 +5,13 @@ import { requestOtp, verifyOtp } from "../lib/api";
 import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
 
+const OPS_ROLES = new Set(["operations", "administrator"]);
+const FINANCE_ROLES = new Set(["finance", "administrator"]);
+
+function normalizePhone(raw: string): string {
+  return raw.trim().replace(/[\s-]/g, "");
+}
+
 /**
  * OTP login for the internal dashboards (Operations / Finance).
  *
@@ -12,11 +19,10 @@ import { Button } from "./Button";
  * in production — so the dashboards were both a takeover vector and broken against a real
  * API. This drives the same OTP flow real staff use: the token's authority comes from the
  * phone's entry in the server's access list (STAFF_PHONES), not from anything the page asks
- * for. A phone that is not staff simply logs in as an ordinary user and the guarded calls
- * 403.
+ * for.
  *
- * Under AUTH_DEV_MODE the request echoes the code back, so the demo logs in in one step; in
- * production the code arrives by SMS and the operator types it.
+ * The form also checks the returned role against the surface before accepting the token —
+ * an ordinary user who can complete OTP must not be treated as signed into Ops/Finance.
  */
 export function StaffLogin({
   surface,
@@ -31,18 +37,30 @@ export function StaffLogin({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function roleAllowed(role: string): boolean {
+    return surface === "operations" ? OPS_ROLES.has(role) : FINANCE_ROLES.has(role);
+  }
+
+  async function completeLogin(rawPhone: string, otp: string) {
+    const normalized = normalizePhone(rawPhone);
+    const { token, role } = await verifyOtp(normalized, otp);
+    if (!roleAllowed(role)) {
+      throw new Error("forbidden: requires role for this surface");
+    }
+    onToken(token);
+  }
+
   async function sendCode() {
     setBusy(true);
     setError(null);
     try {
-      const { devCode } = await requestOtp(phone);
+      const normalized = normalizePhone(phone);
+      const { devCode } = await requestOtp(normalized);
       if (devCode) {
-        // Dev mode: the server returned the code, so complete the login immediately.
-        const { token } = await verifyOtp(phone, devCode);
-        onToken(token);
+        await completeLogin(normalized, devCode);
         return;
       }
-      setStage("code"); // production: collect the SMS code
+      setStage("code");
     } catch (e) {
       setError(getThaiErrorMessage(e, th.staffLogin.sendCodeError));
     } finally {
@@ -54,8 +72,7 @@ export function StaffLogin({
     setBusy(true);
     setError(null);
     try {
-      const { token } = await verifyOtp(phone, code);
-      onToken(token);
+      await completeLogin(phone, code);
     } catch (e) {
       setError(getThaiErrorMessage(e, th.staffLogin.signInError));
     } finally {

@@ -66,6 +66,22 @@ describe("money (integer satang, LOC-02)", () => {
     expect(withinAllocation(satang(100), satang(100))).toBe(true); // boundary is inclusive
     expect(withinAllocation(satang(101), satang(100))).toBe(false);
     expect(withinAllocation(satang(-1), satang(100))).toBe(false);
+    expect(withinAllocation(satang(0), satang(-1))).toBe(false); // corrupt available
+  });
+
+  it("rejects conservation with negative money legs (PAY-07)", () => {
+    expect(
+      conserves({
+        captured: satang(100),
+        protectedRemainder: satang(200),
+        payout: satang(0),
+        fee: satang(0),
+        tax: satang(0),
+        refunds: satang(-100), // "balances" only if negatives were allowed
+        providerCosts: satang(0),
+        adjustments: satang(0),
+      }),
+    ).toBe(false);
   });
 
   it("builds a checkout that totals compensation + fee + tax (PAY-02)", () => {

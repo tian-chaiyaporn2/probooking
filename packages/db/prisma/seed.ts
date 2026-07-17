@@ -59,7 +59,13 @@ async function registerProfessional(
     },
   });
   await prisma.credential.create({
-    data: { professionalId: profile.id, kind: "licence", state: verified ? "Verified" : "Submitted" },
+    data: {
+      professionalId: profile.id,
+      kind: "licence",
+      state: verified ? "Verified" : "Submitted",
+      // VER-04 fail-closed: verified licences need a validity window through shift end.
+      ...(verified ? { validUntil: new Date(Date.now() + 2 * 365 * DAY) } : {}),
+    },
   });
   await prisma.payoutAccount.create({
     data: { professionalId: profile.id, bankRefMasked: payoutRef, verified },
@@ -98,6 +104,11 @@ async function confirmBooking(
 ) {
   const checkout = buildCheckout(satang(compensation));
   return prisma.$transaction(async (tx) => {
+    // Align with production: Converted only from AwaitingPayment.
+    await tx.offer.update({
+      where: { id: offerId },
+      data: { state: "AwaitingPayment", fundingDueAt: new Date(Date.now() + 30 * 60_000) },
+    });
     await tx.offer.update({ where: { id: offerId }, data: { state: "Converted" } });
     const booking = await tx.booking.create({
       data: {
