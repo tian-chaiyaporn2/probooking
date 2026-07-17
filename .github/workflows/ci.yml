@@ -89,6 +89,12 @@ jobs:
       - name: Unit tests (domain)
         run: pnpm --filter @probook/domain test
 
+      - name: Integration tests (Prisma store)
+        # Assert the invariants that exist only in Postgres — transaction atomicity and the
+        # unique constraints. They self-skip without DATABASE_URL, so the memory leg is a
+        # no-op here rather than a false pass.
+        run: pnpm --filter @probook/api test
+
       - name: BDD acceptance suite
         run: pnpm test:bdd
 

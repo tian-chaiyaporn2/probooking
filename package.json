@@ -14,6 +14,7 @@
     "dev": "pnpm -r --parallel dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
+    "test:int": "pnpm --filter @probook/api test",
     "test:bdd": "NODE_OPTIONS='--import tsx/esm' cucumber-js --import features/support/world.ts --import 'features/step-definitions/*.ts' --tags 'not @wip'",
     "test:bdd:all": "NODE_OPTIONS='--import tsx/esm' cucumber-js --import features/support/world.ts --import 'features/step-definitions/*.ts'",
     "e2e": "pnpm build:api && playwright test",
