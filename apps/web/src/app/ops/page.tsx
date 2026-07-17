@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getOpsPending,
   getOpsCases,
@@ -8,7 +8,6 @@ import {
   verifyClinic,
   verifyProfessional,
   resolveHold,
-  getDevToken,
   setAuthToken,
   type CaseSummary,
   type PendingVerification,
@@ -20,6 +19,7 @@ import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { RefreshIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
+import { StaffLogin } from "../../components/StaffLogin";
 import { th } from "../../lib/strings";
 
 /**
@@ -32,17 +32,11 @@ export default function OpsPage() {
   const [metrics, setMetrics] = useState<MarketplaceMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const tokenRef = useRef<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const toast = useToast();
-
-  const ensureOpsToken = useCallback(async () => {
-    if (!tokenRef.current) tokenRef.current = (await getDevToken("operations")).token;
-    setAuthToken(tokenRef.current);
-  }, []);
 
   const load = useCallback(async () => {
     try {
-      await ensureOpsToken();
       const [p, c, m] = await Promise.all([getOpsPending(), getOpsCases(), getMetrics()]);
       setPending(p.pending);
       setCases(c.cases);
@@ -52,16 +46,28 @@ export default function OpsPage() {
     } finally {
       setLoading(false);
     }
-  }, [ensureOpsToken, toast]);
+  }, [toast]);
 
+  // Authority now comes from a real staff sign-in, not a token the page minted for itself.
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (token) {
+      setAuthToken(token);
+      void load();
+    }
+  }, [token, load]);
+
+  if (!token) {
+    return (
+      <>
+        <AppHeader current="/ops" />
+        <StaffLogin surface="Operations" onToken={setToken} />
+      </>
+    );
+  }
 
   async function verify(kind: "clinic" | "professional", id: string) {
     setBusy(true);
     try {
-      await ensureOpsToken();
       if (kind === "clinic") await verifyClinic(id);
       else await verifyProfessional(id);
       await load();
@@ -76,7 +82,6 @@ export default function OpsPage() {
   async function resolve(bookingId: string) {
     setBusy(true);
     try {
-      await ensureOpsToken();
       await resolveHold(bookingId);
       await load();
       toast.success("ปลดการระงับแล้ว");

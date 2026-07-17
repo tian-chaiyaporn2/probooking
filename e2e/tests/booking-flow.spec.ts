@@ -13,6 +13,13 @@ async function loginAs(request: any, api: string, phone: string) {
   return { authorization: `Bearer ${token}` };
 }
 
+/** Sign in through the dashboards' staff OTP form. Under AUTH_DEV_MODE the code is echoed
+ * back, so filling the phone and clicking "Send code" completes the login in one step. */
+async function staffUiLogin(page: any, phone: string) {
+  await page.getByLabel("Phone number").fill(phone);
+  await page.getByRole("button", { name: "Send code" }).click();
+}
+
 /**
  * Phase 0 vertical-slice e2e. Verifies the browser can drive the marketplace flow
  * against the live API: create offer -> accept -> confirm -> Confirmed booking,
@@ -30,9 +37,16 @@ test("pages are responsive — no horizontal page overflow on a small screen", a
   await page.setViewportSize({ width: 360, height: 740 }); // small phone
   for (const path of ["/", "/flow", "/ops", "/finance"]) {
     await page.goto(path);
-    // Let data-driven dashboards settle (finance renders its 6-column table).
-    if (path === "/finance") await expect(page.getByTestId("fin-summary")).toBeVisible();
-    if (path === "/ops") await expect(page.getByTestId("refresh")).toBeVisible();
+    // /ops and /finance now open on a staff sign-in form; sign in, then wait for the
+    // data-driven dashboard to settle so the overflow check runs against real content.
+    if (path === "/ops") {
+      await staffUiLogin(page, "+66900000009");
+      await expect(page.getByTestId("refresh")).toBeVisible();
+    }
+    if (path === "/finance") {
+      await staffUiLogin(page, "+66900000004");
+      await expect(page.getByTestId("fin-summary")).toBeVisible();
+    }
     // The page itself must not scroll horizontally (wide tables scroll inside their box).
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -64,6 +78,7 @@ test("booking flow confirms a booking with the correct checkout total", async ({
 
 test("finance reconciliation shows zero exceptions", async ({ page }) => {
   await page.goto("/finance");
+  await staffUiLogin(page, "+66900000005"); // finance staff
   await expect(page.getByTestId("fin-summary")).toBeVisible();
   // Every payment order conserves by construction, so no reconciliation exceptions.
   await expect(page.getByTestId("fin-exceptions")).toHaveText("0");
@@ -78,6 +93,7 @@ test("ops dashboard verifies a pending clinic", async ({ page }) => {
   const clinic = await res.json();
 
   await page.goto("/ops");
+  await staffUiLogin(page, "+66900000008"); // operations staff
   const row = page.getByTestId(`pending-${clinic.id}`);
   await expect(row).toBeVisible();
   await row.getByTestId("verify-btn").click();

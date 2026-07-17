@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getReconciliation,
-  getDevToken,
   setAuthToken,
   fetchFinanceExport,
   formatThb,
@@ -16,6 +15,7 @@ import { Button } from "../../components/Button";
 import { DataTable, type Column } from "../../components/DataTable";
 import { RefreshIcon, DownloadIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
+import { StaffLogin } from "../../components/StaffLogin";
 import { th } from "../../lib/strings";
 
 const MAX_ROWS = 25;
@@ -24,32 +24,28 @@ const MAX_ROWS = 25;
 export default function FinancePage() {
   const [data, setData] = useState<Reconciliation | null>(null);
   const [loading, setLoading] = useState(true);
-  const tokenRef = useRef<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const toast = useToast();
-
-  const ensureFinanceToken = useCallback(async () => {
-    if (!tokenRef.current) tokenRef.current = (await getDevToken("finance")).token;
-    setAuthToken(tokenRef.current);
-  }, []);
 
   const load = useCallback(async () => {
     try {
-      await ensureFinanceToken();
       setData(await getReconciliation());
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [ensureFinanceToken, toast]);
+  }, [toast]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (token) {
+      setAuthToken(token);
+      void load();
+    }
+  }, [token, load]);
 
   async function exportCsv() {
     try {
-      await ensureFinanceToken();
       const csv = await fetchFinanceExport();
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
       const a = document.createElement("a");
@@ -87,6 +83,15 @@ export default function FinancePage() {
         ),
     },
   ];
+
+  if (!token) {
+    return (
+      <>
+        <AppHeader current="/finance" />
+        <StaffLogin surface="Finance" onToken={setToken} />
+      </>
+    );
+  }
 
   return (
     <>

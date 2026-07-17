@@ -6,8 +6,15 @@ import { maskPhone } from "../marketplace/privacy.util.js";
  * OTP login (AUTH-01). Mock provider: the code is generated and "sent" (logged); in
  * production it goes via the SMS partner. Codes expire after 5 minutes and are single-use.
  */
-/** §7.3 rate limiting: minimum seconds between OTP requests for one phone. */
-const OTP_MIN_INTERVAL_MS = 30 * 1000;
+/**
+ * §7.3 rate limiting: minimum ms between OTP requests for one phone. Env-tunable for the
+ * same reason the ThrottleGuard limits are — a test suite reusing a fixed set of staff
+ * phones is not the SMS-bombing this defends against. Default is the production intent.
+ */
+const OTP_MIN_INTERVAL_MS = (() => {
+  const n = Number(process.env.OTP_MIN_INTERVAL_MS);
+  return Number.isFinite(n) && n >= 0 ? n : 30 * 1000;
+})();
 /** Max wrong verify attempts before the current code is burned (brute-force guard). */
 const OTP_MAX_ATTEMPTS = 5;
 

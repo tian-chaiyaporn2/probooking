@@ -55,21 +55,29 @@ export const getDevToken = (role: "operations" | "finance" | "administrator") =>
   post<{ token: string; role: string }>("/auth/dev/token", { role });
 
 /**
- * Log in as an ordinary party (a clinic owner or a professional) via OTP.
- *
- * `devCode` is returned by the API only under AUTH_DEV_MODE, which is how the demo can log
- * in without an SMS partner. In production the code arrives by SMS and this helper cannot
- * complete on its own — by design: a login that hands you the code is not a login.
+ * Request an OTP for a phone. Returns the code ONLY under AUTH_DEV_MODE (so the demo can
+ * complete a login without an SMS partner); in production it returns undefined and the code
+ * arrives by SMS.
+ */
+export const requestOtp = (phone: string) =>
+  post<{ sent: boolean; devCode?: string }>("/auth/otp/request", { phone });
+
+/** Verify an OTP code and receive a session token carrying whatever role the phone resolves to. */
+export const verifyOtp = (phone: string, code: string) =>
+  post<{ token: string; role: string }>("/auth/otp/verify", { phone, code });
+
+/**
+ * One-shot login for the demo flow, where the code is echoed back under AUTH_DEV_MODE.
+ * In production `requestOtp` returns no code, so callers must collect it from SMS and call
+ * `verifyOtp` — a login that hands you the code is not a login.
  */
 export async function loginAs(phone: string): Promise<string> {
-  const { devCode } = await post<{ sent: boolean; devCode?: string }>("/auth/otp/request", { phone });
+  const { devCode } = await requestOtp(phone);
   if (!devCode) {
     throw new Error("OTP code was not returned — set AUTH_DEV_MODE=true for the demo flow");
   }
-  const { token } = await post<{ token: string; role: string }>("/auth/otp/verify", {
-    phone,
-    code: devCode,
-  });
+  const { token, role } = await verifyOtp(phone, devCode);
+  void role;
   return token;
 }
 
