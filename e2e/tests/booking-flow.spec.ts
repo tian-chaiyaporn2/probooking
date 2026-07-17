@@ -1,6 +1,19 @@
 import { test, expect } from "@playwright/test";
 
 /**
+ * Log in as an ordinary party (clinic owner / professional) and return an auth header.
+ * Authority is derived from the caller's identity, so tests must act as the real party
+ * rather than posting party ids anonymously.
+ */
+async function loginAs(request: any, api: string, phone: string) {
+  const req = await request.post(`${api}/auth/otp/request`, { data: { phone } });
+  const { devCode } = (await req.json()) as { devCode: string };
+  const ver = await request.post(`${api}/auth/otp/verify`, { data: { phone, code: devCode } });
+  const { token } = (await ver.json()) as { token: string };
+  return { authorization: `Bearer ${token}` };
+}
+
+/**
  * Phase 0 vertical-slice e2e. Verifies the browser can drive the marketplace flow
  * against the live API: create offer -> accept -> confirm -> Confirmed booking,
  * with the 12% service fee reflected in the checkout total (10,000 THB comp +
@@ -90,20 +103,23 @@ test("a suspended professional cannot be confirmed (VER-04 gate)", async ({ page
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: auth });
 
+  const clinicAuth = await loginAs(page.request, api, `+66sc${uniq}`);
+  const proAuth = await loginAs(page.request, api, `+66sp${uniq}`);
   const shift = await j(await page.request.post(`${api}/shifts`, {
     data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+    headers: clinicAuth,
   }));
-  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: pro.id } });
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: pro.id }, headers: proAuth,
+  });
   const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
-    data: { professionalId: pro.id },
+    data: { professionalId: pro.id }, headers: clinicAuth,
   }));
-  await page.request.post(`${api}/offers/${offer.id}/accept`);
+  await page.request.post(`${api}/offers/${offer.id}/accept`, { headers: proAuth });
 
   // Ops suspends the licence AFTER acceptance — confirm must now be rejected (§6.3).
   await page.request.post(`${api}/ops/professionals/${pro.id}/suspend-credential`, { headers: auth });
-  const confirm = await page.request.post(`${api}/offers/${offer.id}/confirm`, {
-    data: { prefundingSucceeded: true },
-  });
+  const confirm = await page.request.post(`${api}/offers/${offer.id}/confirm`, { headers: clinicAuth });
   expect(confirm.status()).toBe(400);
   expect(await confirm.text()).toContain("suspended");
 });
@@ -151,17 +167,21 @@ test("reporting: history, receipt, metrics, and finance CSV export (REP-01..03)"
     data: { displayName: "Dr Rep", profession: "physician", phone: `+66rq${uniq}`, payoutRef: "x-1" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
+  const clinicAuth = await loginAs(page.request, api, `+66rr${uniq}`);
+  const proAuth = await loginAs(page.request, api, `+66rq${uniq}`);
   const shift = await j(await page.request.post(`${api}/shifts`, {
-    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, headers: clinicAuth,
   }));
-  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: pro.id } });
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: pro.id }, headers: proAuth,
+  });
   const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
-    data: { professionalId: pro.id },
+    data: { professionalId: pro.id }, headers: clinicAuth,
   }));
-  await page.request.post(`${api}/offers/${offer.id}/accept`);
-  const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`));
+  await page.request.post(`${api}/offers/${offer.id}/accept`, { headers: proAuth });
+  const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`, { headers: clinicAuth }));
   const bookingId = confirmed.booking.id;
-  await page.request.post(`${api}/bookings/${bookingId}/complete`);
+  await page.request.post(`${api}/bookings/${bookingId}/complete`, { headers: proAuth });
 
   // Releasing the payout is authenticated (it moves money): an anonymous caller is refused.
   expect((await page.request.post(`${api}/bookings/${bookingId}/accept-completion`)).status()).toBe(401);
@@ -242,28 +262,37 @@ test("privacy & security: audit trail, OTP rate limit, patient-data guard (§7.3
     data: { branchName: `Sec ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66sf${uniq}` },
   }));
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
+  const clinicAuth = await loginAs(page.request, api, `+66sf${uniq}`);
+  const proAuth = await loginAs(page.request, api, `+66se${uniq}`);
   const shift = await j(await page.request.post(`${api}/shifts`, {
-    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, headers: clinicAuth,
   }));
-  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: pro.id } });
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: pro.id }, headers: proAuth,
+  });
   const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
-    data: { professionalId: pro.id },
+    data: { professionalId: pro.id }, headers: clinicAuth,
   }));
-  await page.request.post(`${api}/offers/${offer.id}/accept`);
-  const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`, {
-    data: { prefundingSucceeded: true },
-  }));
+  await page.request.post(`${api}/offers/${offer.id}/accept`, { headers: proAuth });
+  const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`, { headers: clinicAuth }));
   const bookingId = confirmed.booking.id;
   expect(
     (await page.request.post(`${api}/bookings/${bookingId}/messages`, {
-      data: { senderId: clinic.id, body: "See you Tuesday" },
+      data: { body: "See you Tuesday" }, headers: clinicAuth,
     })).status(),
   ).toBe(201);
   expect(
     (await page.request.post(`${api}/bookings/${bookingId}/messages`, {
-      data: { senderId: clinic.id, body: "patient 1234567890123 details attached" },
+      data: { body: "patient 1234567890123 details attached" }, headers: clinicAuth,
     })).status(),
   ).toBe(400);
+
+  // A stranger is neither party: they cannot read the thread or harvest contact details.
+  const stranger = await loginAs(page.request, api, `+66zz${uniq}`);
+  expect((await page.request.get(`${api}/bookings/${bookingId}/messages`, { headers: stranger })).status()).toBe(403);
+  expect((await page.request.get(`${api}/bookings/${bookingId}/contact`, { headers: stranger })).status()).toBe(403);
+  expect((await page.request.get(`${api}/bookings/${bookingId}/contact`)).status()).toBe(401);
+  expect((await page.request.get(`${api}/bookings/${bookingId}/contact`, { headers: clinicAuth })).ok()).toBe(true);
 });
 
 test("completion pays out, then both parties review", async ({ page }) => {
@@ -302,26 +331,55 @@ test("the money lifecycle cannot be driven anonymously (authz regression guard)"
     data: { displayName: "Dr Az", profession: "physician", phone: `+66ay${uniq}`, payoutRef: "x-1" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
-  const shift = await j(await page.request.post(`${api}/shifts`, {
+  const clinicAuth = await loginAs(page.request, api, `+66az${uniq}`);
+  const proAuth = await loginAs(page.request, api, `+66ay${uniq}`);
+
+  // Posting a shift for someone else's workspace, or with no identity at all, is refused.
+  expect((await page.request.post(`${api}/shifts`, {
     data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+  })).status()).toBe(401);
+  expect((await page.request.post(`${api}/shifts`, {
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, headers: proAuth,
+  })).status()).toBe(403);
+
+  const shift = await j(await page.request.post(`${api}/shifts`, {
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, headers: clinicAuth,
   }));
-  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: pro.id } });
+
+  // A professional applies as themselves; enrolling someone else is refused.
+  expect((await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: pro.id }, headers: clinicAuth,
+  })).status()).toBe(403);
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: pro.id }, headers: proAuth,
+  });
+
+  // OFF-01: sending a binding offer requires clinic authority, not a body field.
+  expect((await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
+    data: { professionalId: pro.id, actorRole: "clinic_owner" }, headers: proAuth,
+  })).status()).toBe(403);
   const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
-    data: { professionalId: pro.id },
+    data: { professionalId: pro.id }, headers: clinicAuth,
   }));
-  await page.request.post(`${api}/offers/${offer.id}/accept`);
+
+  // Only the professional the offer was made to may accept it.
+  const stranger = await loginAs(page.request, api, `+66ax${uniq}`);
+  expect((await page.request.post(`${api}/offers/${offer.id}/accept`, { headers: stranger })).status()).toBe(403);
+  expect((await page.request.post(`${api}/offers/${offer.id}/accept`)).status()).toBe(401);
+  await page.request.post(`${api}/offers/${offer.id}/accept`, { headers: proAuth });
 
   // Confirming no longer takes the caller's word that it paid: `prefundingSucceeded` is
   // ignored, and the API establishes the capture itself.
   const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`, {
-    data: { prefundingSucceeded: false },
+    data: { prefundingSucceeded: false }, headers: clinicAuth,
   }));
   expect(confirmed.booking.state).toBe("Confirmed");
   const bookingId = confirmed.booking.id;
 
-  // Releasing the payout requires a role. Anonymous is refused.
-  await page.request.post(`${api}/bookings/${bookingId}/complete`);
+  // Releasing the payout requires authority. Anonymous and non-parties are refused.
+  await page.request.post(`${api}/bookings/${bookingId}/complete`, { headers: proAuth });
   expect((await page.request.post(`${api}/bookings/${bookingId}/accept-completion`)).status()).toBe(401);
+  expect((await page.request.post(`${api}/bookings/${bookingId}/accept-completion`, { headers: stranger })).status()).toBe(403);
   expect((await page.request.post(`${api}/bookings/${bookingId}/flag-inactive`)).status()).toBe(401);
 });
 
@@ -341,22 +399,27 @@ test("OFF-02 is enforced by the database, not only by a read (OFF-02 regression 
       data: { displayName: `Dr ${tag}`, profession: "physician", phone: `+66${tag}${uniq}`, payoutRef: "x" },
     }));
     await page.request.post(`${api}/ops/professionals/${p.id}/verify`, { headers: opsAuth });
-    return p;
+    return { ...p, auth: await loginAs(page.request, api, `+66${tag}${uniq}`) };
   };
+  const clinicAuth = await loginAs(page.request, api, `+66of${uniq}`);
   const a = await mk("oa");
   const b = await mk("ob");
   const shift = await j(await page.request.post(`${api}/shifts`, {
-    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, headers: clinicAuth,
   }));
-  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: a.id } });
-  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: b.id } });
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: a.id }, headers: a.auth,
+  });
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: b.id }, headers: b.auth,
+  });
 
   // One binding offer per shift: the second is refused, whichever professional it targets.
   expect((await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
-    data: { professionalId: a.id },
+    data: { professionalId: a.id }, headers: clinicAuth,
   })).ok()).toBe(true);
   const second = await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
-    data: { professionalId: b.id },
+    data: { professionalId: b.id }, headers: clinicAuth,
   });
   expect([400, 409]).toContain(second.status());
 });

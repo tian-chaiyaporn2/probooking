@@ -7,6 +7,7 @@ import type {
   VerificationState,
   ShiftUrgency,
   RatingSummary,
+  Role,
 } from "@probook/domain";
 
 /** The offer view the flow works with (joins Shift fields for compensation/urgency/start). */
@@ -318,6 +319,18 @@ export interface ConfirmBookingResult {
 }
 
 /** Full booking view including money state, for the completion/payout phase. */
+/**
+ * The parties an authenticated caller acts as. A phone can be a professional, a member of
+ * one or more clinic workspaces, or both — so this is a set of hats, not a single role.
+ */
+export interface CallerIdentity {
+  userId: string | null;
+  /** The caller's own professional profile, if they registered as one. */
+  professionalId: string | null;
+  /** Clinic workspaces the caller belongs to, with the role they hold in each (§3). */
+  memberships: { workspaceId: string; role: Role }[];
+}
+
 export interface BookingDetail {
   id: string;
   offerId: string;
@@ -427,6 +440,15 @@ export interface MarketplaceRepository {
   getBookingByOffer(offerId: string): Promise<BookingRecord | null>;
 
   // --- Completion & payout ---
+  /**
+   * Resolve who the authenticated caller is, from the phone their token carries (§3).
+   *
+   * Authority is derived here, not read from the request: a token proves possession of a
+   * phone, and the platform decides what that phone may do. Endpoints previously took
+   * `actorRole` and party ids from the body, which made every authority check a
+   * self-certification.
+   */
+  resolveIdentity(phone: string): Promise<CallerIdentity>;
   getBooking(id: string): Promise<BookingDetail | null>;
   /**
    * CAN-03: did the professional actually arrive for this booking? Answered from the

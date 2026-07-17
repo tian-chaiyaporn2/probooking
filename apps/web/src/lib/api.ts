@@ -2,21 +2,26 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
-// Bearer token for internal (ops/finance) calls. Set once a dashboard has fetched
-// a dev token; the public booking flow leaves it null.
+// Bearer token for internal (ops/finance) dashboard calls. The booking flow does NOT use
+// this: it acts as two different parties (a clinic and a professional) within one page, so
+// a single module-global token would silently attach the wrong identity to half the calls.
+// Those callers pass their token explicitly instead.
 let authToken: string | null = null;
 export const setAuthToken = (token: string | null) => {
   authToken = token;
 };
 
-function authHeaders(base: Record<string, string> = {}): Record<string, string> {
-  return authToken ? { ...base, authorization: `Bearer ${authToken}` } : base;
+function authHeaders(base: Record<string, string> = {}, token?: string): Record<string, string> {
+  const t = token ?? authToken;
+  return t ? { ...base, authorization: `Bearer ${t}` } : base;
 }
 
-async function post<T>(path: string, body?: unknown): Promise<T> {
+async function post<T>(path: string, body?: unknown, token?: string): Promise<T> {
   const init: RequestInit = {
     method: "POST",
-    headers: authHeaders({ "content-type": "application/json" }),
+    headers: authHeaders({ "content-type": "application/json" }, token),
+    // Don't hang forever on a dead API/tunnel — surface an error the UI can show.
+    signal: AbortSignal.timeout(15_000),
   };
   if (body !== undefined) {
     init.body = JSON.stringify(body);
@@ -29,8 +34,11 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+async function get<T>(path: string, token?: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: authHeaders({}, token),
+    signal: AbortSignal.timeout(15_000),
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${res.status}: ${text}`);
@@ -40,10 +48,30 @@ async function get<T>(path: string): Promise<T> {
 
 /**
  * Dev-only: obtain an internal role token so the ops/finance dashboards can call
- * guarded endpoints. Replaced by the real OTP + access-list login in production.
+ * guarded endpoints. Absent in production (the route 404s) — the dashboards must then use
+ * the real OTP + access-list login.
  */
 export const getDevToken = (role: "operations" | "finance" | "administrator") =>
   post<{ token: string; role: string }>("/auth/dev/token", { role });
+
+/**
+ * Log in as an ordinary party (a clinic owner or a professional) via OTP.
+ *
+ * `devCode` is returned by the API only under AUTH_DEV_MODE, which is how the demo can log
+ * in without an SMS partner. In production the code arrives by SMS and this helper cannot
+ * complete on its own — by design: a login that hands you the code is not a login.
+ */
+export async function loginAs(phone: string): Promise<string> {
+  const { devCode } = await post<{ sent: boolean; devCode?: string }>("/auth/otp/request", { phone });
+  if (!devCode) {
+    throw new Error("OTP code was not returned — set AUTH_DEV_MODE=true for the demo flow");
+  }
+  const { token } = await post<{ token: string; role: string }>("/auth/otp/verify", {
+    phone,
+    code: devCode,
+  });
+  return token;
+}
 
 export interface Checkout {
   compensation: number;
@@ -93,23 +121,31 @@ export const verifyClinic = (id: string) => post<Registered>(`/ops/clinics/${id}
 export const verifyProfessional = (id: string) =>
   post<Registered>(`/ops/professionals/${id}/verify`);
 
-export const postShift = (input: {
-  clinicWorkspaceId: string;
-  compensation: number;
-  category?: string;
-  urgency?: "standard" | "urgent";
-}) => post<{ shiftId: string; state: string; urgent: boolean }>("/shifts", input);
+// Each action below is taken BY someone: the caller passes the token of the party acting.
+// The API derives authority from that token, so passing the wrong one is a 403 rather than
+// a silently mis-attributed action.
+export const postShift = (
+  input: {
+    clinicWorkspaceId: string;
+    compensation: number;
+    category?: string;
+    urgency?: "standard" | "urgent";
+  },
+  token: string,
+) => post<{ shiftId: string; state: string; urgent: boolean }>("/shifts", input, token);
 
-export const applyToShift = (shiftId: string, professionalId: string) =>
-  post<{ id: string; state: string }>(`/shifts/${shiftId}/apply`, { professionalId });
+export const applyToShift = (shiftId: string, professionalId: string, token: string) =>
+  post<{ id: string; state: string }>(`/shifts/${shiftId}/apply`, { professionalId }, token);
 
-export const offerToProfessional = (shiftId: string, professionalId: string) =>
-  post<OfferCreated>(`/shifts/${shiftId}/offer`, { professionalId });
+export const offerToProfessional = (shiftId: string, professionalId: string, token: string) =>
+  post<OfferCreated>(`/shifts/${shiftId}/offer`, { professionalId }, token);
 
-export const acceptOffer = (id: string) => post<Accepted>(`/offers/${id}/accept`);
+export const acceptOffer = (id: string, token: string) =>
+  post<Accepted>(`/offers/${id}/accept`, undefined, token);
 
-export const confirmOffer = (id: string, prefundingSucceeded = true) =>
-  post<Confirmed>(`/offers/${id}/confirm`, { prefundingSucceeded });
+// No `prefundingSucceeded`: whether funds were captured is the API's finding, not ours.
+export const confirmOffer = (id: string, token: string) =>
+  post<Confirmed>(`/offers/${id}/confirm`, undefined, token);
 
 export interface Payout {
   id: string;
@@ -118,11 +154,11 @@ export interface Payout {
   payoutAmount: number;
 }
 
-export const completeBooking = (bookingId: string) =>
-  post<{ id: string; state: string }>(`/bookings/${bookingId}/complete`);
+export const completeBooking = (bookingId: string, token: string) =>
+  post<{ id: string; state: string }>(`/bookings/${bookingId}/complete`, undefined, token);
 
-export const acceptCompletion = (bookingId: string) =>
-  post<Payout>(`/bookings/${bookingId}/accept-completion`);
+export const acceptCompletion = (bookingId: string, token: string) =>
+  post<Payout>(`/bookings/${bookingId}/accept-completion`, undefined, token);
 
 export interface ReviewResult {
   id: string;
@@ -137,10 +173,12 @@ export interface Rating {
   note?: string;
 }
 
+// `by` is no longer sent: the API derives the author from the caller's identity.
 export const createReview = (
   bookingId: string,
-  input: { by: "clinic" | "professional"; score: number; text?: string },
-) => post<ReviewResult>(`/bookings/${bookingId}/reviews`, input);
+  input: { score: number; text?: string },
+  token: string,
+) => post<ReviewResult>(`/bookings/${bookingId}/reviews`, input, token);
 
 export const getRating = (professionalId: string) =>
   get<Rating>(`/professionals/${professionalId}/rating`);

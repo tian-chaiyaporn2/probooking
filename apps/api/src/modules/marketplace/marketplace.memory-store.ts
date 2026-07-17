@@ -39,10 +39,11 @@ import type {
   MarketplaceMetrics,
   AuditEntry,
   AuditRow,
+  CallerIdentity,
 } from "./marketplace.types.js";
 import { advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
-import type { OfferState, VerificationState, RatingSummary } from "@probook/domain";
+import type { OfferState, VerificationState, RatingSummary, Role } from "@probook/domain";
 
 interface MemReview {
   id: string;
@@ -86,6 +87,10 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly professionals = new Map<string, VerificationState>();
   private readonly professionalProfiles = new Map<string, { displayName: string; profession: string }>();
   private readonly usedPhones = new Set<string>(); // mirrors the Prisma User.phone unique constraint
+  // Identity graph, mirroring Prisma's User -> ProfessionalProfile / Membership relations.
+  private readonly users = new Map<string, string>(); // phone -> userId
+  private readonly professionalByPhone = new Map<string, string>(); // phone -> professionalId
+  private readonly membershipsByPhone = new Map<string, { workspaceId: string; role: Role }[]>();
   private readonly suspendedCredentials = new Set<string>();
   private readonly arrivals = new Set<string>(); // bookingIds with a recorded arrival (CAN-03)
   private readonly autoAcceptAt = new Map<string, number>(); // bookingId -> CMP-03 deadline
@@ -98,8 +103,17 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (this.usedPhones.has(input.ownerPhone)) throw new ConflictError("owner phone already registered");
     this.usedPhones.add(input.ownerPhone);
     const id = randomUUID();
+    const ownerUserId = randomUUID();
     this.clinics.set(id, "Submitted");
-    return { id, verification: "Submitted", ownerUserId: randomUUID() };
+    // Parity with Prisma's User + Membership graph: the owner's phone is how the caller is
+    // later recognised as this workspace's owner. Previously the phone was only added to a
+    // uniqueness Set and discarded, so identity could not be resolved in this store at all.
+    this.users.set(input.ownerPhone, ownerUserId);
+    this.membershipsByPhone.set(input.ownerPhone, [
+      ...(this.membershipsByPhone.get(input.ownerPhone) ?? []),
+      { workspaceId: id, role: "clinic_owner" },
+    ]);
+    return { id, verification: "Submitted", ownerUserId };
   }
 
   async registerProfessional(input: RegisterProfessionalInput): Promise<EntityRef> {
@@ -108,7 +122,17 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const id = randomUUID();
     this.professionals.set(id, "Submitted");
     this.professionalProfiles.set(id, { displayName: input.displayName, profession: input.profession });
+    this.users.set(input.phone, randomUUID());
+    this.professionalByPhone.set(input.phone, id);
     return { id, verification: "Submitted" };
+  }
+
+  async resolveIdentity(phone: string): Promise<CallerIdentity> {
+    return {
+      userId: this.users.get(phone) ?? null,
+      professionalId: this.professionalByPhone.get(phone) ?? null,
+      memberships: this.membershipsByPhone.get(phone) ?? [],
+    };
   }
 
   async verifyClinic(id: string): Promise<EntityRef | null> {

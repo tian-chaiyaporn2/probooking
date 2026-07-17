@@ -51,6 +51,7 @@ import type {
   VerificationState,
   ShiftUrgency,
   RatingSummary,
+  Role,
 } from "@probook/domain";
 import type {
   MarketplaceRepository,
@@ -92,6 +93,7 @@ import type {
   MarketplaceMetrics,
   AuditEntry,
   AuditRow,
+  CallerIdentity,
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
@@ -531,6 +533,22 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
           state: booking.state as BookingRecord["state"],
         }
       : null;
+  }
+
+  async resolveIdentity(phone: string): Promise<CallerIdentity> {
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      include: { professional: { select: { id: true } }, memberships: true },
+    });
+    if (!user) return { userId: null, professionalId: null, memberships: [] };
+    return {
+      userId: user.id,
+      professionalId: user.professional?.id ?? null,
+      memberships: user.memberships.map((m) => ({
+        workspaceId: m.workspaceId,
+        role: m.role as Role,
+      })),
+    };
   }
 
   async getBooking(id: string): Promise<BookingDetail | null> {
