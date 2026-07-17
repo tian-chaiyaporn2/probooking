@@ -50,7 +50,7 @@ async function seedAcceptedOffer(compensation = 1_000_000) {
     sentAt: Date.now(),
     expiresAt: Date.now() + 12 * 3_600_000,
   });
-  await store.setOfferState(offer.id, "AwaitingPayment", Date.now() + 30 * 60_000);
+  await store.setOfferState(offer.id, "AwaitingPayment", { fundingDueAt: Date.now() + 30 * 60_000 });
   return { clinic, pro, shiftId, offerId: offer.id };
 }
 

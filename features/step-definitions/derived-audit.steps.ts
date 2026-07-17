@@ -27,7 +27,7 @@ Given("an offer in AwaitingPayment", async function (this: ProBookingWorld) {
   });
   await store.applyToShift(shiftId, pro.id);
   const offer = await store.createOfferForShift({ shiftId, professionalId: pro.id, sentAt: 1, expiresAt: 2 });
-  await store.setOfferState(offer.id, "AwaitingPayment", 3);
+  await store.setOfferState(offer.id, "AwaitingPayment", { fundingDueAt: 3 });
   this.state.store = store;
   this.state.offerId = offer.id;
 });

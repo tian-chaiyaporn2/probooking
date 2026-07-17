@@ -19,6 +19,11 @@ type CaptureResult =
   | { succeeded: true; providerRef: string }
   | { succeeded: false; reason: string };
 
+export interface RefundRequest {
+  orderRef: string;
+  amount: Satang;
+}
+
 @Injectable()
 export class MockPaymentProvider {
   /**
@@ -29,5 +34,13 @@ export class MockPaymentProvider {
   async capture(req: CaptureRequest): Promise<CaptureResult> {
     if (req.amount <= 0) return { succeeded: false, reason: "non_positive_amount" };
     return { succeeded: true, providerRef: `mock_capture_${req.orderRef}` };
+  }
+
+  /**
+   * Unwind a capture when confirm fails after funds were collected (no booking created).
+   * Mock is always successful; a real provider would reverse the partner transaction.
+   */
+  async refund(req: RefundRequest): Promise<{ succeeded: true; providerRef: string }> {
+    return { succeeded: true, providerRef: `mock_refund_${req.orderRef}` };
   }
 }

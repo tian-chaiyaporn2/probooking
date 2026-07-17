@@ -100,6 +100,8 @@ export const th = {
     requestNewCode: "กลับไปขอรหัสใหม่",
     sendCodeError: "ส่งรหัส OTP ไม่สำเร็จ กรุณาลองอีกครั้ง",
     signInError: "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบรหัส OTP แล้วลองอีกครั้ง",
+    wrongRole: "บัญชีนี้ไม่มีสิทธิ์เข้าถึงหน้านี้",
+    signOut: "ออกจากระบบ",
   },
   a11y: {
     primaryNav: "เมนูหลัก",
@@ -136,7 +138,13 @@ export const th = {
  */
 export function getThaiErrorMessage(error: unknown, fallback: string = th.errors.generic): string {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
-  if (message.includes("too many requests") || message.startsWith("429:")) {
+  // API: "too many OTP requests; retry later" — match before/after errorFrom stripping.
+  if (
+    message.includes("too many requests") ||
+    message.includes("too many otp") ||
+    message.includes("retry later") ||
+    message.startsWith("429:")
+  ) {
     return th.errors.tooManyRequests;
   }
   if (message.includes("invalid or expired code")) return th.errors.invalidOtp;
