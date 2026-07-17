@@ -463,7 +463,8 @@ img, svg { max-width: 100%; height: auto; }
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
 }
-.mockcard__row { display: flex; align-items: center; gap: var(--s3); }
+.mockcard__row { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.mockcard__row > div { min-width: 0; flex: 1 1 auto; }
 .mockcard__avatar {
   width: 2.7rem; height: 2.7rem; border-radius: 50%; flex: none; display: grid; place-items: center;
   background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: #fff; font-weight: 700;
@@ -594,6 +595,7 @@ img, svg { max-width: 100%; height: auto; }
   .hero { grid-template-columns: 1fr; }
   .hero__visual { order: -1; }
   .hero__brand { font-size: clamp(2.2rem, 10vw, 3rem); }
+  .mockcard__stamp { margin-inline-start: 0 !important; }
 }
 @media (max-width: 768px) {
   .app-nav--desktop { display: none; }
