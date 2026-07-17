@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Viewport } from "next";
+import { ToastProvider } from "../components/Toast";
 import "./globals.css";
 
 export const metadata = {
@@ -17,7 +18,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   // Launch language is Thai (LOC-01); lang set accordingly.
   return (
     <html lang="th">
-      <body>{children}</body>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

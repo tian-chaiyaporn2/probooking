@@ -16,6 +16,9 @@ import {
 } from "../../lib/api";
 import { AppHeader } from "../../lib/AppHeader";
 import { Stat, Badge } from "../../lib/ui";
+import { Button } from "../../components/Button";
+import { RefreshIcon } from "../../components/icons";
+import { useToast } from "../../components/Toast";
 import { th } from "../../lib/strings";
 
 /**
@@ -28,8 +31,8 @@ export default function OpsPage() {
   const [metrics, setMetrics] = useState<MarketplaceMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
+  const toast = useToast();
 
   const ensureOpsToken = useCallback(async () => {
     if (!tokenRef.current) tokenRef.current = (await getDevToken("operations")).token;
@@ -37,7 +40,6 @@ export default function OpsPage() {
   }, []);
 
   const load = useCallback(async () => {
-    setError(null);
     try {
       await ensureOpsToken();
       const [p, c, m] = await Promise.all([getOpsPending(), getOpsCases(), getMetrics()]);
@@ -45,11 +47,11 @@ export default function OpsPage() {
       setCases(c.cases);
       setMetrics(m);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [ensureOpsToken]);
+  }, [ensureOpsToken, toast]);
 
   useEffect(() => {
     void load();
@@ -62,8 +64,9 @@ export default function OpsPage() {
       if (kind === "clinic") await verifyClinic(id);
       else await verifyProfessional(id);
       await load();
+      toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -75,8 +78,9 @@ export default function OpsPage() {
       await ensureOpsToken();
       await resolveHold(bookingId);
       await load();
+      toast.success("ปลดการระงับแล้ว");
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -88,9 +92,9 @@ export default function OpsPage() {
       <main className="page" style={{ maxWidth: 960 }}>
         <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
           <h1 style={{ margin: 0 }}>{th.ops.title}</h1>
-          <button data-testid="refresh" onClick={() => void load()} disabled={busy} className="btn btn--ghost">
+          <Button data-testid="refresh" onClick={() => void load()} disabled={busy} icon={<RefreshIcon />}>
             {th.common.refresh}
-          </button>
+          </Button>
         </div>
 
         <div className="stat-grid" data-testid="ops-metrics">
@@ -125,9 +129,9 @@ export default function OpsPage() {
                   {p.name} <code className="row__id">{p.id.slice(0, 8)}…</code>
                 </span>
                 <span className="row__actions">
-                  <button data-testid="verify-btn" onClick={() => void verify(p.kind, p.id)} disabled={busy} className="btn btn--primary">
+                  <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify(p.kind, p.id)}>
                     {th.ops.verify}
-                  </button>
+                  </Button>
                 </span>
               </li>
             ))}
@@ -149,9 +153,9 @@ export default function OpsPage() {
                 </span>
                 {c.kind === "credential_hold" && c.refId && (
                   <span className="row__actions">
-                    <button data-testid="resolve-btn" onClick={() => void resolve(c.refId as string)} disabled={busy} className="btn btn--ghost">
+                    <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(c.refId as string)}>
                       {th.ops.resolveHold}
-                    </button>
+                    </Button>
                   </span>
                 )}
               </li>
@@ -159,11 +163,6 @@ export default function OpsPage() {
           </ul>
         </div>
 
-        {error && (
-          <p data-testid="error" style={{ color: "var(--danger)", marginTop: "var(--s5)" }}>
-            {th.common.error}: {error}
-          </p>
-        )}
       </main>
     </>
   );

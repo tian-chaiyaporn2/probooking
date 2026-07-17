@@ -8,22 +8,24 @@ import {
   fetchFinanceExport,
   formatThb,
   type Reconciliation,
+  type ReconciliationRow,
 } from "../../lib/api";
 import { AppHeader } from "../../lib/AppHeader";
 import { Stat } from "../../lib/ui";
+import { Button } from "../../components/Button";
+import { DataTable, type Column } from "../../components/DataTable";
+import { RefreshIcon, DownloadIcon } from "../../components/icons";
+import { useToast } from "../../components/Toast";
 import { th } from "../../lib/strings";
 
 const MAX_ROWS = 25;
 
-/**
- * Finance dashboard (ADM-01, PAY-11). Reconciles each payment order's events against
- * captured funds and flags any that fail conservation (PAY-08). Read-only.
- */
+/** Finance dashboard (ADM-01, PAY-11): reconciles each payment order against captured funds. */
 export default function FinancePage() {
   const [data, setData] = useState<Reconciliation | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
+  const toast = useToast();
 
   const ensureFinanceToken = useCallback(async () => {
     if (!tokenRef.current) tokenRef.current = (await getDevToken("finance")).token;
@@ -31,23 +33,21 @@ export default function FinancePage() {
   }, []);
 
   const load = useCallback(async () => {
-    setError(null);
     try {
       await ensureFinanceToken();
       setData(await getReconciliation());
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [ensureFinanceToken]);
+  }, [ensureFinanceToken, toast]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function exportCsv() {
-    setError(null);
     try {
       await ensureFinanceToken();
       const csv = await fetchFinanceExport();
@@ -60,14 +60,33 @@ export default function FinancePage() {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success("กำลังดาวน์โหลด finance-export.csv");
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
 
   const s = data?.summary;
   const rows = data?.rows ?? [];
   const shown = rows.slice(0, MAX_ROWS);
+
+  const columns: Column<ReconciliationRow>[] = [
+    { key: "booking", header: th.finance.colBooking, render: (r) => <code>{(r.bookingId ?? "—").slice(0, 8)}</code> },
+    { key: "captured", header: th.finance.captured, align: "right", render: (r) => formatThb(r.captured) },
+    { key: "payouts", header: th.finance.payouts, align: "right", render: (r) => formatThb(r.payouts) },
+    { key: "refunds", header: th.finance.refunds, align: "right", render: (r) => formatThb(r.refunds) },
+    { key: "undistributed", header: th.finance.colUndistributed, align: "right", render: (r) => formatThb(r.undistributed) },
+    {
+      key: "conserved",
+      header: th.finance.colConserved,
+      render: (r) =>
+        r.conserved ? (
+          <span className="badge badge--success" aria-label="conserved">✓</span>
+        ) : (
+          <span className="badge badge--warn" aria-label="exception">✗ {th.finance.exceptions}</span>
+        ),
+    },
+  ];
 
   return (
     <>
@@ -76,12 +95,12 @@ export default function FinancePage() {
         <div className="actions" style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}>
           <h1 style={{ margin: 0 }}>{th.finance.title}</h1>
           <div className="actions">
-            <button data-testid="refresh" onClick={() => void load()} className="btn btn--ghost">
+            <Button data-testid="refresh" onClick={() => void load()} icon={<RefreshIcon />}>
               {th.common.refresh}
-            </button>
-            <button data-testid="export-csv" onClick={() => void exportCsv()} className="btn btn--primary">
+            </Button>
+            <Button data-testid="export-csv" variant="primary" onClick={() => void exportCsv()} icon={<DownloadIcon />}>
               {th.finance.exportCsv}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -104,47 +123,19 @@ export default function FinancePage() {
           )}
         </div>
 
-        <div className="table-scroll" style={{ marginTop: "var(--s5)" }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{th.finance.colBooking}</th>
-                <th className="num">{th.finance.captured}</th>
-                <th className="num">{th.finance.payouts}</th>
-                <th className="num">{th.finance.refunds}</th>
-                <th className="num">{th.finance.colUndistributed}</th>
-                <th>{th.finance.colConserved}</th>
-              </tr>
-            </thead>
-            <tbody data-testid="reconciliation-rows">
-              {shown.map((r) => (
-                <tr key={r.paymentOrderId}>
-                  <td><code>{(r.bookingId ?? "—").slice(0, 8)}</code></td>
-                  <td className="num">{formatThb(r.captured)}</td>
-                  <td className="num">{formatThb(r.payouts)}</td>
-                  <td className="num">{formatThb(r.refunds)}</td>
-                  <td className="num">{formatThb(r.undistributed)}</td>
-                  <td>
-                    {r.conserved ? (
-                      <span className="badge badge--success" aria-label="conserved">✓</span>
-                    ) : (
-                      <span className="badge badge--warn" aria-label="exception">✗ {th.finance.exceptions}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ marginTop: "var(--s5)" }}>
+          <DataTable
+            columns={columns}
+            rows={shown}
+            rowKey={(r) => r.paymentOrderId}
+            loading={loading}
+            empty={th.common.none}
+            bodyTestid="reconciliation-rows"
+          />
         </div>
         {rows.length > MAX_ROWS && (
           <p data-testid="rows-truncated" className="muted" style={{ fontSize: "0.8rem", marginTop: "var(--s3)" }}>
             {th.finance.showing(shown.length, rows.length)}
-          </p>
-        )}
-
-        {error && (
-          <p data-testid="error" style={{ color: "var(--danger)", marginTop: "var(--s5)" }}>
-            {th.common.error}: {error}
           </p>
         )}
       </main>

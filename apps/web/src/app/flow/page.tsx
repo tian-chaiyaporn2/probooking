@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { AppHeader } from "../../lib/AppHeader";
+import { Button } from "../../components/Button";
+import { useToast } from "../../components/Toast";
 import {
   registerClinic,
   registerProfessional,
@@ -39,7 +41,7 @@ export default function FlowPage() {
   const [payout, setPayout] = useState<Payout | null>(null);
   const [reviewsPublished, setReviewsPublished] = useState(false);
   const [rating, setRating] = useState<Rating | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [running, setRunning] = useState(false);
   const [payingOut, setPayingOut] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -53,7 +55,6 @@ export default function FlowPage() {
     setPayout(null);
     setReviewsPublished(false);
     setRating(null);
-    setError(null);
     const log = (label: string, detail: string) =>
       setSteps((s) => [...s, { label, detail }]);
     try {
@@ -98,7 +99,7 @@ export default function FlowPage() {
       setCheckout(confirmed.checkout);
       setBookingId(confirmed.booking.id);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setRunning(false);
     }
@@ -107,13 +108,12 @@ export default function FlowPage() {
   async function runPayout() {
     if (!bookingId) return;
     setPayingOut(true);
-    setError(null);
     try {
       await completeBooking(bookingId); // professional marks completion
       const result = await acceptCompletion(bookingId); // accept + initiate payout
       setPayout(result);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setPayingOut(false);
     }
@@ -122,7 +122,6 @@ export default function FlowPage() {
   async function runReviews() {
     if (!bookingId || !professionalId) return;
     setReviewing(true);
-    setError(null);
     try {
       // Both parties review; the second submission publishes the pair (REV-03).
       await createReview(bookingId, { by: "professional", score: 5 });
@@ -130,7 +129,7 @@ export default function FlowPage() {
       setReviewsPublished(r.published);
       setRating(await getRating(professionalId)); // hasRating false until 3 reviews (REV-04)
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setReviewing(false);
     }
@@ -147,22 +146,9 @@ export default function FlowPage() {
         leave reviews.
       </p>
 
-      <button
-        data-testid="run-flow"
-        onClick={run}
-        disabled={running}
-        style={{
-          padding: "0.6rem 1.1rem",
-          fontSize: "1rem",
-          borderRadius: 8,
-          border: "1px solid #0b6",
-          background: running ? "#eee" : "#0b6",
-          color: running ? "#666" : "#fff",
-          cursor: running ? "default" : "pointer",
-        }}
-      >
-        {running ? "Running…" : "Run booking flow"}
-      </button>
+      <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
+        Run booking flow
+      </Button>
 
       <ol data-testid="steps" style={{ marginTop: "1.5rem", lineHeight: 1.8 }}>
         {steps.map((s, i) => (
@@ -197,21 +183,9 @@ export default function FlowPage() {
 
           <div style={{ marginTop: "1rem" }}>
             {!payout ? (
-              <button
-                data-testid="run-payout"
-                onClick={runPayout}
-                disabled={payingOut}
-                style={{
-                  padding: "0.5rem 1rem",
-                  borderRadius: 8,
-                  border: "1px solid #06b",
-                  background: payingOut ? "#eee" : "#06b",
-                  color: payingOut ? "#666" : "#fff",
-                  cursor: payingOut ? "default" : "pointer",
-                }}
-              >
-                {payingOut ? "Paying out…" : "Complete & pay out"}
-              </button>
+              <Button data-testid="run-payout" variant="primary" busy={payingOut} onClick={runPayout}>
+                Complete &amp; pay out
+              </Button>
             ) : (
               <div data-testid="payout">
                 <span data-testid="payout-status" style={{ fontWeight: 600, color: "#0a5" }}>
@@ -226,21 +200,9 @@ export default function FlowPage() {
           {payout && (
             <div style={{ marginTop: "1rem" }}>
               {!reviewsPublished ? (
-                <button
-                  data-testid="run-reviews"
-                  onClick={runReviews}
-                  disabled={reviewing}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: 8,
-                    border: "1px solid #849",
-                    background: reviewing ? "#eee" : "#849",
-                    color: reviewing ? "#666" : "#fff",
-                    cursor: reviewing ? "default" : "pointer",
-                  }}
-                >
-                  {reviewing ? "Submitting…" : "Leave reviews (both parties)"}
-                </button>
+                <Button data-testid="run-reviews" variant="primary" busy={reviewing} onClick={runReviews}>
+                  Leave reviews (both parties)
+                </Button>
               ) : (
                 <div data-testid="reviews">
                   <span data-testid="reviews-status" style={{ fontWeight: 600, color: "#0a5" }}>
@@ -258,12 +220,6 @@ export default function FlowPage() {
             </div>
           )}
         </div>
-      )}
-
-      {error && (
-        <p data-testid="error" style={{ color: "#c00", marginTop: "1rem" }}>
-          Error: {error}
-        </p>
       )}
     </main>
     </>
