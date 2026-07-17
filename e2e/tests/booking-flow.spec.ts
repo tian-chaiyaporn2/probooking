@@ -62,8 +62,8 @@ test("mobile nav collapses into a drawer that opens and closes", async ({ page }
   // The desktop nav is hidden; a menu button stands in for it.
   await expect(page.getByRole("navigation", { name: "เมนูหลัก" })).toBeHidden();
   await page.getByLabel("เปิดเมนู").click();
-  // Drawer is open; its links are now visible and Escape dismisses it.
-  const drawer = page.getByRole("navigation", { name: "เมนูหลัก" });
+  // Drawer opens as a labelled dialog; its links are visible and Escape dismisses it.
+  const drawer = page.getByRole("dialog", { name: "เมนูหลัก" });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole("link", { name: "เดโม" })).toBeVisible();
   await page.keyboard.press("Escape");
