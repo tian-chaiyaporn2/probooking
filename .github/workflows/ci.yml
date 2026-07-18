@@ -145,7 +145,14 @@ jobs:
         run: pnpm --filter @probook/domain build
 
       - name: Build static export for GitHub Pages
-        run: NEXT_PUBLIC_BASE_PATH=/probooking pnpm --filter @probook/web build
+        # Point the static site at the stable demo API tunnel. Without this the build falls
+        # back to the localhost:4000 default (see apps/web/src/lib/api.ts), so every deploy
+        # would ship a site whose API calls a reviewer's browser can never reach. The
+        # hostname is a public demo tunnel (cloudflared → the demo API), not a secret.
+        run: |
+          NEXT_PUBLIC_BASE_PATH=/probooking \
+          NEXT_PUBLIC_API_BASE_URL=https://probook-demo.zensatang.com \
+          pnpm --filter @probook/web build
 
       - name: Add .nojekyll
         run: touch apps/web/out/.nojekyll
