@@ -5,9 +5,13 @@ import {
   getReconciliation,
   fetchFinanceExport,
   logout,
+  proposeRefund,
+  getPendingRefunds,
+  approveRefund,
   formatThb,
   type Reconciliation,
   type ReconciliationRow,
+  type PendingApproval,
 } from "../../lib/api";
 import { AppHeader } from "../../components/AppHeader";
 import { Stat } from "../../components/Stat";
@@ -18,36 +22,50 @@ import { SectionBlock } from "../../components/SectionBlock";
 import { EmptyState } from "../../components/EmptyState";
 import { StatSkeletonGrid } from "../../components/Skeleton";
 import { KeyValueTable } from "../../components/KeyValueTable";
+import { Field, Input } from "../../components/Field";
+import { Dialog } from "../../components/Dialog";
 import { RefreshIcon, DownloadIcon, CheckIcon, AlertIcon, InboxIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
 import { clearStaffSession, loadStaffSession, saveStaffSession } from "../../lib/session";
+import { loadSession, clearSession, saveSession } from "../../lib/demo-accounts";
 
 const MAX_ROWS = 25;
 
 /** Finance dashboard (ADM-01, PAY-11): reconciles each payment order against captured funds. */
 export default function FinancePage() {
   const [data, setData] = useState<Reconciliation | null>(null);
+  const [pending, setPending] = useState<PendingApproval[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
+  const [refundFor, setRefundFor] = useState<{ bookingId: string; captured: number } | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
   const toast = useToast();
   const loadSeq = useRef(0);
 
   useEffect(() => {
-    const saved = loadStaffSession("finance");
-    if (saved) setToken(saved.token);
+    const staff = loadStaffSession("finance");
+    if (staff) {
+      setToken(staff.token);
+    } else {
+      const demo = loadSession();
+      if (demo) setToken(demo.token);
+    }
     setBooting(false);
   }, []);
 
   const acceptToken = useCallback((next: string) => {
     saveStaffSession("finance", next);
+    saveSession(next, "");
     setSessionNotice(null);
     setToken(next);
   }, []);
@@ -57,10 +75,13 @@ export default function FinancePage() {
     const previous = token;
     setToken(null);
     setData(null);
+    setPending([]);
+    setRefundFor(null);
     setLoadError(null);
     setLoading(false);
     setExporting(false);
     clearStaffSession("finance");
+    clearSession();
     if (previous) {
       try {
         await logout(previous);
@@ -72,6 +93,7 @@ export default function FinancePage() {
 
   const expireSession = useCallback(() => {
     clearStaffSession("finance");
+    clearSession();
     setToken(null);
     setSessionNotice(th.staffLogin.sessionExpiredBanner);
   }, []);
@@ -82,9 +104,10 @@ export default function FinancePage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const next = await getReconciliation(token);
+      const [next, approvals] = await Promise.all([getReconciliation(token), getPendingRefunds(token)]);
       if (seq !== loadSeq.current) return;
       setData(next);
+      setPending(approvals.pending);
     } catch (e) {
       if (seq !== loadSeq.current) return;
       const msg = getThaiErrorMessage(e);
@@ -123,6 +146,41 @@ export default function FinancePage() {
       toast.error(getThaiErrorMessage(e));
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function submitRefund() {
+    if (!token || !refundFor) return;
+    if (!refundAmount || Number(refundAmount) <= 0) return;
+    const auth = token;
+    const satang = Math.round(Number(refundAmount) * 100);
+    setBusy(true);
+    try {
+      await proposeRefund(refundFor.bookingId, satang, refundReason || "goodwill", auth);
+      setRefundFor(null);
+      setRefundAmount("");
+      setRefundReason("");
+      await load();
+      toast.success(th.finance.refundProposed);
+    } catch (e) {
+      toast.error(getThaiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approve(id: string) {
+    if (!token) return;
+    const auth = token;
+    setBusy(true);
+    try {
+      await approveRefund(id, auth);
+      await load();
+      toast.success(th.finance.refundApproved);
+    } catch (e) {
+      toast.error(getThaiErrorMessage(e));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -275,6 +333,12 @@ export default function FinancePage() {
                       onToggle={() =>
                         setExpandedId((id) => (id === r.paymentOrderId ? null : r.paymentOrderId))
                       }
+                      onRefund={() => {
+                        if (!r.bookingId) return;
+                        setRefundFor({ bookingId: r.bookingId, captured: r.captured - r.refunds });
+                        setRefundAmount("");
+                        setRefundReason("");
+                      }}
                     />
                   ))
                 )}
@@ -287,7 +351,73 @@ export default function FinancePage() {
             {th.finance.showing(shown.length, filtered.length)}
           </p>
         )}
+
+        <SectionBlock title={th.finance.pendingApprovals} count={pending.length}>
+          <div className="card">
+            <ul className="rowlist" data-testid="approvals-list">
+              {pending.length === 0 && (
+                <EmptyState as="li" title={th.finance.emptyApprovals} icon={<CheckIcon />} />
+              )}
+              {pending.map((a) => (
+                <li key={a.id} data-testid={`approval-${a.id}`}>
+                  <span className="row__main">
+                    <span className="row__name">{formatThb(a.amount)}</span>
+                    <span className="row__sub muted">
+                      {a.reason} · {th.finance.proposedBy}{" "}
+                      <code className="row__id">{a.initiatorId.slice(0, 10)}</code>
+                    </span>
+                  </span>
+                  <span className="row__actions">
+                    <Button data-testid="approve-btn" variant="primary" busy={busy} onClick={() => void approve(a.id)}>
+                      {th.finance.approve}
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SectionBlock>
       </main>
+
+      <Dialog
+        open={refundFor !== null}
+        title={th.finance.refundTitle}
+        confirmLabel={th.finance.propose}
+        cancelLabel={th.finance.cancel}
+        confirmTestId="refund-submit"
+        busy={busy}
+        onCancel={() => {
+          if (!busy) setRefundFor(null);
+        }}
+        onConfirm={() => void submitRefund()}
+      >
+        {refundFor ? (
+          <div className="refund-form" data-testid="refund-form">
+            <p className="muted">
+              {th.finance.colBooking} <code>{refundFor.bookingId.slice(0, 8)}</code> · {th.finance.captured}{" "}
+              {formatThb(refundFor.captured)}
+            </p>
+            <Field label={th.finance.refundAmount} htmlFor="refund-amount">
+              <Input
+                id="refund-amount"
+                data-testid="refund-amount"
+                inputMode="numeric"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value.replace(/[^0-9]/g, ""))}
+              />
+            </Field>
+            <Field label={th.finance.refundReason} htmlFor="refund-reason">
+              <Input
+                id="refund-reason"
+                data-testid="refund-reason"
+                value={refundReason}
+                placeholder={th.finance.refundReasonPlaceholder}
+                onChange={(e) => setRefundReason(e.target.value)}
+              />
+            </Field>
+          </div>
+        ) : null}
+      </Dialog>
     </>
   );
 }
@@ -296,11 +426,14 @@ function FinanceRow({
   row,
   expanded,
   onToggle,
+  onRefund,
 }: {
   row: ReconciliationRow;
   expanded: boolean;
   onToggle: () => void;
+  onRefund: () => void;
 }) {
+  const canRefund = Boolean(row.bookingId && row.captured - row.refunds > 0);
   return (
     <>
       <tr data-testid={`recon-${row.paymentOrderId}`}>
@@ -323,15 +456,22 @@ function FinanceRow({
           )}
         </td>
         <td>
-          <Button
-            variant="subtle"
-            data-testid={`recon-expand-${row.paymentOrderId}`}
-            aria-expanded={expanded}
-            aria-label={expanded ? th.a11y.collapseRow : th.a11y.expandRow}
-            onClick={onToggle}
-          >
-            {expanded ? th.common.hideDetails : th.common.details}
-          </Button>
+          <span className="row__actions">
+            <Button
+              variant="subtle"
+              data-testid={`recon-expand-${row.paymentOrderId}`}
+              aria-expanded={expanded}
+              aria-label={expanded ? th.a11y.collapseRow : th.a11y.expandRow}
+              onClick={onToggle}
+            >
+              {expanded ? th.common.hideDetails : th.common.details}
+            </Button>
+            {canRefund ? (
+              <Button data-testid="refund-btn" variant="subtle" onClick={onRefund}>
+                {th.finance.refund}
+              </Button>
+            ) : null}
+          </span>
         </td>
       </tr>
       {expanded ? (

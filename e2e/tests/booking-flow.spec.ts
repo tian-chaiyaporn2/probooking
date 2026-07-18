@@ -22,6 +22,51 @@ async function staffUiLogin(page: any, phone: string) {
 }
 
 /**
+ * Land on a role's surface exactly as the "sign in as" picker does: navigate, write the
+ * session the picker would have stored, and reload so the page hydrates from it. Uses a
+ * token minted once (avoids the per-phone OTP interval that re-login would hit).
+ */
+async function injectSession(page: any, route: string, token: string, phone: string) {
+  await page.goto(route);
+  await page.evaluate(
+    ([t, p]: [string, string]) => sessionStorage.setItem("probook.session", JSON.stringify({ token: t, phone: p })),
+    [token, phone],
+  );
+  await page.reload();
+}
+
+/**
+ * Drive the API to a Confirmed booking with captured funds (the state the ops credential
+ * hold and the finance refund both need). Returns the booking id plus an operations auth
+ * header for follow-up staff actions.
+ */
+async function provisionConfirmedBooking(page: any, api: string, uniq: string) {
+  const j = async (r: any) => (await r.json()) as any;
+  const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
+  const opsAuth = { authorization: `Bearer ${ops.token}` };
+  const clinic = await j(await page.request.post(`${api}/clinics`, {
+    data: { branchName: `Wk ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66wc${uniq}` },
+  }));
+  await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Wk", profession: "physician", phone: `+66wp${uniq}`, payoutRef: "x" },
+  }));
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
+  const clinicAuth = await loginAs(page.request, api, `+66wc${uniq}`);
+  const proAuth = await loginAs(page.request, api, `+66wp${uniq}`);
+  const shift = await j(await page.request.post(`${api}/shifts`, {
+    data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, headers: clinicAuth,
+  }));
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, { data: { professionalId: pro.id }, headers: proAuth });
+  const offer = await j(await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
+    data: { professionalId: pro.id }, headers: clinicAuth,
+  }));
+  await page.request.post(`${api}/offers/${offer.id}/accept`, { headers: proAuth });
+  const confirmed = await j(await page.request.post(`${api}/offers/${offer.id}/confirm`, { headers: clinicAuth }));
+  return { bookingId: confirmed.booking.id as string, clinicId: clinic.id as string, proId: pro.id as string, opsAuth };
+}
+
+/**
  * Phase 0 vertical-slice e2e. Verifies the browser can drive the marketplace flow
  * against the live API: create offer -> accept -> confirm -> Confirmed booking,
  * with the 12% service fee reflected in the checkout total (10,000 THB comp +
@@ -581,4 +626,213 @@ test("§7.3: logout revokes a token, and revoke-sessions kills a subject's token
   // then resolves to an ordinary user is asserted in the StaffDirectory unit test, which
   // does not fight the per-phone OTP interval.)
   expect((await page.request.get(`${api}/finance/reconciliation`, { headers: victimAuth })).status()).toBe(401);
+});
+
+test("interactive multi-role flow: clinic and professional drive a booking by hand", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: Awaited<ReturnType<typeof page.request.get>>) => (await r.json()) as any;
+  const money = "฿13,579.00";
+  const total = "฿15,208.48"; // 13,579 + 12% fee
+
+  // Provision a verified clinic + professional (the party pages need real, verified parties).
+  const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
+  const opsAuth = { authorization: `Bearer ${ops.token}` };
+  const clinic = await j(await page.request.post(`${api}/clinics`, {
+    data: { branchName: `Play ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66pc${uniq}` },
+  }));
+  await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Play", profession: "physician", phone: `+66pp${uniq}`, payoutRef: "x" },
+  }));
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
+
+  // Log each party in ONCE and reuse the token; re-logging-in the same phone each turn would
+  // trip the per-phone OTP interval. "Signing in" then just injects the session the picker
+  // would have stored and lands on the dashboard — the real page under test.
+  const clinicToken = (await loginAs(page.request, api, `+66pc${uniq}`)).authorization.slice("Bearer ".length);
+  const proToken = (await loginAs(page.request, api, `+66pp${uniq}`)).authorization.slice("Bearer ".length);
+  const actAs = async (who: "clinic" | "pro", route: string) => {
+    const token = who === "clinic" ? clinicToken : proToken;
+    const phone = who === "clinic" ? `+66pc${uniq}` : `+66pp${uniq}`;
+    await page.goto(route);
+    await page.evaluate(
+      ([t, p]) => sessionStorage.setItem("probook.session", JSON.stringify({ token: t, phone: p })),
+      [token, phone],
+    );
+    await page.reload();
+  };
+
+  // 1. Clinic posts a shift.
+  await actAs("clinic", "/clinic");
+  await page.getByTestId("shift-comp").fill("13579");
+  // Urgent so the shift sorts to the top of the professional's browse (which shows the
+  // first 25, urgent-first) regardless of how many other open shifts exist.
+  await page.getByRole("checkbox").check();
+  await page.getByTestId("post-shift").click();
+  await expect(page.getByTestId("clinic-shifts").locator("li", { hasText: money }).first()).toBeVisible();
+
+  // 2. Professional applies.
+  await actAs("pro", "/pro");
+  await page.getByTestId("open-shifts").locator("li", { hasText: money }).first().getByTestId("apply-shift").click();
+  await expect(page.getByTestId("pro-bookings")).toBeVisible();
+
+  // 3. Clinic sends the offer.
+  await actAs("clinic", "/clinic");
+  const shiftRow = page.getByTestId("clinic-shifts").locator("li", { hasText: money }).first();
+  await expect(shiftRow.getByTestId("send-offer").first()).toBeVisible();
+  await shiftRow.getByTestId("send-offer").first().click();
+
+  // 4. Professional accepts.
+  await actAs("pro", "/pro");
+  const offerRow = page.getByTestId("pro-offers").locator("li", { hasText: money }).first();
+  await expect(offerRow.getByTestId("accept-offer")).toBeVisible();
+  await offerRow.getByTestId("accept-offer").click();
+
+  // 5. Clinic confirms & pays.
+  await actAs("clinic", "/clinic");
+  const shiftRow2 = page.getByTestId("clinic-shifts").locator("li", { hasText: money }).first();
+  await expect(shiftRow2.getByTestId("confirm-offer")).toBeVisible();
+  await shiftRow2.getByTestId("confirm-offer").click();
+  await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: total }).first()).toBeVisible();
+
+  // 6. Professional completes.
+  await actAs("pro", "/pro");
+  const bk = page.getByTestId("pro-bookings").locator("li", { hasText: total }).first();
+  await expect(bk.getByTestId("complete")).toBeVisible();
+  await bk.getByTestId("complete").click();
+
+  // 7. Clinic accepts completion → the booking reaches ServiceCompleted (payout).
+  await actAs("clinic", "/clinic");
+  const bk2 = page.getByTestId("clinic-bookings").locator("li", { hasText: total }).first();
+  await expect(bk2.getByTestId("accept-completion")).toBeVisible();
+  await bk2.getByTestId("accept-completion").click();
+  await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: "ServiceCompleted" }).first()).toBeVisible();
+});
+
+test("operations walkthrough: verify pending parties and resolve a credential hold by hand", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: any) => (await r.json()) as any;
+
+  // A confirmed booking placed on a credential hold (VER-06) → an open case waits for ops.
+  const { bookingId, opsAuth } = await provisionConfirmedBooking(page, api, `oh${uniq}`);
+  await page.request.post(`${api}/bookings/${bookingId}/hold-credential`, { headers: opsAuth });
+
+  // Two UNVERIFIED parties waiting in the verification queue.
+  const clinic = await j(await page.request.post(`${api}/clinics`, {
+    data: { branchName: `Pend ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66oc${uniq}` },
+  }));
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Pend", profession: "physician", phone: `+66op${uniq}`, payoutRef: "x" },
+  }));
+
+  // Sign in as operations exactly as the picker would (dedicated phone, no OTP-interval clash).
+  const opsToken = (await loginAs(page.request, api, "+66900000020")).authorization.slice("Bearer ".length);
+  await injectSession(page, "/ops", opsToken, "+66900000020");
+  await expect(page.getByTestId("ops-metrics")).toBeVisible();
+
+  // Verify the pending clinic through the console.
+  await expect(page.getByTestId(`pending-${clinic.id}`)).toBeVisible();
+  await page.getByTestId(`pending-${clinic.id}`).getByTestId("verify-btn").click();
+  await expect(page.getByTestId(`pending-${clinic.id}`)).toHaveCount(0);
+
+  // Verify the pending professional through the console.
+  await expect(page.getByTestId(`pending-${pro.id}`)).toBeVisible();
+  await page.getByTestId(`pending-${pro.id}`).getByTestId("verify-btn").click();
+  await expect(page.getByTestId(`pending-${pro.id}`)).toHaveCount(0);
+
+  // Resolve the credential hold from the open-cases list.
+  const caseRow = page.getByTestId("cases-list").locator("li", { hasText: bookingId.slice(0, 8) }).first();
+  await expect(caseRow.getByTestId("resolve-btn")).toBeVisible();
+  await caseRow.getByTestId("resolve-btn").click();
+  await expect(page.getByTestId("cases-list").locator("li", { hasText: bookingId.slice(0, 8) })).toHaveCount(0);
+});
+
+test("operations enforcement walkthrough: verify insurance, hold a booking, suspend a licence", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+
+  // A confirmed booking (its professional is verified) plus submitted insurance evidence
+  // waiting for review. Staff may submit on the professional's behalf (requireProfessional).
+  const { bookingId, proId, opsAuth } = await provisionConfirmedBooking(page, api, `en${uniq}`);
+  await page.request.post(`${api}/professionals/${proId}/insurance`, {
+    data: { validUntilHours: 8760 }, headers: opsAuth,
+  });
+
+  // A dedicated ops phone (distinct from the other ops walkthrough) so the two never land
+  // within the per-phone OTP interval of each other.
+  const opsToken = (await loginAs(page.request, api, "+66900000023")).authorization.slice("Bearer ".length);
+  await injectSession(page, "/ops", opsToken, "+66900000023");
+
+  // 1. Verify the submitted insurance from the verification queue (kind = insurance).
+  await expect(page.getByTestId(`pending-${proId}`)).toBeVisible();
+  await page.getByTestId(`pending-${proId}`).getByTestId("verify-btn").click();
+  await expect(page.getByTestId(`pending-${proId}`)).toHaveCount(0);
+
+  // 2. Place a credential hold on the live booking from the active-bookings section.
+  const row = page.getByTestId(`active-${bookingId}`);
+  await expect(row).toBeVisible();
+  await expect(row.getByTestId("hold-btn")).toBeVisible();
+  await row.getByTestId("hold-btn").click();
+  // The hold action is gone (already held) and a credential-hold case now exists.
+  await expect(page.getByTestId(`active-${bookingId}`).locator("[data-testid=hold-btn]")).toHaveCount(0);
+  await expect(page.getByTestId("cases-list").locator("li", { hasText: bookingId.slice(0, 8) }).first()).toBeVisible();
+
+  // 3. Suspend the professional's licence (VER-04) from the same row.
+  await expect(page.getByTestId(`active-${bookingId}`).getByTestId("suspend-btn")).toBeVisible();
+  await page.getByTestId(`active-${bookingId}`).getByTestId("suspend-btn").click();
+  // Suspended: the action is gone and the row shows the suspended badge.
+  await expect(page.getByTestId(`active-${bookingId}`).locator("[data-testid=suspend-btn]")).toHaveCount(0);
+  await expect(page.getByTestId(`active-${bookingId}`).getByText("ระงับแล้ว")).toBeVisible();
+});
+
+test("finance walkthrough: reconcile, export, and run a dual-control refund by hand", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+
+  // A confirmed booking → its payment order captured funds and sorts newest-first in recon.
+  await provisionConfirmedBooking(page, api, `fr${uniq}`);
+
+  // Finance proposer signs in (dedicated phone), reconciliation + summary render.
+  const proposerToken = (await loginAs(page.request, api, "+66900000021")).authorization.slice("Bearer ".length);
+  await injectSession(page, "/finance", proposerToken, "+66900000021");
+  await expect(page.getByTestId("fin-summary")).toBeVisible();
+  await expect(page.getByTestId("fin-exceptions")).toHaveText(/^0$/);
+
+  // Export the CSV (REP-02) — assert the download is produced.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("export-csv").click(),
+  ]);
+  expect(await download.suggestedFilename()).toBe("finance-export.csv");
+
+  // Propose a ฿123 refund on the newest (top) reconciliation row.
+  await page.getByTestId("reconciliation-rows").locator("[data-testid=refund-btn]").first().click();
+  await expect(page.getByTestId("refund-form")).toBeVisible();
+  await page.getByTestId("refund-amount").fill("123");
+  await page.getByTestId("refund-reason").fill("goodwill (walkthrough)");
+  await page.getByTestId("refund-submit").click();
+
+  // The proposal is now awaiting a second person. The proposer cannot approve their own
+  // (§6.4): the API rejects it, so the approval stays pending rather than executing.
+  const approvalRow = page.getByTestId("approvals-list").locator("li", { hasText: "฿123.00" }).first();
+  await expect(approvalRow).toBeVisible();
+  await approvalRow.getByTestId("approve-btn").click();
+  await expect(page.getByTestId("approvals-list").locator("li", { hasText: "฿123.00" })).toHaveCount(1);
+
+  // A DIFFERENT finance person approves it — the refund executes and leaves recon conserved.
+  const approverToken = (await loginAs(page.request, api, "+66900000022")).authorization.slice("Bearer ".length);
+  await injectSession(page, "/finance", approverToken, "+66900000022");
+  const row2 = page.getByTestId("approvals-list").locator("li", { hasText: "฿123.00" }).first();
+  await expect(row2.getByTestId("approve-btn")).toBeVisible();
+  await row2.getByTestId("approve-btn").click();
+  await expect(page.getByTestId("fin-exceptions")).toHaveText(/^0$/); // still conserved after the refund
+});
+
+test("the sign-in picker offers an account per role", async ({ page }) => {
+  await page.goto("/signin");
+  for (const id of ["clinic", "professional", "operations", "finance", "finance-approver"]) {
+    await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
+  }
 });

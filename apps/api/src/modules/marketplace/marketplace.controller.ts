@@ -240,6 +240,9 @@ export class MarketplaceController {
     const booking = await this.requireBooking(id);
     if (!booking.heldAt) return { id, held: false };
     await this.repo.resolveHold(id);
+    // The hold's support case is done once the hold is lifted — close it so it leaves the
+    // operations queue rather than lingering Open forever.
+    await this.repo.resolveSupportCase(id, "credential_hold");
     await this.audit(user, "resolve_hold", "booking", id);
     return { id, held: false };
   }
@@ -641,6 +644,13 @@ export class MarketplaceController {
   @Get("ops/pending")
   async listPending() {
     return { pending: await this.repo.listPendingVerifications() };
+  }
+
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
+  @Get("ops/bookings")
+  async listActiveBookings() {
+    return { bookings: await this.repo.listActiveBookings() };
   }
 
   // REP-03: core marketplace + operations metrics for management (no liquidity dashboard).
@@ -1281,21 +1291,47 @@ export class MarketplaceController {
   }
 
   // ----- Reporting (REP-01): party booking + financial history and receipts -----
-  // Guarded behind an internal role: these expose compensation/fee/tax/payout amounts
-  // by enumerable id. Party-facing self-service (a clinic seeing only its own history)
-  // needs external-user identity and is deferred to Phase 2 — for now it is Ops/Finance.
+  // Party self-service: a professional sees their OWN bookings, a clinic member their own
+  // workspace's, and staff see any. Ownership is derived from the caller's identity, so the
+  // enumerable id in the path cannot be used to read another party's money history.
   @UseGuards(AuthGuard)
-  @Roles("operations", "finance", "administrator")
   @Get("professionals/:id/bookings")
-  async professionalBookings(@Param("id") id: string) {
+  async professionalBookings(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    await this.requireProfessional(user, id);
     return { bookings: await this.repo.listPartyBookings("professional", id) };
   }
 
   @UseGuards(AuthGuard)
-  @Roles("operations", "finance", "administrator")
   @Get("clinics/:id/bookings")
-  async clinicBookings(@Param("id") id: string) {
+  async clinicBookings(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    await this.requireClinicMember(user, id);
     return { bookings: await this.repo.listPartyBookings("clinic", id) };
+  }
+
+  // ----- Party self-service reads for the clinic / professional dashboards -----
+
+  /** Who the caller is (ids + names + verification) — the party UIs render from this. */
+  @UseGuards(AuthGuard)
+  @Get("me")
+  async me(@CurrentUser() user?: TokenPayload) {
+    if (!user?.sub) throw new UnauthorizedException("authentication required");
+    return this.repo.describeMe(user.sub);
+  }
+
+  /** A clinic's own posted shifts, with the candidate/offer/booking rollup. */
+  @UseGuards(AuthGuard)
+  @Get("clinics/:id/shifts")
+  async clinicShifts(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    await this.requireClinicMember(user, id);
+    return { shifts: await this.repo.listClinicShifts(id) };
+  }
+
+  /** The offers made to a professional (so they can accept). */
+  @UseGuards(AuthGuard)
+  @Get("professionals/:id/offers")
+  async professionalOffers(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    await this.requireProfessional(user, id);
+    return { offers: await this.repo.listProfessionalOffers(id) };
   }
 
   @UseGuards(AuthGuard)
@@ -1386,6 +1422,15 @@ export class MarketplaceController {
   private async identityOf(user?: TokenPayload): Promise<CallerIdentity> {
     if (!user?.sub) throw new UnauthorizedException("authentication required");
     return this.repo.resolveIdentity(user.sub);
+  }
+
+  /** Read access for a clinic member (any role) or staff — no specific capability needed. */
+  private async requireClinicMember(user: TokenPayload | undefined, workspaceId: string) {
+    if (this.isStaff(user)) return;
+    const me = await this.identityOf(user);
+    if (!me.memberships.some((m) => m.workspaceId === workspaceId)) {
+      throw new ForbiddenException("not a member of this clinic workspace");
+    }
   }
 
   /**

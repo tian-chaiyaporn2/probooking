@@ -218,7 +218,8 @@ export interface CaseSummary {
 }
 
 export interface PendingVerification {
-  kind: "clinic" | "professional";
+  // "insurance" = a professional whose submitted insurance evidence awaits review (VER-05).
+  kind: "clinic" | "professional" | "insurance";
   id: string;
   name: string;
   /** Clinic licence (decrypted for Ops review). */
@@ -227,6 +228,17 @@ export interface PendingVerification {
   address?: string;
   /** Professional self-declared profession. */
   profession?: string;
+}
+
+/** A live booking Operations can act on (VER-04 suspend / VER-06 credential hold). */
+export interface ActiveBookingRow {
+  bookingId: string;
+  professionalId: string;
+  professionalName: string;
+  clinicName: string;
+  state: string;
+  held: boolean;
+  credential: string; // professional's licence state: Verified | Suspended | ...
 }
 
 // ----- Finance (PAY-11 reconciliation view) -----
@@ -336,6 +348,41 @@ export interface CallerIdentity {
   professionalId: string | null;
   /** Clinic workspaces the caller belongs to, with the role they hold in each (§3). */
   memberships: { workspaceId: string; role: Role }[];
+}
+
+/** Enriched "who am I" for the party UIs — ids plus the human names they render. */
+export interface MeIdentity {
+  professionalId: string | null;
+  professionalName: string | null;
+  professionalVerification: string | null;
+  clinics: { workspaceId: string; name: string; role: Role; verification: string }[];
+}
+
+/** A shift a clinic posted, with the rollup its dashboard needs to drive the flow. */
+export interface ClinicShiftRow {
+  shiftId: string;
+  category: string;
+  compensation: number; // satang
+  urgency: ShiftUrgency;
+  startsAt: number; // epoch ms UTC
+  state: string;
+  hasActiveOffer: boolean;
+  booked: boolean;
+  candidateCount: number;
+  /** The current non-terminal offer (so the clinic can confirm once the pro accepts). */
+  offer: { id: string; state: string; professionalId: string } | null;
+}
+
+/** An offer made to a professional, with the shift summary their dashboard shows. */
+export interface ProfessionalOfferRow {
+  offerId: string;
+  shiftId: string;
+  category: string;
+  compensation: number; // satang
+  urgency: ShiftUrgency;
+  shiftStart: number; // epoch ms UTC
+  state: string;
+  expiresAt: number; // epoch ms UTC
 }
 
 /** §6.4: a money action proposed by one authorized person, executed by a different one. */
@@ -509,6 +556,12 @@ export interface MarketplaceRepository {
    * self-certification.
    */
   resolveIdentity(phone: string): Promise<CallerIdentity>;
+  /** Enriched identity (names + verification) for the caller's own dashboards. */
+  describeMe(phone: string): Promise<MeIdentity>;
+  /** Shifts a clinic workspace posted, with candidate/offer/booking rollup. */
+  listClinicShifts(workspaceId: string): Promise<ClinicShiftRow[]>;
+  /** Offers currently made to a professional. */
+  listProfessionalOffers(professionalId: string): Promise<ProfessionalOfferRow[]>;
 
   // ----- §6.4 dual control -----
   /** Propose a money action. Writes no money — it only records the request. */
@@ -560,6 +613,8 @@ export interface MarketplaceRepository {
   // --- Operations cases (SUP-01) — one per (booking, kind) ---
   findSupportCase(bookingId: string, kind: string): Promise<ReviewCase | null>;
   createSupportCase(bookingId: string, kind: string, subject: string): Promise<ReviewCase>;
+  /** Mark the open case for (booking, kind) Resolved, if one exists. Idempotent. */
+  resolveSupportCase(bookingId: string, kind: string): Promise<void>;
 
   // --- Cancellation & refund (CAN-01..05) ---
   /**
@@ -617,6 +672,8 @@ export interface MarketplaceRepository {
   // --- Operations dashboard (ADM-01) ---
   listOpenCases(): Promise<CaseSummary[]>;
   listPendingVerifications(): Promise<PendingVerification[]>;
+  /** Live bookings (Confirmed/InProgress/AwaitingCompletion) for the operations console. */
+  listActiveBookings(): Promise<ActiveBookingRow[]>;
 
   // --- Finance (PAY-11) ---
   reconcile(): Promise<Reconciliation>;

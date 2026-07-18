@@ -11,6 +11,7 @@ type NavLink = { href: string; label: string; group?: "public" | "staff" };
 const LINKS: NavLink[] = [
   { href: "/", label: th.nav.home, group: "public" },
   { href: "/journey", label: th.nav.journey, group: "public" },
+  { href: "/signin", label: th.nav.signin, group: "public" },
   { href: "/ops", label: th.nav.ops, group: "staff" },
   { href: "/finance", label: th.nav.finance, group: "staff" },
   { href: "/flow", label: th.nav.flow, group: "public" },

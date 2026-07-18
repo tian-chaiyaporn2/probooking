@@ -215,13 +215,28 @@ export interface CaseSummary {
 }
 
 export interface PendingVerification {
-  kind: "clinic" | "professional";
+  // "insurance" = a verified professional whose insurance evidence is awaiting review (VER-05).
+  kind: "clinic" | "professional" | "insurance";
   id: string;
   name: string;
   licenceNo?: string;
   address?: string;
   profession?: string;
 }
+
+/** A live booking Operations can act on (credential hold VER-06 / suspend VER-04). */
+export interface ActiveBooking {
+  bookingId: string;
+  professionalId: string;
+  professionalName: string;
+  clinicName: string;
+  state: string;
+  held: boolean;
+  credential: string; // professional's licence state: Verified | Suspended | ...
+}
+
+export const getOpsBookings = (token: string) =>
+  get<{ bookings: ActiveBooking[] }>("/ops/bookings", token);
 
 export const getOpsCases = (token: string) => get<{ cases: CaseSummary[] }>("/ops/cases", token);
 export const getOpsPending = (token: string) =>
@@ -245,6 +260,34 @@ export interface Reconciliation {
 
 export const getReconciliation = (token: string) =>
   get<Reconciliation>("/finance/reconciliation", token);
+
+// ----- Refunds (§6.4 dual-control) -----
+export interface PendingApproval {
+  id: string;
+  capability: string;
+  refId: string; // bookingId
+  amount: number; // integer satang
+  reason: string;
+  state: "Pending" | "Executed" | "Rejected";
+  initiatorId: string;
+  initiatorRole: string;
+  createdAt: number;
+}
+
+/** A finance person proposes a refund; it moves no money until a *different* finance person approves. */
+export const proposeRefund = (bookingId: string, amount: number, reason: string, token: string) =>
+  post<{ id: string; state: string; amount: number }>(
+    "/finance/refunds",
+    { bookingId, amount, reason },
+    token,
+  );
+
+export const getPendingRefunds = (token: string) =>
+  get<{ pending: PendingApproval[] }>("/finance/refunds", token);
+
+/** Approve (execute) a proposed refund. Rejected with 403 if you are the initiator (§6.4). */
+export const approveRefund = (id: string, token: string) =>
+  post<{ id: string; state: string; refund?: number }>(`/finance/refunds/${id}/approve`, undefined, token);
 
 // ----- Reporting & exports (REP-02/03) -----
 export interface MarketplaceMetrics {
@@ -275,3 +318,96 @@ export async function fetchFinanceExport(token: string): Promise<string> {
 }
 export const resolveHold = (bookingId: string, token: string) =>
   post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`, undefined, token);
+
+// Operations enforcement actions (VER-04/05/06).
+export const verifyInsurance = (professionalId: string, token: string) =>
+  post<{ state: string }>(`/ops/professionals/${professionalId}/verify-insurance`, undefined, token);
+export const suspendCredential = (professionalId: string, token: string) =>
+  post<{ professionalId: string; credential: string }>(
+    `/ops/professionals/${professionalId}/suspend-credential`,
+    undefined,
+    token,
+  );
+export const holdCredential = (bookingId: string, token: string) =>
+  post<{ id: string; held: boolean }>(`/bookings/${bookingId}/hold-credential`, undefined, token);
+
+// ----- Party self-service (clinic / professional dashboards) -----
+
+export interface MeIdentity {
+  professionalId: string | null;
+  professionalName: string | null;
+  professionalVerification: string | null;
+  clinics: { workspaceId: string; name: string; role: string; verification: string }[];
+}
+export const getMe = (token: string) => get<MeIdentity>("/me", token);
+
+export interface ClinicShiftRow {
+  shiftId: string;
+  category: string;
+  compensation: number;
+  urgency: "standard" | "urgent";
+  startsAt: number;
+  state: string;
+  hasActiveOffer: boolean;
+  booked: boolean;
+  candidateCount: number;
+  offer: { id: string; state: string; professionalId: string } | null;
+}
+export const getClinicShifts = (clinicId: string, token: string) =>
+  get<{ shifts: ClinicShiftRow[] }>(`/clinics/${clinicId}/shifts`, token);
+
+export interface Candidate {
+  professionalId: string;
+  via: "application" | "invitation";
+  state: string;
+}
+export const getShiftCandidates = (shiftId: string, token: string) =>
+  get<{ candidates: Candidate[] }>(`/shifts/${shiftId}/candidates`, token);
+
+export interface ProfessionalOfferRow {
+  offerId: string;
+  shiftId: string;
+  category: string;
+  compensation: number;
+  urgency: "standard" | "urgent";
+  shiftStart: number;
+  state: string;
+  expiresAt: number;
+}
+export const getProfessionalOffers = (proId: string, token: string) =>
+  get<{ offers: ProfessionalOfferRow[] }>(`/professionals/${proId}/offers`, token);
+
+export interface OpenShift {
+  shiftId: string;
+  category: string;
+  compensation: number;
+  startsAt: number;
+  urgency: "standard" | "urgent";
+  urgent: boolean;
+}
+export const browseShifts = (token: string) => get<{ shifts: OpenShift[] }>("/shifts", token);
+
+export interface PartyBooking {
+  bookingId: string;
+  shiftId: string;
+  counterpartyId: string;
+  state: string;
+  compensation: number;
+  serviceFee: number;
+  tax: number;
+  total: number;
+  payoutState: string;
+}
+export const getClinicBookings = (clinicId: string, token: string) =>
+  get<{ bookings: PartyBooking[] }>(`/clinics/${clinicId}/bookings`, token);
+export const getProfessionalBookings = (proId: string, token: string) =>
+  get<{ bookings: PartyBooking[] }>(`/professionals/${proId}/bookings`, token);
+
+export const arriveBooking = (bookingId: string, token: string) =>
+  post<{ id: string; arrived: boolean }>(`/bookings/${bookingId}/arrive`, undefined, token);
+
+export const cancelBooking = (
+  bookingId: string,
+  input: { reason: string },
+  token: string,
+) => post<{ id: string; outcome: string; fraction?: number }>(`/bookings/${bookingId}/cancel`, input, token);

@@ -25,6 +25,7 @@ import type {
   OpenShift,
   CaseSummary,
   PendingVerification,
+  ActiveBookingRow,
   AvailabilityBlock,
   ShiftFilters,
   ProfessionalFilters,
@@ -40,6 +41,9 @@ import type {
   AuditEntry,
   AuditRow,
   CallerIdentity,
+  MeIdentity,
+  ClinicShiftRow,
+  ProfessionalOfferRow,
   ApprovalRequestRecord,
   CreateApprovalInput,
   ExecuteApprovalInput,
@@ -168,6 +172,69 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       professionalId: this.professionalByPhone.get(phone) ?? null,
       memberships: this.membershipsByPhone.get(phone) ?? [],
     };
+  }
+
+  async describeMe(phone: string): Promise<MeIdentity> {
+    const professionalId = this.professionalByPhone.get(phone) ?? null;
+    const prof = professionalId ? this.professionalProfiles.get(professionalId) : undefined;
+    const memberships = this.membershipsByPhone.get(phone) ?? [];
+    return {
+      professionalId,
+      professionalName: prof?.displayName ?? null,
+      professionalVerification: professionalId ? (this.professionals.get(professionalId) ?? null) : null,
+      clinics: memberships.map((m) => ({
+        workspaceId: m.workspaceId,
+        name: this.clinicProfiles.get(m.workspaceId)?.branchName ?? "",
+        role: m.role,
+        verification: this.clinics.get(m.workspaceId) ?? "Draft",
+      })),
+    };
+  }
+
+  async listClinicShifts(workspaceId: string): Promise<ClinicShiftRow[]> {
+    return [...this.shifts.values()]
+      .filter((s) => s.clinicWorkspaceId === workspaceId)
+      .sort((a, b) => a.startsAt - b.startsAt)
+      .map((s) => {
+        const offersForShift = [...this.offers.values()].filter((o) => o.shiftId === s.id);
+        const booked = [...this.bookingByOffer.keys()].some((offerId) =>
+          offersForShift.some((o) => o.id === offerId),
+        );
+        const active = offersForShift.find(
+          (o) => o.state === "PendingResponse" || o.state === "AwaitingPayment",
+        );
+        return {
+          shiftId: s.id,
+          category: s.category,
+          compensation: s.compensation,
+          urgency: s.urgency,
+          startsAt: s.startsAt,
+          state: s.state,
+          hasActiveOffer: active !== undefined,
+          booked,
+          candidateCount: this.candidates.filter((c) => c.shiftId === s.id).length,
+          offer: active ? { id: active.id, state: active.state, professionalId: active.professionalId } : null,
+        };
+      });
+  }
+
+  async listProfessionalOffers(professionalId: string): Promise<ProfessionalOfferRow[]> {
+    return [...this.offers.values()]
+      .filter((o) => o.professionalId === professionalId)
+      .sort((a, b) => b.sentAt - a.sentAt)
+      .map((o) => {
+        const shift = this.shifts.get(o.shiftId);
+        return {
+          offerId: o.id,
+          shiftId: o.shiftId,
+          category: shift?.category ?? "general",
+          compensation: shift?.compensation ?? o.compensation,
+          urgency: o.urgency,
+          shiftStart: o.shiftStart,
+          state: o.state,
+          expiresAt: o.expiresAt,
+        };
+      });
   }
 
   async verifyClinic(id: string): Promise<EntityRef | null> {
@@ -526,7 +593,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async listPendingApprovals(): Promise<ApprovalRequestRecord[]> {
     return [...this.approvals.values()]
       .filter((r) => r.state === "Pending")
-      .sort((a, b) => a.createdAt - b.createdAt)
+      .sort((a, b) => b.createdAt - a.createdAt) // newest first (matches Prisma; fresh proposals surface)
       .map((r) => ({ ...r }));
   }
 
@@ -658,6 +725,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const c: ReviewCase = { id: randomUUID(), state: "Open", bookingId };
     this.supportCases.set(key, c);
     return c;
+  }
+
+  async resolveSupportCase(bookingId: string, kind: string): Promise<void> {
+    const c = this.supportCases.get(`${bookingId}:${kind}`);
+    if (c && c.state !== "Resolved") c.state = "Resolved";
   }
 
   async createReview(input: ReviewInput): Promise<ReviewResult> {
@@ -937,6 +1009,35 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         if (profile?.profession) row.profession = profile.profession;
         out.push(row);
       }
+    }
+    // VER-05: submitted insurance evidence awaiting an operator's review. Skip any orphan
+    // record with no live professional (staff may submit for an arbitrary id; Prisma's FK
+    // prevents this, so this only guards the in-memory store).
+    for (const [id, ins] of this.insurance) {
+      const profile = this.professionalProfiles.get(id);
+      if (ins.state === "Submitted" && profile) {
+        out.push({ kind: "insurance", id, name: profile.displayName });
+      }
+    }
+    return out;
+  }
+
+  async listActiveBookings(): Promise<ActiveBookingRow[]> {
+    const active = new Set(["Confirmed", "InProgress", "AwaitingCompletion"]);
+    const out: ActiveBookingRow[] = [];
+    for (const b of this.bookings.values()) {
+      if (!active.has(b.state)) continue;
+      const suspended = this.suspendedCredentials.has(b.professionalId);
+      const verified = this.professionals.get(b.professionalId) === "Verified";
+      out.push({
+        bookingId: b.id,
+        professionalId: b.professionalId,
+        professionalName: this.professionalProfiles.get(b.professionalId)?.displayName ?? "",
+        clinicName: this.clinicProfiles.get(b.clinicWorkspaceId)?.branchName ?? "",
+        state: b.state,
+        held: b.heldAt !== null,
+        credential: suspended ? "Suspended" : verified ? "Verified" : "Submitted",
+      });
     }
     return out;
   }
