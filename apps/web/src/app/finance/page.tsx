@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ApiError,
   getReconciliation,
   fetchFinanceExport,
   logout,
@@ -44,7 +45,7 @@ export default function FinancePage() {
   const [pending, setPending] = useState<PendingApproval[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
@@ -127,13 +128,9 @@ export default function FinancePage() {
       const msg = getThaiErrorMessage(e);
       setLoadError(msg);
       toast.error(msg);
-      const raw = e instanceof Error ? e.message.toLowerCase() : "";
-      if (
-        raw.includes("403") ||
-        raw.includes("401") ||
-        raw.includes("forbidden") ||
-        raw.includes("authentication")
-      ) {
+      // Drop a stale/mismatched session on an auth failure and return to staff login. Branch
+      // on the HTTP status, not the message text — the message never contains the code.
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
         expireSession();
       }
     } finally {
@@ -177,7 +174,7 @@ export default function FinancePage() {
     setRefundAmountError(null);
     const auth = token;
     const satang = Math.round(Number(refundAmount) * 100);
-    setBusy(true);
+    setBusyId("refund");
     try {
       await proposeRefund(
         refundFor.bookingId,
@@ -194,14 +191,14 @@ export default function FinancePage() {
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
-      setBusy(false);
+      setBusyId(null);
     }
   }
 
   async function approve(id: string) {
     if (!token) return;
     const auth = token;
-    setBusy(true);
+    setBusyId(`approve-${id}`);
     try {
       await approveRefund(id, auth);
       await load();
@@ -209,7 +206,7 @@ export default function FinancePage() {
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
-      setBusy(false);
+      setBusyId(null);
     }
   }
 
@@ -456,7 +453,8 @@ export default function FinancePage() {
                     <Button
                       data-testid="approve-btn"
                       variant="primary"
-                      busy={busy}
+                      busy={busyId === `approve-${a.id}`}
+                      disabled={busyId !== null && busyId !== `approve-${a.id}`}
                       onClick={() => void approve(a.id)}
                     >
                       {th.finance.approve}
@@ -475,12 +473,15 @@ export default function FinancePage() {
         confirmLabel={th.finance.propose}
         cancelLabel={th.finance.cancel}
         confirmTestId="refund-submit"
-        busy={busy}
+        busy={busyId === "refund"}
         confirmDisabled={
-          !refundAmount || Number(refundAmount) <= 0 || !!refundAmountError
+          !refundAmount ||
+          Number(refundAmount) <= 0 ||
+          !!refundAmountError ||
+          (busyId !== null && busyId !== "refund")
         }
         onCancel={() => {
-          if (!busy) setRefundFor(null);
+          if (busyId === null) setRefundFor(null);
         }}
         onConfirm={() => void submitRefund()}
       >

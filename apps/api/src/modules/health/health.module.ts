@@ -1,9 +1,11 @@
-import { Controller, Get, Module, ServiceUnavailableException } from "@nestjs/common";
+import { Controller, Get, Logger, Module, ServiceUnavailableException } from "@nestjs/common";
 import { Public } from "../auth/auth.guard.js";
 import { NoThrottle } from "../throttle/throttle.guard.js";
 
 @Controller("health")
 class HealthController {
+  private readonly logger = new Logger("Health");
+
   // Exempt: a load balancer or uptime check polls this continuously and must never be
   // throttled into reporting the service as down — and must not require a Bearer token.
   @Public()
@@ -32,11 +34,10 @@ class HealthController {
       await prisma.$queryRaw`SELECT 1`;
       return { status: "ready", store: "postgres" };
     } catch (e) {
-      throw new ServiceUnavailableException({
-        status: "not-ready",
-        store: "postgres",
-        error: (e as Error).message,
-      });
+      // Log the real cause server-side, but never return it: this probe is @Public, so a raw
+      // Prisma connection error would disclose host/database/user fragments to anonymous callers.
+      this.logger.warn(`readiness probe failed: ${(e as Error).message}`);
+      throw new ServiceUnavailableException({ status: "not-ready", store: "postgres" });
     }
   }
 }

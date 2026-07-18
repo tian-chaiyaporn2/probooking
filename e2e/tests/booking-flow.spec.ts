@@ -211,6 +211,29 @@ test("signed-in clinic nav hides staff links and supports sign out", async ({ pa
   ).toBeVisible();
 });
 
+test("clinic compensation input survives an oversized number (no render crash)", async ({
+  page,
+}) => {
+  // Regression: an unbounded compensation fed `Number(comp) * 100` into satang(), which
+  // throws RangeError past 2^53 and took down the whole page via the error boundary while
+  // the user was still typing. The input is now length-capped and the summary is guarded.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // Fresh unique phone + injected session (the post-shift form renders on any token) — avoids
+  // the shared demo-account OTP interval, and no clinic membership is needed for this path.
+  const api = "http://localhost:4000";
+  const phone = `+66rc${Date.now()}`;
+  const { authorization } = await loginAs(page.request, api, phone);
+  await injectSession(page, "/clinic", authorization.replace("Bearer ", ""), phone, "clinic");
+
+  const comp = page.getByTestId("shift-comp");
+  await expect(comp).toBeVisible();
+  await comp.fill("99999999999999"); // 14 digits — would overflow satang()
+  // The input caps itself, and the page must still be alive: post-shift form present,
+  // no error-boundary screen replacing it.
+  await expect(page.getByTestId("post-shift")).toBeVisible();
+  await expect(comp).toHaveValue("9999999"); // capped to 7 digits
+});
+
 test("party session on ops hides workspace link until staff logs in", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const api = "http://localhost:4000";
