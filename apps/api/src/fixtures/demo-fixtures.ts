@@ -564,7 +564,7 @@ export async function seedDemoFixtures(
     refType: "Booking",
     refId: completed.booking.id,
     amount: 50_000,
-    reason: "ลูกค้าขอคืนเงินบางส่วน (เดโม)",
+    reason: "ลูกค้าขอคืนเงินบางส่วน (demo)",
     initiatorId: "+66900000005",
     initiatorRole: "finance",
   });
