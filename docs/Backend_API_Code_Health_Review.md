@@ -284,6 +284,16 @@ Gaps that hurt maintainability:
 11. Controller + money-path integration tests; coverage gates on `apps/api`.  
 12. Bound list endpoints; tighten arrival policy when product allows.
 
+### Status (updated 2026-07-18)
+
+- **P0 (1–4): done.** Unified remaining-funds via `money-ledger.util`, per-order money serialization, `isStaff` replaced by `isOpsCrossTenant`/`isInternalReader`, fail-closed `DATABASE_URL` (`ALLOW_IN_MEMORY_STORE`). (#38)
+- **P1.7 / P1.8: done.** `PaymentProvider` port injected; phones normalized before blind index. (#38)
+- **P2.9 (env schema + readiness): done.** `config/env-schema.ts` boot validation + `GET /health/ready`. (#43)
+- **P2.12 (bound lists): done.** Shared `LIST_LIMITS` applied in both stores. (#43)
+- **P2.11 (controller + money tests): done.** `controller-authz.test.ts` (REP-01 reader/actor split) + `store-parity.test.ts` (money conservation, ordering, caps). Coverage-gate wiring still open. (#44)
+- **P1.6 (memory/Prisma parity suite): done** as `store-parity.test.ts` — same scenarios asserted against both stores, prisma param gated on `DATABASE_URL`. (#44)
+- **Still open:** **P1.5** (split the marketplace monolith — large, risky, deliberately deferred), **P2.10** (zod validation), and coverage-gate thresholds on `apps/api`.
+
 ---
 
 ## 7. Suggested target shape (incremental)
