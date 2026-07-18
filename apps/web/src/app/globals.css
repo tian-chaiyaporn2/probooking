@@ -19,6 +19,7 @@
 .signin-card:hover:not(:disabled) { border-color: var(--primary); box-shadow: var(--shadow); transform: translateY(-2px); }
 .signin-card:disabled { opacity: 0.6; cursor: default; }
 .signin-card__emoji { font-size: 1.6rem; flex: none; width: 2.6rem; height: 2.6rem; display: grid; place-items: center; background: var(--primary-050); border-radius: 50%; }
+.signin-card__mark { flex: none; width: 2.6rem; height: 2.6rem; display: grid; place-items: center; background: var(--primary-050); color: var(--primary); border-radius: 50%; }
 .signin-card__body { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .signin-card__label { font-weight: 700; color: var(--ink); }
 .signin-card__sub { font-size: 0.82rem; color: var(--muted); }
@@ -29,6 +30,30 @@
 /* Modal dialog (finance refund proposal) */
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: var(--s4); background: color-mix(in srgb, #000 45%, transparent); }
 .modal { width: 100%; max-width: 420px; }
+.modal--wide { max-width: 520px; }
+
+.role-picker__path { margin: 0 0 var(--s4); font-size: 0.9rem; }
+.role-picker__group + .role-picker__group { margin-top: var(--s5); }
+.role-picker__heading { margin: 0 0 var(--s3); font-size: 0.95rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.hero__cta { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s4); }
+.trust-line--hero { margin: var(--s3) 0 0; }
+.how-dual { display: grid; gap: var(--s5); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.how-dual__title { margin: 0 0 var(--s3); font-size: 1rem; }
+
+.role-chip { display: none; font-size: 0.78rem; color: var(--muted); padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 960px) { .role-chip { display: inline-block; } }
+.nav-signout { background: none; border: none; color: var(--muted); cursor: pointer; font: inherit; padding: 0.4rem 0.6rem; }
+.nav-signout--drawer { width: 100%; text-align: left; padding: var(--s3) var(--s4); }
+.app-nav--drawer__role { margin: 0; padding: 0 var(--s4) var(--s2); color: var(--muted); font-size: 0.85rem; }
+
+.checkout-box { border: 1px solid var(--line); border-radius: 10px; padding: var(--s3); background: var(--surface-2); }
+.checkout-box__line { display: flex; justify-content: space-between; gap: var(--s3); padding: 4px 0; font-size: 0.9rem; }
+.checkout-box__total { font-weight: 700; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; }
+
+.note-banner { font-size: 0.85rem; padding: var(--s3); border-radius: 10px; background: var(--surface-2); border: 1px dashed var(--line); margin-bottom: var(--s5); }
+.flow-banner { padding: var(--s3); margin-bottom: var(--s4); border-radius: 10px; background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); font-size: 0.9rem; }
+.finance-summary { margin: 0 0 var(--s2); font-size: 0.95rem; }
 
 /* Staff-login demo shortcut */
 .staff-demo { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s4); padding: var(--s3); border: 1px dashed var(--line); border-radius: 10px; background: var(--surface-2); }

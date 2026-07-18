@@ -1,5 +1,7 @@
 # Content & IA review — page and flow recommendations
 
+> **Implementation status (2026-07-18):** P0–P2 recommendations below have been implemented in the web UI, API enrichments, and e2e updates on branch `cursor/information-architecture-flows-d877`.
+
 **Lens:** Information architecture + content strategy  
 **Scope:** Every current web surface and the journeys they support  
 **Audience:** Product, design, eng preparing Phase 0 demo → Phase 1 polish  

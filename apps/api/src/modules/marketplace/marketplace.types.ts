@@ -80,8 +80,11 @@ export interface OpenShift {
   category: string;
   compensation: number; // integer satang
   startsAt: number; // epoch ms UTC
+  endsAt: number;
   urgency: ShiftUrgency;
   urgent: boolean;
+  clinicName: string;
+  clinicVerified: boolean;
 }
 
 // ----- Onboarding & verification (ORG-01, PRO-01, VER-01..02) -----
@@ -142,12 +145,18 @@ export interface BookingHistoryRow {
   bookingId: string;
   shiftId: string;
   counterpartyId: string; // the other party on the booking
+  counterpartyName: string;
   state: string;
   compensation: number; // satang
   serviceFee: number;
   tax: number;
   total: number;
   payoutState: string;
+  shiftStart: number;
+  shiftEnd: number;
+  category: string;
+  arrived: boolean;
+  held: boolean;
 }
 
 /** REP-02: a payment order's allocation + events for the Finance export. */
@@ -303,6 +312,9 @@ export interface Candidate {
   professionalId: string;
   via: "application" | "invitation";
   state: string;
+  displayName: string;
+  profession: string;
+  verification: string;
 }
 
 export interface CreateOfferForShiftInput {
@@ -364,7 +376,7 @@ export interface ClinicShiftRow {
   booked: boolean;
   candidateCount: number;
   /** The current non-terminal offer (so the clinic can confirm once the pro accepts). */
-  offer: { id: string; state: string; professionalId: string } | null;
+  offer: { id: string; state: string; professionalId: string; professionalName: string } | null;
 }
 
 /** An offer made to a professional, with the shift summary their dashboard shows. */
@@ -375,8 +387,11 @@ export interface ProfessionalOfferRow {
   compensation: number; // satang
   urgency: ShiftUrgency;
   shiftStart: number; // epoch ms UTC
+  shiftEnd: number;
   state: string;
   expiresAt: number; // epoch ms UTC
+  clinicName: string;
+  clinicVerified: boolean;
 }
 
 /** §6.4: a money action proposed by one authorized person, executed by a different one. */
@@ -485,6 +500,8 @@ export interface MarketplaceRepository {
   /** Operations moves an entity to Verified via the domain machine (VER-01). */
   verifyClinic(id: string): Promise<EntityRef | null>;
   verifyProfessional(id: string): Promise<EntityRef | null>;
+  setClinicVerification(id: string, target: VerificationState): Promise<EntityRef | null>;
+  setProfessionalVerification(id: string, target: VerificationState): Promise<EntityRef | null>;
   clinicVerification(id: string): Promise<VerificationState | null>;
   /** Verification facts for an offer's clinic and professional (§6.3). */
   getOfferEligibility(offerId: string): Promise<OfferEligibility | null>;

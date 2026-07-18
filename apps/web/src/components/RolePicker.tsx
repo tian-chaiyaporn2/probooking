@@ -4,15 +4,31 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "./Toast";
 import { loginAs } from "../lib/api";
-import { getThaiErrorMessage } from "../lib/strings";
+import { getThaiErrorMessage, th } from "../lib/strings";
 import { DEMO_ACCOUNTS, saveSession, type DemoAccount } from "../lib/demo-accounts";
+import { ClinicIcon, StethoscopeIcon, ShieldCheckIcon, WalletIcon } from "./icons";
 
-/**
- * The "sign in as" demo picker. Each card logs in as a ready-made account for a role and
- * lands on that role's surface, so a tester can drive the marketplace by hand from each side
- * rather than one-click everything. The mock phone is shown on the card and, under
- * AUTH_DEV_MODE, the OTP is auto-filled — nothing to type.
- */
+const PARTY = DEMO_ACCOUNTS.filter((a) => a.role === "clinic" || a.role === "professional");
+const STAFF = DEMO_ACCOUNTS.filter((a) => a.role === "operations" || a.role === "finance");
+
+function RoleMark({ acc }: { acc: DemoAccount }) {
+  const icon =
+    acc.role === "clinic" ? (
+      <ClinicIcon />
+    ) : acc.role === "professional" ? (
+      <StethoscopeIcon />
+    ) : acc.role === "operations" ? (
+      <ShieldCheckIcon />
+    ) : (
+      <WalletIcon />
+    );
+  return (
+    <span className="signin-card__mark" aria-hidden>
+      {icon}
+    </span>
+  );
+}
+
 export function RolePicker() {
   const router = useRouter();
   const toast = useToast();
@@ -31,29 +47,58 @@ export function RolePicker() {
   }
 
   return (
-    <div className="signin-grid">
-      {DEMO_ACCOUNTS.map((acc) => (
-        <button
-          key={acc.phone}
-          type="button"
-          className="signin-card"
-          data-testid={`signin-${acc.id}`}
-          disabled={busy !== null}
-          onClick={() => void signInAs(acc)}
-        >
-          <span className="signin-card__emoji" aria-hidden>
-            {acc.emoji}
-          </span>
-          <span className="signin-card__body">
-            <span className="signin-card__label">{acc.label}</span>
-            <span className="signin-card__sub">{acc.sublabel}</span>
-            <span className="signin-card__phone">
-              <code>{acc.phone}</code> · OTP อัตโนมัติ
-            </span>
-          </span>
-          <span className="signin-card__go">{busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}</span>
-        </button>
-      ))}
+    <div className="role-picker">
+      <p className="role-picker__path muted">{th.home.pickPath}</p>
+      <div className="role-picker__group">
+        <h3 className="role-picker__heading">{th.home.pickParty}</h3>
+        <div className="signin-grid">
+          {PARTY.map((acc) => (
+            <button
+              key={acc.phone}
+              type="button"
+              className="signin-card"
+              data-testid={`signin-${acc.id}`}
+              disabled={busy !== null}
+              onClick={() => void signInAs(acc)}
+            >
+              <RoleMark acc={acc} />
+              <span className="signin-card__body">
+                <span className="signin-card__label">{acc.label}</span>
+                <span className="signin-card__sub">{acc.sublabel}</span>
+                <span className="signin-card__phone">
+                  <code>{acc.phone}</code> · OTP อัตโนมัติ
+                </span>
+              </span>
+              <span className="signin-card__go">{busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="role-picker__group">
+        <h3 className="role-picker__heading">{th.home.pickStaff}</h3>
+        <div className="signin-grid">
+          {STAFF.map((acc) => (
+            <button
+              key={acc.phone}
+              type="button"
+              className="signin-card"
+              data-testid={`signin-${acc.id}`}
+              disabled={busy !== null}
+              onClick={() => void signInAs(acc)}
+            >
+              <RoleMark acc={acc} />
+              <span className="signin-card__body">
+                <span className="signin-card__label">{acc.label}</span>
+                <span className="signin-card__sub">{acc.sublabel}</span>
+                <span className="signin-card__phone">
+                  <code>{acc.phone}</code> · OTP อัตโนมัติ
+                </span>
+              </span>
+              <span className="signin-card__go">{busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

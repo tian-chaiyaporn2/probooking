@@ -3,37 +3,64 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { th } from "../lib/strings";
+import { getSessionContext, type SessionRole } from "../lib/session-role";
+import { clearSession } from "../lib/demo-accounts";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "./icons";
 
-const LINKS = [
-  { href: "/", label: th.nav.home },
-  { href: "/ops", label: th.nav.ops },
-  { href: "/finance", label: th.nav.finance },
-  { href: "/flow", label: th.nav.flow },
-  { href: "/signin", label: th.nav.signin },
-] as const;
-
-/** Keep in sync with max-width: 959px drawer breakpoint in pages.css. */
 const DRAWER_MQ = "(min-width: 960px)";
 
-/**
- * Shared app shell header: brand + section nav + theme toggle.
- *
- * On phone and tablet the nav collapses into a drawer behind a menu button. The drawer
- * closes on Escape, backdrop tap, resize into the desktop band, and navigation; scroll
- * is locked on <html> while open; Tab cycles inside the panel.
- */
+function navForRole(role: SessionRole | null) {
+  if (!role || role === "unknown") {
+    return [
+      { href: "/", label: th.nav.home },
+      { href: "/signin", label: th.nav.signin },
+    ] as const;
+  }
+  if (role === "clinic") {
+    return [
+      { href: "/", label: th.nav.home },
+      { href: "/clinic", label: th.nav.clinic },
+      { href: "/signin", label: th.nav.switchRole },
+    ] as const;
+  }
+  if (role === "professional") {
+    return [
+      { href: "/", label: th.nav.home },
+      { href: "/pro", label: th.nav.pro },
+      { href: "/signin", label: th.nav.switchRole },
+    ] as const;
+  }
+  if (role === "operations") {
+    return [
+      { href: "/", label: th.nav.home },
+      { href: "/ops", label: th.nav.ops },
+      { href: "/signin", label: th.nav.switchRole },
+    ] as const;
+  }
+  return [
+    { href: "/", label: th.nav.home },
+    { href: "/finance", label: th.nav.finance },
+    { href: "/signin", label: th.nav.switchRole },
+  ] as const;
+}
+
 export function AppHeader({ current }: { current?: string }) {
   const [open, setOpen] = useState(false);
+  const [session, setSession] = useState<ReturnType<typeof getSessionContext>>(null);
   const drawerId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    setSession(getSessionContext());
+  }, [current]);
+
+  const links = navForRole(session?.role ?? null);
+
+  useEffect(() => {
     if (!open) return;
-    const drawer = drawerRef.current;
     const main = document.getElementById("main");
     if (main) main.inert = true;
     const onKey = (e: KeyboardEvent) => {
@@ -41,9 +68,9 @@ export function AppHeader({ current }: { current?: string }) {
         setOpen(false);
         return;
       }
-      if (e.key !== "Tab" || !drawer) return;
+      if (e.key !== "Tab" || !drawerRef.current) return;
       const focusables = Array.from(
-        drawer.querySelectorAll<HTMLElement>(
+        drawerRef.current.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
       ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1);
@@ -59,8 +86,6 @@ export function AppHeader({ current }: { current?: string }) {
       }
     };
     document.addEventListener("keydown", onKey);
-    // Lock scroll on <html> — locking body alone can shrink the fixed containing
-    // block in WebKit/Blink and collapse the drawer to content height.
     const root = document.documentElement;
     const prevOverflow = root.style.overflow;
     root.style.overflow = "hidden";
@@ -73,8 +98,6 @@ export function AppHeader({ current }: { current?: string }) {
     };
   }, [open]);
 
-  // If the viewport grows into the desktop nav band, dismiss the drawer so it
-  // cannot linger as an invisible overlay after orientation change.
   useEffect(() => {
     const mq = window.matchMedia(DRAWER_MQ);
     const onChange = () => {
@@ -85,7 +108,6 @@ export function AppHeader({ current }: { current?: string }) {
       mq.addEventListener("change", onChange);
       return () => mq.removeEventListener("change", onChange);
     }
-    // Safari < 14
     mq.addListener(onChange);
     return () => mq.removeListener(onChange);
   }, []);
@@ -100,13 +122,31 @@ export function AppHeader({ current }: { current?: string }) {
           {th.brand}
         </Link>
 
-        {/* Desktop nav */}
+        {session && (
+          <span className="role-chip" data-testid="role-chip">
+            {session.label}
+          </span>
+        )}
+
         <nav className="app-nav app-nav--desktop" aria-label={th.a11y.primaryNav}>
-          {LINKS.map((l) => (
+          {links.map((l) => (
             <Link key={l.href} href={l.href} aria-current={current === l.href ? "page" : undefined}>
               {l.label}
             </Link>
           ))}
+          {session && (
+            <button
+              type="button"
+              className="nav-signout"
+              onClick={() => {
+                clearSession();
+                setSession(null);
+                window.location.href = "/";
+              }}
+            >
+              {th.nav.signOut}
+            </button>
+          )}
         </nav>
 
         <div className="app-header__right">
@@ -125,7 +165,6 @@ export function AppHeader({ current }: { current?: string }) {
         </div>
       </div>
 
-      {/* Mobile / tablet drawer */}
       {open && (
         <>
           <button className="nav-backdrop" aria-label={th.a11y.closeMenu} onClick={() => setOpen(false)} />
@@ -149,7 +188,8 @@ export function AppHeader({ current }: { current?: string }) {
                 <CloseIcon />
               </button>
             </div>
-            {LINKS.map((l) => (
+            {session && <p className="app-nav--drawer__role">{session.label}</p>}
+            {links.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
@@ -159,7 +199,20 @@ export function AppHeader({ current }: { current?: string }) {
                 {l.label}
               </Link>
             ))}
-            <p className="app-nav--drawer__foot">{th.home.phase}</p>
+            {session && (
+              <button
+                type="button"
+                className="nav-signout nav-signout--drawer"
+                onClick={() => {
+                  clearSession();
+                  setOpen(false);
+                  window.location.href = "/";
+                }}
+              >
+                {th.nav.signOut}
+              </button>
+            )}
+            <p className="app-nav--drawer__foot">{th.home.region}</p>
           </nav>
         </>
       )}

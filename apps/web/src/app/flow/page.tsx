@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AppHeader } from "../../components/AppHeader";
 import { Button } from "../../components/Button";
 import { PageHeader } from "../../components/PageHeader";
@@ -53,8 +54,11 @@ export default function FlowPage() {
   const [payingOut, setPayingOut] = useState(false);
   const [reviewing, setReviewing] = useState(false);
 
-  const FLOW_TOTAL = 7;
-  const progressPct = Math.min(100, Math.round((steps.length / FLOW_TOTAL) * 100));
+  const FLOW_BOOKING = 7;
+  const phase = payout ? th.flow.phaseSettlement : th.flow.phaseBooking;
+  const progressPct = payout
+    ? 100
+    : Math.min(100, Math.round((steps.length / FLOW_BOOKING) * 100));
 
   async function run() {
     setRunning(true);
@@ -157,8 +161,10 @@ export default function FlowPage() {
     <>
       <AppHeader current="/flow" />
       <main id="main" className="page page--flow">
+        <div className="flow-banner" role="note">
+          {th.flow.banner} — <Link href="/#start">{th.flow.bannerLink}</Link>
+        </div>
         <PageHeader
-          eyebrow={<span className="hero__eyebrow">{th.home.phase}</span>}
           title={th.flow.title}
           subtitle={th.flow.subtitle}
         />
@@ -169,7 +175,7 @@ export default function FlowPage() {
         {(running || steps.length > 0) && (
           <div className="flow-progress">
             <div className="flow-progress__meta">
-              <span id="flow-progress-label">{th.flow.progress(Math.min(steps.length, FLOW_TOTAL), FLOW_TOTAL)}</span>
+              <span id="flow-progress-label">{phase} · {th.flow.progress(Math.min(steps.length, FLOW_BOOKING), FLOW_BOOKING)}</span>
               {running && <span className="muted">{th.common.loading}</span>}
             </div>
             <div
@@ -177,8 +183,8 @@ export default function FlowPage() {
               role="progressbar"
               aria-labelledby="flow-progress-label"
               aria-valuemin={0}
-              aria-valuemax={FLOW_TOTAL}
-              aria-valuenow={Math.min(steps.length, FLOW_TOTAL)}
+              aria-valuemax={FLOW_BOOKING}
+              aria-valuenow={Math.min(steps.length, FLOW_BOOKING)}
             >
               <div
                 className={`progress__bar${running && steps.length === 0 ? " progress__bar--indeterminate" : ""}`}

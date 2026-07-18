@@ -222,36 +222,43 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async verifyClinic(id: string): Promise<EntityRef | null> {
+    return this.setClinicVerification(id, "Verified");
+  }
+
+  async verifyProfessional(id: string): Promise<EntityRef | null> {
+    return this.setProfessionalVerification(id, "Verified");
+  }
+
+  async setClinicVerification(id: string, target: VerificationState): Promise<EntityRef | null> {
     const clinic = await prisma.clinicWorkspace.findUnique({ where: { id } });
     if (!clinic) return null;
-    if (clinic.verification === "Verified") return { id, verification: "Verified" }; // idempotent
-    const next = advanceVerification(clinic.verification as VerificationState, "Verified");
+    if (clinic.verification === target) return { id, verification: target };
+    const next = advanceVerification(clinic.verification as VerificationState, target);
     await prisma.clinicWorkspace.update({ where: { id }, data: { verification: next } });
     return { id, verification: next };
   }
 
-  async verifyProfessional(id: string): Promise<EntityRef | null> {
+  async setProfessionalVerification(id: string, target: VerificationState): Promise<EntityRef | null> {
     const p = await prisma.professionalProfile.findUnique({ where: { id } });
     if (!p) return null;
-    if (p.verification === "Verified") return { id, verification: "Verified" }; // idempotent
-    const next = advanceVerification(p.verification as VerificationState, "Verified");
-    await prisma.$transaction([
-      prisma.professionalProfile.update({ where: { id }, data: { verification: next } }),
-      // VER-04/07: confirm the LICENCE credential and the payout account. Other
-      // credential kinds (specialty_evidence, identity) are reviewed separately and
-      // must not be blanket-endorsed here.
-      prisma.credential.updateMany({
-        where: { professionalId: id, kind: "licence" },
-        data: { state: "Verified" },
-      }),
-      // Fail-closed licence checks need a validity window. Newly verified pros with no
-      // recorded expiry get ~2 years so confirmation eligibility can evaluate them.
-      prisma.credential.updateMany({
-        where: { professionalId: id, kind: "licence", validUntil: null },
-        data: { validUntil: new Date(Date.now() + TWO_YEARS_MS) },
-      }),
-      prisma.payoutAccount.updateMany({ where: { professionalId: id }, data: { verified: true } }),
-    ]);
+    if (p.verification === target) return { id, verification: target };
+    const next = advanceVerification(p.verification as VerificationState, target);
+    if (target === "Verified") {
+      await prisma.$transaction([
+        prisma.professionalProfile.update({ where: { id }, data: { verification: next } }),
+        prisma.credential.updateMany({
+          where: { professionalId: id, kind: "licence" },
+          data: { state: "Verified" },
+        }),
+        prisma.credential.updateMany({
+          where: { professionalId: id, kind: "licence", validUntil: null },
+          data: { validUntil: new Date(Date.now() + TWO_YEARS_MS) },
+        }),
+        prisma.payoutAccount.updateMany({ where: { professionalId: id }, data: { verified: true } }),
+      ]);
+    } else {
+      await prisma.professionalProfile.update({ where: { id }, data: { verification: next } });
+    }
     return { id, verification: next };
   }
 
@@ -388,15 +395,33 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async listShiftCandidates(shiftId: string): Promise<Candidate[]> {
     const apps = await prisma.application.findMany({
       where: { shiftId },
-      select: { professionalId: true, state: true },
+      include: {
+        professional: { select: { id: true, displayName: true, profession: true, verification: true } },
+      },
     });
     const invs = await prisma.invitation.findMany({
       where: { shiftId },
-      select: { professionalId: true, state: true },
+      include: {
+        professional: { select: { id: true, displayName: true, profession: true, verification: true } },
+      },
     });
     return [
-      ...apps.map((a) => ({ professionalId: a.professionalId, via: "application" as const, state: a.state })),
-      ...invs.map((i) => ({ professionalId: i.professionalId, via: "invitation" as const, state: i.state })),
+      ...apps.map((a) => ({
+        professionalId: a.professionalId,
+        via: "application" as const,
+        state: a.state,
+        displayName: a.professional.displayName,
+        profession: a.professional.profession,
+        verification: a.professional.verification,
+      })),
+      ...invs.map((i) => ({
+        professionalId: i.professionalId,
+        via: "invitation" as const,
+        state: i.state,
+        displayName: i.professional.displayName,
+        profession: i.professional.profession,
+        verification: i.professional.verification,
+      })),
     ];
   }
 
@@ -542,7 +567,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
             }
           : {}),
       },
-      select: { id: true, category: true, compensation: true, urgency: true, startsAt: true },
+      select: { id: true, category: true, compensation: true, urgency: true, startsAt: true, endsAt: true, workspace: { select: { branchName: true, verification: true } } },
       orderBy: [{ urgency: "desc" }, { startsAt: "asc" }],
     });
     return shifts.map((s) => ({
@@ -550,8 +575,11 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       category: s.category,
       compensation: s.compensation,
       startsAt: s.startsAt.getTime(),
+      endsAt: s.endsAt.getTime(),
       urgency: s.urgency as ShiftUrgency,
       urgent: s.urgency === "urgent",
+      clinicName: s.workspace.branchName,
+      clinicVerified: s.workspace.verification === "Verified",
     }));
   }
 
@@ -726,7 +754,15 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       take: 100,
       include: {
         _count: { select: { applications: true, invitations: true } },
-        offers: { select: { id: true, state: true, professionalId: true }, orderBy: { sentAt: "desc" } },
+        offers: {
+          select: {
+            id: true,
+            state: true,
+            professionalId: true,
+            professional: { select: { displayName: true } },
+          },
+          orderBy: { sentAt: "desc" },
+        },
         booking: { select: { id: true } },
       },
     });
@@ -742,7 +778,14 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         hasActiveOffer: active !== undefined,
         booked: s.booking !== null,
         candidateCount: s._count.applications + s._count.invitations,
-        offer: active ? { id: active.id, state: active.state, professionalId: active.professionalId } : null,
+        offer: active
+          ? {
+              id: active.id,
+              state: active.state,
+              professionalId: active.professionalId,
+              professionalName: active.professional.displayName,
+            }
+          : null,
       };
     });
   }
@@ -752,7 +795,19 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       where: { professionalId },
       orderBy: { sentAt: "desc" },
       take: 100,
-      include: { shift: { select: { id: true, category: true, compensation: true, urgency: true, startsAt: true } } },
+      include: {
+        shift: {
+          select: {
+            id: true,
+            category: true,
+            compensation: true,
+            urgency: true,
+            startsAt: true,
+            endsAt: true,
+            workspace: { select: { branchName: true, verification: true } },
+          },
+        },
+      },
     });
     return offers.map((o) => ({
       offerId: o.id,
@@ -761,8 +816,11 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       compensation: o.shift.compensation,
       urgency: o.shift.urgency,
       shiftStart: o.shift.startsAt.getTime(),
+      shiftEnd: o.shift.endsAt.getTime(),
       state: o.state,
       expiresAt: o.expiresAt.getTime(),
+      clinicName: o.shift.workspace.branchName,
+      clinicVerified: o.shift.workspace.verification === "Verified",
     }));
   }
 
@@ -1173,7 +1231,12 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         party === "professional"
           ? { professionalId: id }
           : { shift: { workspaceId: id } },
-      include: { shift: true, paymentOrder: { include: { allocation: true } } },
+      include: {
+        shift: { include: { workspace: { select: { branchName: true } } } },
+        professional: { select: { displayName: true } },
+        paymentOrder: { include: { allocation: true } },
+        attendance: { where: { kind: "Arrived" }, take: 1 },
+      },
       orderBy: { confirmedAt: "desc" },
     });
     return bookings.map((b) => {
@@ -1185,12 +1248,19 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         bookingId: b.id,
         shiftId: b.shiftId,
         counterpartyId: party === "professional" ? b.shift.workspaceId : b.professionalId,
+        counterpartyName:
+          party === "professional" ? b.shift.workspace.branchName : b.professional.displayName,
         state: b.state,
         compensation,
         serviceFee,
         tax,
         total: compensation + serviceFee + tax,
         payoutState: alloc?.payoutState ?? "NotEligible",
+        shiftStart: b.shift.startsAt.getTime(),
+        shiftEnd: b.shift.endsAt.getTime(),
+        category: b.shift.category,
+        arrived: b.attendance.length > 0,
+        held: b.heldAt !== null,
       };
     });
   }

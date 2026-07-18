@@ -13,13 +13,24 @@ export default function Home() {
           <div>
             <p className="hero__brand">{th.brand}</p>
             <span className="hero__eyebrow">
-              <ShieldCheckIcon /> {th.home.phase}
+              <ShieldCheckIcon /> {th.home.region}
             </span>
             <h1>{th.home.tagline}</h1>
-            <p className="lead muted">{th.home.description}</p>
+            <p className="lead muted">{th.home.lead}</p>
+            <p className="trust-line trust-line--hero" aria-label={th.home.trust.join(" · ")}>
+              {th.home.trust.map((t, i) => (
+                <span key={t}>
+                  {i > 0 && <span className="trust-line__dot" aria-hidden>·</span>}
+                  {t}
+                </span>
+              ))}
+            </p>
+            <div className="hero__cta">
+              <a href="#start" className="btn btn--primary btn--lg">{th.home.ctaPrimary}</a>
+              <a href="#how" className="btn btn--subtle btn--lg">{th.home.ctaSecondary}</a>
+            </div>
           </div>
 
-          {/* Product moment: the protected booking checkout the marketplace actually settles. */}
           <div className="hero__visual" aria-hidden>
             <div className="mockcard">
               <div className="mockcard__row">
@@ -43,7 +54,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Primary entry point: pick a role and drive the marketplace by hand. */}
         <section id="start">
           <div className="section-head">
             <h2>{th.home.pickTitle}</h2>
@@ -57,25 +67,33 @@ export default function Home() {
             <h2>{th.home.howTitle}</h2>
             <p>{th.home.howSubtitle}</p>
           </div>
-          <div className="steps">
-            {th.home.steps.map((s, i) => (
-              <div key={s.t} className="step">
-                <div className="step__num">{i + 1}</div>
-                <h3>{s.t}</h3>
-                <p>{s.d}</p>
+          <div className="how-dual">
+            <div>
+              <h3 className="how-dual__title">{th.home.howClinicTitle}</h3>
+              <div className="steps">
+                {th.home.stepsClinic.map((s, i) => (
+                  <div key={s.t} className="step">
+                    <div className="step__num">{i + 1}</div>
+                    <h3>{s.t}</h3>
+                    <p>{s.d}</p>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+            <div>
+              <h3 className="how-dual__title">{th.home.howProTitle}</h3>
+              <div className="steps">
+                {th.home.stepsPro.map((s, i) => (
+                  <div key={s.t} className="step">
+                    <div className="step__num">{i + 1}</div>
+                    <h3>{s.t}</h3>
+                    <p>{s.d}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
-
-        <p className="trust-line" aria-label={th.home.trust.join(" · ")}>
-          {th.home.trust.map((t, i) => (
-            <span key={t}>
-              {i > 0 && <span className="trust-line__dot" aria-hidden>·</span>}
-              {t}
-            </span>
-          ))}
-        </p>
 
         <footer className="footer">
           <span className="footer__brand">
@@ -85,7 +103,7 @@ export default function Home() {
             ProBooking
           </span>
           <span className="footer__meta">
-            <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+            <span>{th.home.region}</span>
             <Link href="/flow" className="footer__link" data-testid="flow-link">
               {th.home.flowSmokeNote}
             </Link>

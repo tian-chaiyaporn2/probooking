@@ -216,19 +216,67 @@ export class MarketplaceController {
 
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
+  @Post("ops/clinics/:id/needs-information")
+  async clinicNeedsInformation(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const result = await this.repo.setClinicVerification(id, "NeedsInformation");
+    if (!result) throw new NotFoundException("clinic not found");
+    await this.audit(user, "needs_information_clinic", "clinic", id);
+    return result;
+  }
+
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
+  @Post("ops/clinics/:id/reject")
+  async rejectClinic(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const result = await this.repo.setClinicVerification(id, "Rejected");
+    if (!result) throw new NotFoundException("clinic not found");
+    await this.audit(user, "reject_clinic", "clinic", id);
+    return result;
+  }
+
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
+  @Post("ops/professionals/:id/needs-information")
+  async professionalNeedsInformation(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const result = await this.repo.setProfessionalVerification(id, "NeedsInformation");
+    if (!result) throw new NotFoundException("professional not found");
+    await this.audit(user, "needs_information_professional", "professional", id);
+    return result;
+  }
+
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
+  @Post("ops/professionals/:id/reject")
+  async rejectProfessional(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const result = await this.repo.setProfessionalVerification(id, "Rejected");
+    if (!result) throw new NotFoundException("professional not found");
+    await this.audit(user, "reject_professional", "professional", id);
+    return result;
+  }
+
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
   @Post("ops/professionals/:id/suspend-credential")
-  async suspendCredential(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+  async suspendCredential(
+    @Param("id") id: string,
+    @Body() raw: { reason?: string },
+    @CurrentUser() user?: TokenPayload,
+  ) {
     // VER-04: a licence lapses / is suspended by Operations.
     const ok = await this.repo.suspendCredential(id);
     if (!ok) throw new NotFoundException("professional or licence credential not found");
-    await this.audit(user, "suspend_credential", "professional", id);
+    await this.audit(user, "suspend_credential", "professional", id, raw?.reason ? { reason: raw.reason } : undefined);
     return { professionalId: id, credential: "Suspended" };
   }
 
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
   @Post("bookings/:id/hold-credential")
-  async holdCredential(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+  async holdCredential(
+    @Param("id") id: string,
+    @Body() raw: { reason?: string },
+    @CurrentUser() user?: TokenPayload,
+  ) {
     const booking = await this.requireBooking(id);
     // VER-06 applies after confirmation and before completion is accepted.
     if (
@@ -248,7 +296,7 @@ export class MarketplaceController {
     // NOT-01: a critical hold notifies both parties.
     await this.notifications.sms(booking.professionalId, "critical_hold", { type: "Booking", id });
     await this.notifications.sms(booking.clinicWorkspaceId, "critical_hold", { type: "Booking", id });
-    await this.audit(user, "hold_credential", "booking", id);
+    await this.audit(user, "hold_credential", "booking", id, raw?.reason ? { reason: raw.reason } : undefined);
     return { id, held: true, created: true };
   }
 
@@ -683,7 +731,7 @@ export class MarketplaceController {
   // §7.3: immutable audit trail of privileged actions. Actor is masked for display
   // (least privilege). Administrator-only — it exposes who did what.
   @UseGuards(AuthGuard)
-  @Roles("administrator")
+  @Roles("operations", "administrator")
   @Get("ops/audit")
   async auditTrail() {
     const rows = await this.repo.listAudit();
@@ -788,6 +836,22 @@ export class MarketplaceController {
     // NOT-01: acceptance opens the funding window — tell the clinic payment is required.
     await this.notifications.sms(offer.clinicWorkspaceId, "payment_required", { type: "Offer", id });
     return { id, state: nextState, fundingDueAt: updated.fundingDueAt ?? fundingDueAt };
+  }
+
+  @UseGuards(AuthGuard)
+  @Post("offers/:id/decline")
+  async decline(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const offer = await this.requireOffer(id);
+    await this.requireProfessional(user, offer.professionalId);
+    let nextState;
+    try {
+      nextState = advanceOffer(offer.state, "Declined");
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+    const updated = await this.repo.setOfferState(id, nextState, { from: "PendingResponse" });
+    if (!updated) throw new ConflictException("offer is no longer pending response");
+    return { id, state: nextState };
   }
 
   @UseGuards(AuthGuard)

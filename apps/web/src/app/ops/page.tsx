@@ -6,9 +6,14 @@ import {
   getOpsCases,
   getOpsBookings,
   getMetrics,
+  getOpsAudit,
   verifyClinic,
   verifyProfessional,
   verifyInsurance,
+  needsInfoClinic,
+  rejectClinic,
+  needsInfoProfessional,
+  rejectProfessional,
   suspendCredential,
   holdCredential,
   resolveHold,
@@ -16,6 +21,7 @@ import {
   type PendingVerification,
   type ActiveBooking,
   type MarketplaceMetrics,
+  type AuditRow,
 } from "../../lib/api";
 import { AppHeader } from "../../components/AppHeader";
 import { Stat } from "../../components/Stat";
@@ -40,6 +46,7 @@ import {
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
+import { labelBookingState, labelCaseState } from "../../lib/status-labels";
 import { badgeToneForKind } from "../../lib/tones";
 import { loadSession, clearSession } from "../../lib/demo-accounts";
 
@@ -56,6 +63,7 @@ export default function OpsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [audit, setAudit] = useState<AuditRow[]>([]);
   const toast = useToast();
   const loadSeq = useRef(0);
 
@@ -67,6 +75,7 @@ export default function OpsPage() {
     setPending([]);
     setCases([]);
     setBookings([]);
+    setAudit([]);
     setLoadError(null);
     setLoading(false);
     setBusy(false);
@@ -86,17 +95,19 @@ export default function OpsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [p, c, b, m] = await Promise.all([
+      const [p, c, b, m, a] = await Promise.all([
         getOpsPending(token),
         getOpsCases(token),
         getOpsBookings(token),
         getMetrics(token),
+        getOpsAudit(token).catch(() => ({ audit: [] as AuditRow[] })),
       ]);
       if (seq !== loadSeq.current) return;
       setPending(p.pending);
       setCases(c.cases);
       setBookings(b.bookings);
       setMetrics(m);
+      setAudit(a.audit.slice(0, 10));
     } catch (e) {
       if (seq !== loadSeq.current) return;
       const msg = getThaiErrorMessage(e);
@@ -124,27 +135,41 @@ export default function OpsPage() {
     );
   }
 
-  async function verify(kind: "clinic" | "professional" | "insurance", id: string) {
+  async function review(
+    action: "verify" | "needs" | "reject",
+    kind: "clinic" | "professional" | "insurance",
+    id: string,
+  ) {
     if (!token) return;
     const auth = token;
     setBusy(true);
     try {
-      if (kind === "clinic") await verifyClinic(id, auth);
-      else if (kind === "insurance") await verifyInsurance(id, auth);
-      else await verifyProfessional(id, auth);
+      if (action === "verify") {
+        if (kind === "clinic") await verifyClinic(id, auth);
+        else if (kind === "insurance") await verifyInsurance(id, auth);
+        else await verifyProfessional(id, auth);
+        toast.success(
+          kind === "clinic" ? th.ops.verifiedClinic : kind === "insurance" ? th.ops.insuranceVerified : th.ops.verifiedPro,
+        );
+      } else if (action === "needs") {
+        if (kind === "clinic") await needsInfoClinic(id, auth);
+        else await needsInfoProfessional(id, auth);
+        toast.success(th.ops.needsInfoDone);
+      } else if (kind === "professional" || kind === "clinic") {
+        if (kind === "clinic") await rejectClinic(id, auth);
+        else await rejectProfessional(id, auth);
+        toast.success(th.ops.rejected);
+      }
       await load();
-      toast.success(
-        kind === "clinic"
-          ? "คลินิกผ่านการตรวจสอบแล้ว"
-          : kind === "insurance"
-            ? th.ops.insuranceVerified
-            : "บุคลากรผ่านการตรวจสอบแล้ว",
-      );
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function verify(kind: "clinic" | "professional" | "insurance", id: string) {
+    await review("verify", kind, id);
   }
 
   async function enforce(fn: () => Promise<unknown>, ok: string) {
@@ -261,10 +286,25 @@ export default function OpsPage() {
                       <code className="row__id">{p.id.slice(0, 8)}…</code>
                     </span>
                   </span>
-                  <span className="row__actions">
-                    <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify(p.kind, p.id)}>
-                      {th.ops.verify}
-                    </Button>
+                  <span className="row__actions actions">
+                    {p.kind !== "insurance" && (
+                      <>
+                        <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void review("verify", p.kind, p.id)}>
+                          {th.ops.verify}
+                        </Button>
+                        <Button busy={busy} onClick={() => void review("needs", p.kind, p.id)}>
+                          {th.ops.needsInfo}
+                        </Button>
+                        <Button variant="subtle" busy={busy} onClick={() => void review("reject", p.kind, p.id)}>
+                          {th.ops.reject}
+                        </Button>
+                      </>
+                    )}
+                    {p.kind === "insurance" && (
+                      <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify("insurance", p.id)}>
+                        {th.ops.verify}
+                      </Button>
+                    )}
                   </span>
                 </li>
               ))}
@@ -293,11 +333,9 @@ export default function OpsPage() {
                   <li key={c.id} data-testid={`case-${c.id}`}>
                     <Badge tone={badgeToneForKind(c.kind)}>{th.ops.caseKind[c.kind] ?? c.kind}</Badge>
                     <span className="row__main">
-                      <span className="row__name">{c.subject || (th.ops.caseState[c.state] ?? c.state)}</span>
+                      <span className="row__name">{c.subject || labelCaseState(c.state)}</span>
                       <span className="row__sub">
-                        {c.subject ? (
-                          <span className="muted">{th.ops.caseState[c.state] ?? c.state}</span>
-                        ) : null}
+                        {c.subject ? <span className="muted">{labelCaseState(c.state)}</span> : null}
                         {refId && <code className="row__id">{refId.slice(0, 8)}…</code>}
                       </span>
                     </span>
@@ -330,7 +368,7 @@ export default function OpsPage() {
                   <span className="row__main">
                     <span className="row__name">{b.professionalName}</span>
                     <span className="row__sub">
-                      <Badge tone="info">{b.state}</Badge>
+                      <Badge tone="info">{labelBookingState(b.state)}</Badge>
                       <span className="muted">{b.clinicName}</span>
                       {b.held && <Badge tone="warning">{th.ops.heldBadge}</Badge>}
                       {b.credential === "Suspended" && <Badge tone="danger">{th.ops.suspendedBadge}</Badge>}
@@ -341,7 +379,10 @@ export default function OpsPage() {
                       <Button
                         data-testid="hold-btn"
                         busy={busy}
-                        onClick={() => void enforce(() => holdCredential(b.bookingId, token), th.ops.credentialHeld)}
+                        onClick={() => {
+                          const reason = window.prompt(th.ops.reasonLabel) ?? "";
+                          void enforce(() => holdCredential(b.bookingId, token, reason || undefined), th.ops.credentialHeld);
+                        }}
                       >
                         {th.ops.holdCredential}
                       </Button>
@@ -351,11 +392,32 @@ export default function OpsPage() {
                         data-testid="suspend-btn"
                         variant="subtle"
                         busy={busy}
-                        onClick={() => void enforce(() => suspendCredential(b.professionalId, token), th.ops.credentialSuspended)}
+                        onClick={() => {
+                          const reason = window.prompt(th.ops.reasonLabel) ?? "";
+                          void enforce(() => suspendCredential(b.professionalId, token, reason || undefined), th.ops.credentialSuspended);
+                        }}
                       >
                         {th.ops.suspend}
                       </Button>
                     )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title={th.ops.auditTitle} count={audit.length}>
+          <div className="card">
+            <ul className="rowlist" data-testid="audit-list">
+              {audit.length === 0 && <li className="empty">{th.ops.auditEmpty}</li>}
+              {audit.map((row) => (
+                <li key={row.id}>
+                  <span className="row__main">
+                    <span className="row__name">{row.action}</span>
+                    <span className="row__sub muted">
+                      {row.targetType} · {row.actor} · {new Date(row.at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}
+                    </span>
                   </span>
                 </li>
               ))}

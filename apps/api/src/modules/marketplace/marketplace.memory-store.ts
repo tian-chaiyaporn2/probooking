@@ -220,7 +220,15 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
           hasActiveOffer: active !== undefined,
           booked,
           candidateCount: this.candidates.filter((c) => c.shiftId === s.id).length,
-          offer: active ? { id: active.id, state: active.state, professionalId: active.professionalId } : null,
+          offer: active
+            ? {
+                id: active.id,
+                state: active.state,
+                professionalId: active.professionalId,
+                professionalName:
+                  this.professionalProfiles.get(active.professionalId)?.displayName ?? active.professionalId,
+              }
+            : null,
         };
       });
   }
@@ -238,33 +246,43 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
           compensation: shift?.compensation ?? o.compensation,
           urgency: o.urgency,
           shiftStart: o.shiftStart,
+          shiftEnd: o.shiftStart + SHIFT_LEN_MS,
           state: o.state,
           expiresAt: o.expiresAt,
+          clinicName: this.clinicProfiles.get(shift?.clinicWorkspaceId ?? o.clinicWorkspaceId)?.branchName ?? "คลินิก",
+          clinicVerified: this.clinics.get(shift?.clinicWorkspaceId ?? o.clinicWorkspaceId) === "Verified",
         };
       });
   }
 
   async verifyClinic(id: string): Promise<EntityRef | null> {
+    return this.setClinicVerification(id, "Verified");
+  }
+
+  async setClinicVerification(id: string, target: VerificationState): Promise<EntityRef | null> {
     const current = this.clinics.get(id);
     if (current === undefined) return null;
-    if (current === "Verified") return { id, verification: "Verified" }; // idempotent
-    const next = advanceVerification(current, "Verified");
+    if (current === target) return { id, verification: target };
+    const next = advanceVerification(current, target);
     this.clinics.set(id, next);
     return { id, verification: next };
   }
 
   async verifyProfessional(id: string): Promise<EntityRef | null> {
+    return this.setProfessionalVerification(id, "Verified");
+  }
+
+  async setProfessionalVerification(id: string, target: VerificationState): Promise<EntityRef | null> {
     const current = this.professionals.get(id);
     if (current === undefined) return null;
-    // Fail-closed licence checks need a window; stamp 2 years so verified pros pass.
     const licenceUntil = Date.now() + 2 * 365 * 24 * 60 * 60 * 1000;
-    if (current === "Verified") {
-      if (!this.licenceValidUntil.has(id)) this.licenceValidUntil.set(id, licenceUntil);
-      return { id, verification: "Verified" }; // idempotent
+    if (current === target) {
+      if (target === "Verified" && !this.licenceValidUntil.has(id)) this.licenceValidUntil.set(id, licenceUntil);
+      return { id, verification: target };
     }
-    const next = advanceVerification(current, "Verified");
+    const next = advanceVerification(current, target);
     this.professionals.set(id, next);
-    this.licenceValidUntil.set(id, licenceUntil);
+    if (target === "Verified") this.licenceValidUntil.set(id, licenceUntil);
     return { id, verification: next };
   }
 
@@ -374,7 +392,17 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async listShiftCandidates(shiftId: string): Promise<Candidate[]> {
     return this.candidates
       .filter((c) => c.shiftId === shiftId)
-      .map((c) => ({ professionalId: c.professionalId, via: c.via, state: c.state }));
+      .map((c) => {
+        const profile = this.professionalProfiles.get(c.professionalId);
+        return {
+          professionalId: c.professionalId,
+          via: c.via,
+          state: c.state,
+          displayName: profile?.displayName ?? c.professionalId,
+          profession: profile?.profession ?? "",
+          verification: this.professionals.get(c.professionalId) ?? "Submitted",
+        };
+      });
   }
 
   async createOfferForShift(input: CreateOfferForShiftInput): Promise<OfferRecord> {
@@ -499,8 +527,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         category: s.category,
         compensation: s.compensation,
         startsAt: s.startsAt,
+        endsAt: s.startsAt + SHIFT_LEN_MS,
         urgency: s.urgency,
         urgent: s.urgency === "urgent",
+        clinicName: this.clinicProfiles.get(s.clinicWorkspaceId)?.branchName ?? "คลินิก",
+        clinicVerified: this.clinics.get(s.clinicWorkspaceId) === "Verified",
       }));
   }
 
@@ -911,16 +942,26 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     for (const b of this.bookings.values()) {
       const mine = party === "professional" ? b.professionalId === id : b.clinicWorkspaceId === id;
       if (!mine) continue;
+      const shift = this.shifts.get(b.shiftId);
       rows.push({
         bookingId: b.id,
         shiftId: b.shiftId,
         counterpartyId: party === "professional" ? b.clinicWorkspaceId : b.professionalId,
+        counterpartyName:
+          party === "professional"
+            ? (this.clinicProfiles.get(b.clinicWorkspaceId)?.branchName ?? "คลินิก")
+            : (this.professionalProfiles.get(b.professionalId)?.displayName ?? b.professionalId),
         state: b.state,
         compensation: b.compensation,
         serviceFee: b.serviceFee,
         tax: b.tax,
         total: b.compensation + b.serviceFee + b.tax,
         payoutState: b.payoutState,
+        shiftStart: shift?.startsAt ?? 0,
+        shiftEnd: (shift?.startsAt ?? 0) + SHIFT_LEN_MS,
+        category: shift?.category ?? "general",
+        arrived: this.arrivals.has(b.id),
+        held: b.heldAt != null,
       });
     }
     // Most-recent first, matching the Prisma store's `orderBy: confirmedAt desc`.

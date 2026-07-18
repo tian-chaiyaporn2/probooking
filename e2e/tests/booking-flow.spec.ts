@@ -110,7 +110,7 @@ test("mobile nav collapses into a drawer that opens and closes", async ({ page }
   // Drawer opens as a labelled dialog; its links are visible and Escape dismisses it.
   const drawer = page.getByRole("dialog", { name: "เมนูหลัก" });
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole("link", { name: "เดโม" })).toBeVisible();
+  await expect(drawer.getByRole("link", { name: "เข้าใช้งาน" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
   await expect(page.getByLabel("เปิดเมนู")).toBeVisible();
@@ -685,20 +685,24 @@ test("interactive multi-role flow: clinic and professional drive a booking by ha
   // 4. Professional accepts.
   await actAs("pro", "/pro");
   const offerRow = page.getByTestId("pro-offers").locator("li", { hasText: money }).first();
-  await expect(offerRow.getByTestId("accept-offer")).toBeVisible();
-  await offerRow.getByTestId("accept-offer").click();
+  await expect(offerRow.getByTestId("accept-offer-open")).toBeVisible();
+  await offerRow.getByTestId("accept-offer-open").click();
+  await page.getByTestId("offer-modal").getByTestId("accept-offer").click();
 
   // 5. Clinic confirms & pays.
   await actAs("clinic", "/clinic");
   const shiftRow2 = page.getByTestId("clinic-shifts").locator("li", { hasText: money }).first();
-  await expect(shiftRow2.getByTestId("confirm-offer")).toBeVisible();
-  await shiftRow2.getByTestId("confirm-offer").click();
+  await expect(shiftRow2.getByTestId("open-confirm-offer")).toBeVisible();
+  await shiftRow2.getByTestId("open-confirm-offer").click();
+  await page.getByTestId("confirm-modal").getByTestId("confirm-offer").click();
   await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: total }).first()).toBeVisible();
 
   // 6. Professional completes.
   await actAs("pro", "/pro");
   const bk = page.getByTestId("pro-bookings").locator("li", { hasText: total }).first();
-  await expect(bk.getByTestId("complete")).toBeVisible();
+  await expect(bk.getByTestId("arrive")).toBeVisible();
+  await bk.getByTestId("arrive").click();
+  await expect(bk.getByTestId("complete")).toBeEnabled();
   await bk.getByTestId("complete").click();
 
   // 7. Clinic accepts completion → the booking reaches ServiceCompleted (payout).
@@ -706,7 +710,7 @@ test("interactive multi-role flow: clinic and professional drive a booking by ha
   const bk2 = page.getByTestId("clinic-bookings").locator("li", { hasText: total }).first();
   await expect(bk2.getByTestId("accept-completion")).toBeVisible();
   await bk2.getByTestId("accept-completion").click();
-  await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: "ServiceCompleted" }).first()).toBeVisible();
+  await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: "เสร็จสิ้น" }).first()).toBeVisible();
 });
 
 test("operations walkthrough: verify pending parties and resolve a credential hold by hand", async ({ page }) => {

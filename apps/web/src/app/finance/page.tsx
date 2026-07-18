@@ -105,7 +105,7 @@ export default function FinancePage() {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 0);
-      toast.success("กำลังดาวน์โหลด finance-export.csv");
+      toast.success(th.finance.exportStarted);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
@@ -153,7 +153,7 @@ export default function FinancePage() {
   const shown = rows.slice(0, MAX_ROWS);
 
   const columns: Column<ReconciliationRow>[] = [
-    { key: "booking", header: th.finance.colBooking, render: (r) => <code>{(r.bookingId ?? "—").slice(0, 8)}</code> },
+    { key: "booking", header: th.finance.colBooking, render: (r) => <span>{r.bookingId ? r.bookingId.slice(0, 8) : "—"}</span> },
     { key: "captured", header: th.finance.captured, align: "right", render: (r) => formatThb(r.captured) },
     { key: "payouts", header: th.finance.payouts, align: "right", render: (r) => formatThb(r.payouts) },
     { key: "refunds", header: th.finance.refunds, align: "right", render: (r) => formatThb(r.refunds) },
@@ -236,6 +236,13 @@ export default function FinancePage() {
           </p>
         )}
 
+        {s && (
+          <p className="finance-summary muted" data-testid="finance-summary">
+            {th.finance.summaryLine(formatThb(s.captured), formatThb(s.payouts), s.exceptions)}
+          </p>
+        )}
+        <p className="muted" style={{ fontSize: "0.82rem", marginTop: 0 }}>{th.finance.conservationHelp}</p>
+
         {loading && !s ? (
           <StatSkeletonGrid count={5} testid="fin-summary" />
         ) : (
@@ -263,7 +270,7 @@ export default function FinancePage() {
             rows={shown}
             rowKey={(r) => r.paymentOrderId}
             loading={loading}
-            empty={th.common.emptyTable}
+            empty={rows.length === 0 ? th.finance.emptyRecon : th.common.emptyTable}
             bodyTestid="reconciliation-rows"
             caption={th.a11y.reconciliationTable}
           />
@@ -284,7 +291,7 @@ export default function FinancePage() {
                   <span className="row__main">
                     <span className="row__name">{formatThb(a.amount)}</span>
                     <span className="row__sub muted">
-                      {a.reason} · {th.finance.proposedBy} <code className="row__id">{a.initiatorId.slice(0, 10)}</code>
+                      {a.reason} · {th.finance.proposedBy} {a.initiatorId.slice(0, 10)} · {new Date(a.createdAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}
                     </span>
                   </span>
                   <span className="row__actions">
@@ -305,8 +312,7 @@ export default function FinancePage() {
           <div className="modal card card--pad">
             <h2 style={{ marginTop: 0 }}>{th.finance.refundTitle}</h2>
             <p className="muted" style={{ fontSize: "0.85rem" }}>
-              {th.finance.colBooking} <code>{refundFor.bookingId.slice(0, 8)}</code> · {th.finance.captured}{" "}
-              {formatThb(refundFor.captured)}
+              {th.finance.colBooking} {refundFor.bookingId.slice(0, 8)} · {th.finance.refundMax(formatThb(refundFor.captured))}
             </p>
             <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.85rem", marginBottom: "var(--s3)" }}>
               {th.finance.refundAmount}
