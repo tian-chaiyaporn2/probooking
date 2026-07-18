@@ -837,6 +837,46 @@ test("finance walkthrough: reconcile, export, and run a dual-control refund by h
   await expect(page.getByTestId("fin-exceptions")).toHaveText(/^0$/); // still conserved after the refund
 });
 
+test("a professional can decline a pending offer", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: any) => (await r.json()) as any;
+
+  // Verified clinic + professional, an offer made to the professional (PendingResponse).
+  const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
+  const opsAuth = { authorization: `Bearer ${ops.token}` };
+  const clinic = await j(await page.request.post(`${api}/clinics`, {
+    data: { branchName: `Dec ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66xc${uniq}` },
+  }));
+  await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
+  const pro = await j(await page.request.post(`${api}/professionals`, {
+    data: { displayName: "Dr Dec", profession: "physician", phone: `+66xp${uniq}`, payoutRef: "x" },
+  }));
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
+  const clinicAuth = await loginAs(page.request, api, `+66xc${uniq}`);
+  // Log the professional in ONCE and reuse — re-logging the same phone would trip the OTP interval.
+  const proAuth = await loginAs(page.request, api, `+66xp${uniq}`);
+  const shift = await j(await page.request.post(`${api}/shifts`, {
+    data: { clinicWorkspaceId: clinic.id, compensation: 700_000 }, headers: clinicAuth,
+  }));
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: pro.id }, headers: proAuth,
+  });
+  await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
+    data: { professionalId: pro.id }, headers: clinicAuth,
+  });
+
+  // Sign in as the professional and decline the offer from the dashboard.
+  const proToken = proAuth.authorization.slice("Bearer ".length);
+  await injectSession(page, "/pro", proToken, `+66xp${uniq}`);
+  const offerRow = page.getByTestId("pro-offers").locator("li", { hasText: "฿7,000.00" }).first();
+  await expect(offerRow.getByTestId("decline-offer")).toBeVisible();
+  await offerRow.getByTestId("decline-offer").click();
+  // Once declined the offer is no longer actionable — accept/decline buttons are gone.
+  await expect(page.getByTestId("pro-offers").locator("[data-testid=decline-offer]")).toHaveCount(0);
+  await expect(page.getByTestId("pro-offers").locator("[data-testid=accept-offer]")).toHaveCount(0);
+});
+
 test("the sign-in picker offers an account per role", async ({ page }) => {
   await page.goto("/signin");
   for (const id of ["clinic", "professional", "operations", "finance", "finance-approver"]) {

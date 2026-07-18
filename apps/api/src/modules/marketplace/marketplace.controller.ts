@@ -790,6 +790,29 @@ export class MarketplaceController {
     return { id, state: nextState, fundingDueAt: updated.fundingDueAt ?? fundingDueAt };
   }
 
+  // A professional may decline a pending offer outright (OFF: PendingResponse -> Declined),
+  // instead of letting it expire — so the clinic can offer someone else sooner. Only the
+  // professional the offer was made to may decline it.
+  @UseGuards(AuthGuard)
+  @Post("offers/:id/decline")
+  async decline(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
+    const offer = await this.requireOffer(id);
+    await this.requireProfessional(user, offer.professionalId);
+    let nextState;
+    try {
+      nextState = advanceOffer(offer.state, "Declined");
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+    // Conditional claim: a concurrent accept/expire/withdraw must not be overwritten.
+    const updated = await this.repo.setOfferState(id, nextState, { from: "PendingResponse" });
+    if (!updated) {
+      throw new ConflictException("offer is no longer pending response");
+    }
+    await this.notifications.sms(offer.clinicWorkspaceId, "offer_declined", { type: "Offer", id });
+    return { id, state: nextState };
+  }
+
   @UseGuards(AuthGuard)
   @Post("offers/:id/confirm")
   async confirm(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {

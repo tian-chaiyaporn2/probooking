@@ -17,6 +17,7 @@ import {
   getProfessionalProfile,
   applyToShift,
   acceptOffer,
+  declineOffer,
   arriveBooking,
   completeBooking,
   createReview,
@@ -211,7 +212,7 @@ export default function ProPage() {
                   ) : null}
                 </span>
                 {o.state === "PendingResponse" && (
-                  <span className="row__actions">
+                  <span className="row__actions actions">
                     <Button
                       data-testid="accept-offer"
                       variant="primary"
@@ -224,6 +225,16 @@ export default function ProPage() {
                       }
                     >
                       {th.party.acceptOffer}
+                    </Button>
+                    <Button
+                      data-testid="decline-offer"
+                      variant="subtle"
+                      busy={busy}
+                      onClick={() =>
+                        void run(() => declineOffer(o.offerId, token), "ปฏิเสธข้อเสนอแล้ว")
+                      }
+                    >
+                      {th.party.declineOffer}
                     </Button>
                   </span>
                 )}
