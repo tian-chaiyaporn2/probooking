@@ -6,40 +6,47 @@ import type { VerifiedProfile } from "../lib/api";
 import { statusLabel, professionLabel } from "../lib/status";
 import { th } from "../lib/strings";
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
-}
-
-/** Compact VER-03 profile panel: self-declared vs verified facts. */
-export function ProfilePanel({ profile }: { profile: VerifiedProfile }) {
+/** VER-03 readiness strip — trust facts without repeating the home hero name. */
+export function ProfilePanel({
+  profile,
+  bookable,
+}: {
+  profile: VerifiedProfile;
+  bookable?: boolean;
+}) {
   const { selfDeclared, verified } = profile;
+  const ready = bookable ?? verified.identityVerified;
   return (
-    <div className="identity-card" data-testid="profile-panel">
-      <div className="identity-card__avatar" aria-hidden>
-        {initials(selfDeclared.displayName)}
-      </div>
+    <div
+      className="identity-card identity-card--home identity-card--trust"
+      data-testid="profile-panel"
+    >
       <div className="identity-card__body">
         <div className="identity-card__title-row">
           <h2 className="identity-card__title">{th.party.profileTitle}</h2>
-          {verified.identityVerified ? (
-            <span className="identity-card__verified">
-              <ShieldCheckIcon />
-              {th.party.identityVerified}
-            </span>
-          ) : null}
+          <span
+            className={`identity-card__status${ready ? " identity-card__status--ready" : ""}`}
+          >
+            {ready ? (
+              <>
+                <ShieldCheckIcon />
+                {th.party.bookableReady}
+              </>
+            ) : (
+              th.party.bookablePending
+            )}
+          </span>
         </div>
-        <p className="identity-card__name">{selfDeclared.displayName}</p>
-        <p className="identity-card__meta muted">
+        <p className="identity-card__meta muted" style={{ marginTop: 0 }}>
           {professionLabel(selfDeclared.profession)}
           {selfDeclared.specialty ? ` · ${selfDeclared.specialty}` : ""}
         </p>
         <div className="identity-card__chips">
           {!verified.identityVerified ? (
             <Badge tone="warn">{th.party.identityPending}</Badge>
-          ) : null}
+          ) : (
+            <Badge tone="success">{th.party.identityVerified}</Badge>
+          )}
           {verified.licence ? (
             <Badge tone="info">
               {th.party.licence}: {statusLabel(verified.licence.state)}
@@ -60,6 +67,7 @@ export function ProfilePanel({ profile }: { profile: VerifiedProfile }) {
             </span>
           )}
         </div>
+        <p className="identity-card__trust muted">{th.party.homeTrustLine}</p>
       </div>
     </div>
   );

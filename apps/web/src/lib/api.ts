@@ -202,7 +202,11 @@ export const acceptOffer = (id: string, token: string) =>
   post<Accepted>(`/offers/${id}/accept`, undefined, token);
 
 export const declineOffer = (id: string, token: string) =>
-  post<{ id: string; state: string }>(`/offers/${id}/decline`, undefined, token);
+  post<{ id: string; state: string }>(
+    `/offers/${id}/decline`,
+    undefined,
+    token,
+  );
 
 // No `prefundingSucceeded`: whether funds were captured is the API's finding, not ours.
 export const confirmOffer = (id: string, token: string) =>
@@ -511,6 +515,32 @@ export interface VerifiedProfile {
 /** VER-03: public marketplace profile (no PII). */
 export const getProfessionalProfile = (id: string) =>
   get<VerifiedProfile>(`/professionals/${id}/profile`);
+
+/** AVL-01/02: one-off availability windows for a professional. */
+export interface AvailabilityBlock {
+  id: string;
+  startsAt: number;
+  endsAt: number;
+  openToRequests: boolean;
+}
+
+export const listAvailability = (proId: string, token: string) =>
+  get<{ availability: AvailabilityBlock[] }>(
+    `/professionals/${proId}/availability`,
+    token,
+  );
+
+/** Relative hours from now — matches API convenience contract. */
+export const addAvailability = (
+  proId: string,
+  input: {
+    startsInHours?: number;
+    durationHours?: number;
+    openToRequests?: boolean;
+  },
+  token: string,
+) =>
+  post<AvailabilityBlock>(`/professionals/${proId}/availability`, input, token);
 
 export interface ProfessionalSearchResult {
   id: string;

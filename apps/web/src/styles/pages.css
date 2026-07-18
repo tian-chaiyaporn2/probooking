@@ -304,8 +304,13 @@
   .page-head > .btn,
   .workspace-head .actions .btn { flex: 1 1 auto; width: 100%; }
   .workspace-head__identity { width: 100%; }
+  .pro-home__top { align-items: stretch; }
+  .pro-home__top .actions { width: 100%; }
+  .pro-home__top .actions .btn { flex: 1 1 auto; width: 100%; }
   .identity-card { flex-direction: column; align-items: flex-start; }
-  .page--pro::before { inset: -1rem -0.75rem auto; height: 9rem; }
+  .page--pro::before { inset: -1rem -0.75rem auto; height: 12rem; }
+  .availability-actions { flex-direction: column; align-items: stretch; }
+  .availability-actions .btn { width: 100%; }
   .rowlist > li {
     align-items: flex-start;
     padding: var(--s4);
