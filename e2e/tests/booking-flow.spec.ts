@@ -157,9 +157,30 @@ test("mobile and tablet nav collapses into a drawer that opens and closes", asyn
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole("link", { name: "เข้าใช้งาน" })).toBeVisible();
     await expect(drawer.getByRole("link", { name: "ทดสอบระบบ" })).toHaveCount(0);
+
+    // Regression: backdrop-filter on the sticky header used to trap position:fixed
+    // descendants, collapsing the scrim to the header strip. Overlay is portaled to
+    // body and must cover the viewport; the drawer must be full-height.
+    const backdrop = page.getByTestId("nav-backdrop");
+    await expect(backdrop).toBeVisible();
+    const overlayBox = await backdrop.boundingBox();
+    const drawerBox = await drawer.boundingBox();
+    expect(overlayBox).toBeTruthy();
+    expect(drawerBox).toBeTruthy();
+    expect(overlayBox!.width).toBeGreaterThanOrEqual(viewport.width - 1);
+    expect(overlayBox!.height).toBeGreaterThanOrEqual(viewport.height - 1);
+    expect(drawerBox!.height).toBeGreaterThanOrEqual(viewport.height - 1);
+    expect(drawerBox!.y).toBeLessThanOrEqual(1);
+
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
     await expect(page.getByLabel("เปิดเมนู")).toBeVisible();
+
+    // Re-open and dismiss via the scrim (not only Escape).
+    await page.getByLabel("เปิดเมนู").click();
+    await expect(drawer).toBeVisible();
+    await backdrop.click({ position: { x: 8, y: viewport.height / 2 } });
+    await expect(drawer).toBeHidden();
   }
 });
 
