@@ -61,14 +61,16 @@ export function RolePicker() {
             disabled={busy !== null}
             onClick={() => void signInAs(acc)}
           >
-            <span className="signin-card__icon" aria-hidden>
-              <Icon style={{ fontSize: "1.35rem" }} />
-            </span>
-            <span className="signin-card__body">
-              <span className="signin-card__label">{acc.label}</span>
-              <span className="signin-card__sub">{acc.sublabel}</span>
-              <span className="signin-card__phone">
-                <code>{acc.phone}</code> · OTP อัตโนมัติ
+            <span className="signin-card__top">
+              <span className="signin-card__icon" aria-hidden>
+                <Icon style={{ fontSize: "1.35rem" }} />
+              </span>
+              <span className="signin-card__body">
+                <span className="signin-card__label">{acc.label}</span>
+                <span className="signin-card__sub">{acc.sublabel}</span>
+                <span className="signin-card__phone">
+                  <code>{acc.phone}</code> · OTP อัตโนมัติ
+                </span>
               </span>
             </span>
             <span className="signin-card__go">
