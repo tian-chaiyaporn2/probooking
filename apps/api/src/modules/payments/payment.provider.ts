@@ -1,6 +1,9 @@
 import { Injectable } from "@nestjs/common";
 import type { Satang } from "@probook/domain";
 
+/** Nest DI token for the payment partner port (mock in Phase 0, real provider in prod). */
+export const PAYMENT_PROVIDER = Symbol("PAYMENT_PROVIDER");
+
 /**
  * Payment partner port (§7.2 "integrations are ports"). "Payment Protected" (PAY-01) is a
  * mock here and a regulated partner in production; nothing above this line changes.
@@ -24,8 +27,13 @@ export interface RefundRequest {
   amount: Satang;
 }
 
+export interface PaymentProvider {
+  capture(req: CaptureRequest): Promise<CaptureResult>;
+  refund(req: RefundRequest): Promise<{ succeeded: true; providerRef: string }>;
+}
+
 @Injectable()
-export class MockPaymentProvider {
+export class MockPaymentProvider implements PaymentProvider {
   /**
    * Dev/e2e stand-in for the partner's capture call. Deterministic and always successful:
    * failure paths are exercised through the domain's eligibility rules, not by asking the

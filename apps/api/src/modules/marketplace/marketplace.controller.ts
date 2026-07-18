@@ -42,7 +42,7 @@ import {
 import { OffersService } from "../offers/offers.service.js";
 import { BookingsService } from "../bookings/bookings.service.js";
 import { PaymentsService } from "../payments/payments.service.js";
-import { MockPaymentProvider } from "../payments/payment.provider.js";
+import { PAYMENT_PROVIDER, type PaymentProvider } from "../payments/payment.provider.js";
 import { NotificationsService } from "./notifications.service.js";
 import { InMemoryMarketplaceStore } from "./marketplace.memory-store.js";
 import { seedDemoFixtures } from "../../fixtures/demo-fixtures.js";
@@ -53,6 +53,7 @@ import {
   type ProfessionalFilters,
   type CallerIdentity,
 } from "./marketplace.types.js";
+import { normalizePhone } from "@probook/db";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -93,7 +94,7 @@ export class MarketplaceController {
     private readonly offers: OffersService,
     private readonly bookings: BookingsService,
     private readonly payments: PaymentsService,
-    private readonly paymentProvider: MockPaymentProvider,
+    @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
     private readonly notifications: NotificationsService,
     @Inject(MARKETPLACE_REPOSITORY) private readonly repo: MarketplaceRepository,
   ) {}
@@ -127,7 +128,10 @@ export class MarketplaceController {
       ownerPhone: { type: "string", minLen: 8, maxLen: 32 },
     });
     try {
-      return await this.repo.registerClinic(dto);
+      return await this.repo.registerClinic({
+        ...dto,
+        ownerPhone: normalizePhone(dto.ownerPhone),
+      });
     } catch (e) {
       if (isConflict(e)) throw new ConflictException("a clinic with that owner phone already exists");
       throw e; // real infra failure — surface as 500, don't mask as a business error
@@ -146,7 +150,10 @@ export class MarketplaceController {
       payoutRef: { type: "string", minLen: 1, maxLen: 100 },
     });
     try {
-      return await this.repo.registerProfessional(dto);
+      return await this.repo.registerProfessional({
+        ...dto,
+        phone: normalizePhone(dto.phone),
+      });
     } catch (e) {
       if (isConflict(e)) throw new ConflictException("a professional with that phone already exists");
       throw e;
@@ -642,7 +649,7 @@ export class MarketplaceController {
     } catch (e) {
       if (isConflict(e)) {
         const msg = (e as Error).message;
-        if (msg.includes("refundable")) {
+        if (msg.includes("exceeds remaining") || msg.includes("ALLOCATION_EXCEEDED")) {
           throw new BadRequestException(msg);
         }
         throw new ConflictException("approval was already executed");
@@ -1030,22 +1037,27 @@ export class MarketplaceController {
       throw new BadRequestException((e as Error).message);
     }
 
-    // PAY-08: the payout may not exceed the funds actually captured for this booking.
+    // PAY-08: payout may not exceed remaining headroom after prior refunds/payouts.
+    const [paidOut, refunded] = await Promise.all([
+      this.repo.sumPaidOut(id),
+      this.repo.sumRefunded(id),
+    ]);
+    const remaining = booking.captured - paidOut - refunded;
     this.payments.assertWithinAllocation(
       satang(booking.compensation),
-      satang(booking.captured),
+      satang(remaining),
       "payout",
     );
 
     // PAY-07 conservation AFTER payout: protected is released to payout, so
-    // captured == payout(compensation) + fee + tax.
+    // captured == payout(compensation) + fee + tax + prior refunds.
     this.payments.assertConserved({
       captured: satang(booking.captured),
       protectedRemainder: satang(0),
       payout: satang(booking.compensation),
       fee: satang(booking.serviceFee),
       tax: satang(booking.tax),
-      refunds: satang(0),
+      refunds: satang(refunded),
       providerCosts: satang(0),
       adjustments: satang(0),
     });
@@ -1419,7 +1431,7 @@ export class MarketplaceController {
     const offer = await this.requireOffer(id);
     // Offer terms are commercial — the professional, clinic of record, or staff only.
 
-    if (!this.isStaff(user)) {
+    if (!this.isOpsCrossTenant(user)) {
       const me = await this.identityOf(user);
       const isPro = me.professionalId === offer.professionalId;
       const isClinic = me.memberships.some((m) => m.workspaceId === offer.clinicWorkspaceId);
@@ -1456,9 +1468,9 @@ export class MarketplaceController {
   // against them. Previously the controller read `actorRole` and party ids straight from the
   // request body, so `can(role, capability)` was asking the attacker to grade their own work.
 
-  /** Internal platform staff act across tenants by design (Ops/Finance/Admin, §3). */
-  private isStaff(user?: TokenPayload): boolean {
-    return user?.role === "operations" || user?.role === "finance" || user?.role === "administrator";
+  /** Operations / administrator cross-tenant support (ADM-01). Finance is excluded. */
+  private isOpsCrossTenant(user?: TokenPayload): boolean {
+    return user?.role === "operations" || user?.role === "administrator";
   }
 
   private async identityOf(user?: TokenPayload): Promise<CallerIdentity> {
@@ -1468,7 +1480,7 @@ export class MarketplaceController {
 
   /** Read access for a clinic member (any role) or staff — no specific capability needed. */
   private async requireClinicMember(user: TokenPayload | undefined, workspaceId: string) {
-    if (this.isStaff(user)) return;
+    if (this.isOpsCrossTenant(user)) return;
     const me = await this.identityOf(user);
     if (!me.memberships.some((m) => m.workspaceId === workspaceId)) {
       throw new ForbiddenException("not a member of this clinic workspace");
@@ -1480,7 +1492,7 @@ export class MarketplaceController {
    * (support flows); anyone else must BE them.
    */
   private async requireProfessional(user: TokenPayload | undefined, professionalId: string) {
-    if (this.isStaff(user)) return;
+    if (this.isOpsCrossTenant(user)) return;
     const me = await this.identityOf(user);
     if (me.professionalId !== professionalId) {
       throw new ForbiddenException("not your professional profile");
@@ -1524,7 +1536,7 @@ export class MarketplaceController {
     user: TokenPayload | undefined,
     booking: { clinicWorkspaceId: string; professionalId: string },
   ): Promise<"clinic" | "professional" | "staff"> {
-    if (this.isStaff(user)) return "staff";
+    if (this.isOpsCrossTenant(user)) return "staff";
     const me = await this.identityOf(user);
     if (me.professionalId && me.professionalId === booking.professionalId) return "professional";
     if (me.memberships.some((m) => m.workspaceId === booking.clinicWorkspaceId)) return "clinic";

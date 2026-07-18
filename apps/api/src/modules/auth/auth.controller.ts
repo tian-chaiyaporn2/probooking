@@ -17,6 +17,7 @@ import { AuthGuard, Roles, CurrentUser } from "./auth.guard.js";
 import type { TokenPayload } from "./token.util.js";
 import { TokenRevocationService } from "./token-revocation.service.js";
 import { StaffDirectory } from "./staff-directory.js";
+import { normalizePhone } from "@probook/db";
 
 @Controller("auth")
 export class AuthController {
@@ -30,7 +31,7 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @Post("otp/request")
   request(@Body() raw: { phone?: string }): { sent: true; devCode?: string } {
-    const phone = typeof raw?.phone === "string" ? raw.phone.trim() : "";
+    const phone = normalizePhone(typeof raw?.phone === "string" ? raw.phone : "");
     if (!phone || phone.length > 32) throw new BadRequestException("phone required");
     try {
       const code = this.otp.request(phone);
@@ -55,7 +56,7 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @Post("otp/verify")
   verify(@Body() raw: { phone?: string; code?: string }) {
-    const phone = typeof raw?.phone === "string" ? raw.phone.trim() : "";
+    const phone = normalizePhone(typeof raw?.phone === "string" ? raw.phone : "");
     const code = typeof raw?.code === "string" ? raw.code.trim() : "";
     if (!phone || phone.length > 32 || !code || code.length > 16) {
       throw new BadRequestException("phone and code required");
@@ -86,7 +87,7 @@ export class AuthController {
   @Roles("administrator")
   @Post("sessions/revoke")
   revokeSessions(@Body() raw: { subject?: string }) {
-    const subject = typeof raw?.subject === "string" ? raw.subject.trim() : "";
+    const subject = normalizePhone(typeof raw?.subject === "string" ? raw.subject : "");
     if (!subject) throw new BadRequestException("subject required");
     this.revocations.revokeAllForSubject(subject);
     return { subject, revoked: true };
@@ -102,7 +103,7 @@ export class AuthController {
   @Roles("administrator")
   @Post("staff/suspend")
   suspendStaff(@Body() raw: { phone?: string }) {
-    const phone = typeof raw?.phone === "string" ? raw.phone.trim() : "";
+    const phone = normalizePhone(typeof raw?.phone === "string" ? raw.phone : "");
     if (!phone) throw new BadRequestException("phone required");
     const wasStaff = this.staff.suspend(phone);
     this.revocations.revokeAllForSubject(phone); // also kill an ordinary-user session, if any
