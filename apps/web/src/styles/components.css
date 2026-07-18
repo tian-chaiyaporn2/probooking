@@ -288,7 +288,7 @@
 
 /* ---- Page titles (dashboards) ---- */
 .page-head {
-  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between;
   gap: var(--s4); margin-bottom: var(--s5);
 }
 .page-head h1 { margin: 0; }
@@ -373,7 +373,7 @@
 
 .stat-grid {
   display: grid; gap: var(--s3);
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
 }
 .stat {
   position: relative; background: var(--surface); border: 1px solid var(--line);
