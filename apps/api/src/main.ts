@@ -7,10 +7,15 @@ import { AppModule } from "./app.module.js";
 import { devAuthEnabled, devTokenRouteEnabled } from "./modules/auth/dev-mode.util.js";
 import { assertSigningSecretConfigured } from "./modules/auth/token.util.js";
 import { assertFieldKeyConfigured } from "./modules/marketplace/field-crypto.js";
+import { validateEnv } from "./config/env-schema.js";
 
 async function bootstrap() {
   const isProd = process.env.NODE_ENV === "production";
   const devAuth = devAuthEnabled();
+
+  // Shape-check the environment first (M10): numbers parse, booleans are true/false, enums
+  // are known. A malformed flag must fail the boot, not silently disable a control.
+  validateEnv();
 
   // Fail fast at boot rather than at the first signed request. `secret()` throws unless a
   // strong JWT_SECRET is configured or the explicit dev opt-in is on (§3).

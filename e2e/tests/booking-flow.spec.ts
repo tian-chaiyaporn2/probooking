@@ -72,6 +72,14 @@ async function provisionConfirmedBooking(page: any, api: string, uniq: string) {
  * with the 12% service fee reflected in the checkout total (10,000 THB comp +
  * 1,200 THB fee = ฿11,200.00).
  */
+test("readiness health reports the store and returns 200 (M9)", async ({ page }) => {
+  const res = await page.request.get("http://localhost:4000/health/ready");
+  expect(res.ok()).toBe(true);
+  const body = (await res.json()) as { status: string; store: string };
+  expect(body.status).toBe("ready");
+  expect(["in-memory", "postgres"]).toContain(body.store); // memory leg vs postgres leg
+});
+
 test("home links to the flow", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "ProBooking" })).toBeVisible(); // brand in the app header
