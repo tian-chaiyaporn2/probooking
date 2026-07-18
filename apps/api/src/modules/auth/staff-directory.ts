@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { normalizePhone } from "@probook/db";
 
 const INTERNAL_ROLES = ["operations", "finance", "administrator"] as const;
 export type InternalRole = (typeof INTERNAL_ROLES)[number];
@@ -25,7 +26,7 @@ export class StaffDirectory {
     for (const entry of spec.split(",").map((e) => e.trim()).filter(Boolean)) {
       const idx = entry.lastIndexOf(":");
       if (idx <= 0) continue;
-      const phone = entry.slice(0, idx).trim();
+      const phone = normalizePhone(entry.slice(0, idx).trim());
       const role = entry.slice(idx + 1).trim();
       if (phone && (INTERNAL_ROLES as readonly string[]).includes(role)) {
         out[phone] = role as InternalRole;
@@ -36,7 +37,7 @@ export class StaffDirectory {
 
   /** The internal role currently granted to this phone, or undefined if it is not staff. */
   roleFor(phone: string): InternalRole | undefined {
-    return this.staff[phone];
+    return this.staff[normalizePhone(phone)];
   }
 
   /**
@@ -46,14 +47,15 @@ export class StaffDirectory {
    * user — without an env change or a restart. Returns whether they were staff.
    */
   suspend(phone: string): boolean {
-    if (!(phone in this.staff)) return false;
-    delete this.staff[phone];
+    const key = normalizePhone(phone);
+    if (!(key in this.staff)) return false;
+    delete this.staff[key];
     return true;
   }
 
   /** Grant (or restore) an internal role at runtime. */
   grant(phone: string, role: InternalRole): void {
-    this.staff[phone] = role;
+    this.staff[normalizePhone(phone)] = role;
   }
 
   static isInternalRole(role: string): role is InternalRole {

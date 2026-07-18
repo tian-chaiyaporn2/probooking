@@ -9,8 +9,19 @@ import {
 } from "@probook/domain";
 import { ConflictError, isConflict } from "./errors.util.js";
 import { encryptField, decryptField, blindIndex } from "./field-crypto.js";
+import {
+  assertLedgerHeadroom,
+  remainingLedgerFunds,
+} from "./money-ledger.util.js";
+import { normalizePhone } from "@probook/db";
 
-/** Shape of the fields a terms snapshot freezes. Structural, so both Shift reads fit. */
+/** Row-lock a payment order so concurrent money commands serialize (PAY-08). */
+async function lockPaymentOrder(
+  tx: Pick<typeof prisma, "$queryRaw">,
+  paymentOrderId: string,
+): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "PaymentOrder" WHERE id = ${paymentOrderId} FOR UPDATE`;
+}
 interface SnapshotableShift {
   id: string;
   category: string;
@@ -188,7 +199,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     return prisma.$transaction(async (tx) => {
       const owner = await tx.user.create({
         // Phone encrypted at rest; the blind index carries lookup + uniqueness.
-        data: { phone: encryptField(input.ownerPhone), phoneHash: blindIndex(input.ownerPhone) },
+        data: { phone: encryptField(normalizePhone(input.ownerPhone)), phoneHash: blindIndex(input.ownerPhone) },
       });
       const clinic = await tx.clinicWorkspace.create({
         data: {
@@ -215,7 +226,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // be refused every action they tried.
     return prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { phone: encryptField(input.phone), phoneHash: blindIndex(input.phone) },
+        data: { phone: encryptField(normalizePhone(input.phone)), phoneHash: blindIndex(input.phone) },
       });
       const profile = await tx.professionalProfile.create({
         data: {
@@ -825,18 +836,17 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
 
       const po = await tx.paymentOrder.findUnique({
         where: { bookingId: req.refId },
-        include: { allocation: true, events: true },
+        include: { allocation: true },
       });
       if (!po?.allocation) throw new Error("no payment allocation for booking");
-      // PAY-08 inside the transaction: prior refunds must not exceed captured.
-      const alreadyRefunded = po.events
-        .filter((e) => e.type === "Refund")
-        .reduce((s, e) => s + e.amount, 0);
-      if (alreadyRefunded + req.amount > po.captured) {
-        throw new ConflictError(
-          `ALLOCATION_EXCEEDED: refund of ${req.amount} exceeds remaining ${po.captured - alreadyRefunded}`,
-        );
-      }
+
+      await lockPaymentOrder(tx, po.id);
+      const events = await tx.financialEvent.findMany({
+        where: { paymentOrderId: po.id },
+        select: { type: true, amount: true },
+      });
+      // PAY-08: prior payouts and refunds both reduce headroom; lock serializes racers.
+      assertLedgerHeadroom(req.amount, { captured: po.captured, events }, "refund");
 
       // PAY-05/06: the money moves as an immutable event, exactly like every other path —
       // staff never edit a balance. PAY-04 idempotency is the unique key.
@@ -858,15 +868,18 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async refundAvailable(bookingId: string): Promise<number> {
     const po = await prisma.paymentOrder.findUnique({
       where: { bookingId },
-      include: { events: { where: { type: "Refund" }, select: { amount: true } } },
+      include: { events: { select: { type: true, amount: true } } },
     });
     if (!po) return 0;
-    const refunded = po.events.reduce((s, e) => s + e.amount, 0);
     const pending = await prisma.approvalRequest.aggregate({
       where: { refType: "Booking", refId: bookingId, state: "Pending", capability: "finance.execute_refund" },
       _sum: { amount: true },
     });
-    return Math.max(0, po.captured - refunded - (pending._sum.amount ?? 0));
+    return remainingLedgerFunds({
+      captured: po.captured,
+      events: po.events,
+      pendingRefundApprovals: pending._sum.amount ?? 0,
+    });
   }
 
   async sumRefunded(bookingId: string): Promise<number> {
@@ -1025,6 +1038,14 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       if (!po?.allocation) {
         throw new Error("no payment allocation for booking");
       }
+
+      await lockPaymentOrder(tx, po.id);
+      const events = await tx.financialEvent.findMany({
+        where: { paymentOrderId: po.id },
+        select: { type: true, amount: true },
+      });
+      assertLedgerHeadroom(input.payoutAmount, { captured: po.captured, events }, "payout");
+
       // The caller checked `state === AwaitingCompletion` on a snapshot read outside this
       // transaction. Under READ COMMITTED that check is stale by the time we write: a cancel
       // committing in between would be silently overwritten here, and its refund plus this
@@ -1093,6 +1114,17 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         include: { allocation: true },
       });
       if (!po?.allocation) throw new Error("no payment allocation for booking");
+
+      await lockPaymentOrder(tx, po.id);
+      const events = await tx.financialEvent.findMany({
+        where: { paymentOrderId: po.id },
+        select: { type: true, amount: true },
+      });
+      assertLedgerHeadroom(
+        input.payable + input.refund,
+        { captured: po.captured, events },
+        "cancellation",
+      );
 
       // Same reasoning as recordPayout: the cancellable-state check happened outside this
       // transaction, so re-assert it as part of the write. Without this, a cancel racing an

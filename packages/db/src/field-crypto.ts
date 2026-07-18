@@ -1,5 +1,6 @@
 // Moved to @probook/db so both the API and the Prisma seed can encrypt/hash consistently.
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
+import { normalizePhone } from "./phone.util.js";
 
 /**
  * Application-layer encryption for sensitive columns at rest (§7.3 / Thai PDPA).
@@ -51,14 +52,22 @@ function key(): Buffer {
   );
 }
 
-/** Encrypt a value for storage. Idempotent-safe: an already-encrypted value is returned as-is. */
+/** Encrypt a value for storage. Always encrypts — never trust a client-supplied `enc:v1:` prefix. */
 export function encryptField(plaintext: string): string {
-  if (plaintext.startsWith(PREFIX)) return plaintext; // already encrypted; don't double-wrap
   const iv = randomBytes(IV_LEN);
   const cipher = createCipheriv("aes-256-gcm", key(), iv);
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return PREFIX + Buffer.concat([iv, tag, ciphertext]).toString("base64");
+}
+
+/**
+ * Encrypt only when the value is still plaintext. For migrations/backfill on trusted DB
+ * reads — never pass attacker-controlled input through this.
+ */
+export function encryptFieldIfPlain(value: string): string {
+  if (value.startsWith(PREFIX)) return value;
+  return encryptField(value);
 }
 
 /**
@@ -88,7 +97,9 @@ export function decryptField(stored: string): string {
  * brute-forced without the key the way a plain SHA of a phone number could.
  */
 export function blindIndex(plaintext: string): string {
-  return createHmac("sha256", key()).update(`blind-index:${plaintext}`).digest("hex");
+  return createHmac("sha256", key())
+    .update(`blind-index:${normalizePhone(plaintext)}`)
+    .digest("hex");
 }
 
 /** Boot-time assertion so a missing key fails fast rather than at the first write. */

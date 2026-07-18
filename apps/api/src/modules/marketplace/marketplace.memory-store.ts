@@ -50,6 +50,7 @@ import type {
 } from "./marketplace.types.js";
 import { advanceBooking, advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
+import { assertLedgerHeadroom, remainingLedgerFunds } from "./money-ledger.util.js";
 import type { OfferState, VerificationState, RatingSummary, Role } from "@probook/domain";
 
 interface MemReview {
@@ -623,14 +624,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       throw new ConflictError("an approval cannot be executed by its initiator");
     }
     const booking = this.bookings.get(req.refId);
-    if (!booking) throw new Error("no payment allocation for booking");    // PAY-08: refund must not exceed remaining refundable headroom.
-    const alreadyRefunded = this.events
-      .filter((e) => e.bookingId === req.refId && e.type === "Refund")
-      .reduce((s, e) => s + e.amount, 0);
-    if (alreadyRefunded + req.amount > booking.captured) {
-      throw new ConflictError(
-        `ALLOCATION_EXCEEDED: refund of ${req.amount} exceeds remaining ${booking.captured - alreadyRefunded}`,
-      );    }
+    if (!booking) throw new Error("no payment allocation for booking");
+    const events = this.events.filter((e) => e.bookingId === req.refId);
+    assertLedgerHeadroom(req.amount, { captured: booking.captured, events }, "refund");
     req.state = "Executed";
     req.executorId = input.executorId;
     req.executorRole = input.executorRole;
@@ -641,9 +637,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async refundAvailable(bookingId: string): Promise<number> {
     const booking = this.bookings.get(bookingId);
     if (!booking) return 0;
-    const refunded = this.events
-      .filter((e) => e.bookingId === bookingId && e.type === "Refund")
-      .reduce((s, e) => s + e.amount, 0);
+    const events = this.events.filter((e) => e.bookingId === bookingId);
     const pending = [...this.approvals.values()]
       .filter(
         (a) =>
@@ -652,7 +646,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
           a.capability === "finance.execute_refund",
       )
       .reduce((s, a) => s + a.amount, 0);
-    return Math.max(0, booking.captured - refunded - pending);
+    return remainingLedgerFunds({
+      captured: booking.captured,
+      events,
+      pendingRefundApprovals: pending,
+    });
   }
 
   async sumRefunded(bookingId: string): Promise<number> {
@@ -719,6 +717,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (detail.state !== "AwaitingCompletion" || detail.heldAt !== null) {
       throw new ConflictError("booking is no longer awaiting completion (concurrent update)");
     }
+    const events = this.events.filter((e) => e.bookingId === input.bookingId);
+    assertLedgerHeadroom(input.payoutAmount, { captured: detail.captured, events }, "payout");
     detail.state = "ServiceCompleted";
     detail.payoutState = "Paid";
     this.appendEvent(input.bookingId, "Payout", input.payoutAmount, input.idempotencyKey);
@@ -1087,6 +1087,12 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (!detail) throw new Error("booking not found");
     // Idempotency parity with the Prisma cancel-refund idempotencyKey unique constraint.
     if (detail.state === "Cancelled") throw new ConflictError("booking already cancelled");
+    const events = this.events.filter((e) => e.bookingId === input.bookingId);
+    assertLedgerHeadroom(
+      input.payable + input.refund,
+      { captured: detail.captured, events },
+      "cancellation",
+    );
     detail.state = "Cancelled";
     detail.payoutState = input.payable > 0 ? "Paid" : "NotEligible";
     if (input.payable > 0) this.appendEvent(input.bookingId, "Payout", input.payable, input.payoutKey);

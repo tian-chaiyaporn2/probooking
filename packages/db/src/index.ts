@@ -8,3 +8,4 @@ export const prisma = new PrismaClient();
 
 export * from "@prisma/client";
 export * from "./field-crypto.js";
+export * from "./phone.util.js";
