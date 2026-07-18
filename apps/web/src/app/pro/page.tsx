@@ -33,7 +33,7 @@ import {
 } from "../../lib/api";
 import { checkoutFromCompensation } from "../../lib/checkout";
 import { getThaiErrorMessage, th } from "../../lib/strings";
-import { statusLabel, nextActionHint } from "../../lib/status";
+import { statusLabel, nextActionHint, categoryLabel } from "../../lib/status";
 import { loadSession, clearSession } from "../../lib/session";
 import { verificationBadgeTone } from "../../lib/tones";
 
@@ -389,7 +389,7 @@ export default function ProPage() {
                     {formatThb(s.compensation)}{" "}
                     {s.urgent && <Badge tone="warn">ด่วน</Badge>}
                   </span>
-                  <span className="row__sub muted">{s.category}</span>
+                  <span className="row__sub muted">{categoryLabel(s.category)}</span>
                 </span>
                 <span className="row__actions">
                   <Button

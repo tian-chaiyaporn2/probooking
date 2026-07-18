@@ -42,7 +42,7 @@ import {
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
-import { statusLabel } from "../../lib/status";
+import { statusLabel, professionLabel } from "../../lib/status";
 import { badgeToneForKind } from "../../lib/tones";
 import { loadSession, clearSession, saveSession } from "../../lib/session";
 
@@ -386,7 +386,7 @@ export default function OpsPage() {
                           {p.profession ? (
                             <>
                               <dt>{th.ops.profession}</dt>
-                              <dd>{p.profession}</dd>
+                              <dd>{professionLabel(p.profession)}</dd>
                             </>
                           ) : null}
                           <dt>{th.ops.entityId}</dt>

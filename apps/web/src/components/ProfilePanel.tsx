@@ -2,7 +2,7 @@
 
 import { Badge } from "./Badge";
 import type { VerifiedProfile } from "../lib/api";
-import { statusLabel } from "../lib/status";
+import { statusLabel, professionLabel } from "../lib/status";
 import { th } from "../lib/strings";
 import { verificationBadgeTone } from "../lib/tones";
 
@@ -20,7 +20,7 @@ export function ProfilePanel({ profile }: { profile: VerifiedProfile }) {
         <strong>{selfDeclared.displayName}</strong>
         <span className="muted">
           {" "}
-          · {selfDeclared.profession}
+          · {professionLabel(selfDeclared.profession)}
           {selfDeclared.specialty ? ` · ${selfDeclared.specialty}` : ""}
         </span>
       </p>

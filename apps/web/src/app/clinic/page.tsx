@@ -32,7 +32,7 @@ import {
 } from "../../lib/api";
 import { checkoutFromCompensation } from "../../lib/checkout";
 import { getThaiErrorMessage, th } from "../../lib/strings";
-import { statusLabel, nextActionHint } from "../../lib/status";
+import { statusLabel, nextActionHint, professionLabel } from "../../lib/status";
 import { loadSession, clearSession } from "../../lib/session";
 import { verificationBadgeTone } from "../../lib/tones";
 
@@ -305,7 +305,7 @@ export default function ClinicPage() {
                 <span className="row__main">
                   <span className="row__name">{p.displayName}</span>
                   <span className="row__sub muted">
-                    {p.profession}
+                    {professionLabel(p.profession)}
                     {p.specialty ? ` · ${p.specialty}` : ""}
                     {p.rating != null ? ` · ★ ${p.rating.toFixed(1)}` : ""}
                   </span>
