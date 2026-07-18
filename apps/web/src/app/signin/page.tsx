@@ -39,7 +39,7 @@ export default function SignInPage() {
           <p className="muted" style={{ margin: 0 }}>
             {th.signin.subtitle}
           </p>
-          <p className="guided-demo muted" style={{ margin: "var(--s3) 0 0" }}>
+          <p className="guided-demo muted" style={{ margin: "var(--s3) 0 0" }} data-testid="guided-demo">
             {th.home.guidedDemo}
           </p>
           <p style={{ margin: "var(--s3) 0 0" }}>

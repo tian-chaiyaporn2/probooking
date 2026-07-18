@@ -196,7 +196,9 @@ test("signed-in clinic nav hides staff links and supports sign out", async ({ pa
   await expect(page.getByRole("link", { name: "คลินิกของฉัน" })).toBeVisible();
   await page.getByTestId("nav-signout").click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("link", { name: "เข้าใช้งาน" })).toBeVisible();
+  await expect(
+    page.locator(".app-nav--desktop").getByRole("link", { name: "เข้าใช้งาน" }),
+  ).toBeVisible();
 });
 
 test("landing keeps brand before product visual on phone", async ({ page }) => {
@@ -998,9 +1000,10 @@ test("the home page leads with the role picker", async ({ page }) => {
   for (const id of ["clinic", "professional", "operations", "finance"]) {
     await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
   }
-  // Clicking a card signs in and lands on that role's surface.
-  await page.getByTestId("signin-clinic").click();
-  await expect(page).toHaveURL(/\/clinic$/);
+  // Clicking a card signs in and lands on that role's surface (professional avoids OTP
+  // interval collision with the signed-in clinic nav test above).
+  await page.getByTestId("signin-professional").click();
+  await expect(page).toHaveURL(/\/pro$/);
 });
 
 // Placed LAST: on the in-memory demo leg this wipes and re-seeds the shared store, so no

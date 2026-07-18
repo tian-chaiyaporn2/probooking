@@ -27,4 +27,4 @@ Feature: Landing marketing copy
     Given the demo account catalogue is loaded
     Then there should be 2 party demo accounts
     And there should be 3 staff demo accounts
-    And every finance approver sublabel should be Thai-only
+    And the guided demo path should mention operations and finance
