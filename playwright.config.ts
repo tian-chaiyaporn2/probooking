@@ -46,7 +46,7 @@ export default defineConfig({
           "+66900000010:finance,+66900000011:finance,+66900000012:administrator,+66900000013:finance,+66900000014:finance," +
           // dedicated to the per-role UI walkthroughs (ops + finance dual-control), kept
           // distinct so their picker-style session injection never collides on the OTP interval:
-          "+66900000020:operations,+66900000021:finance,+66900000022:finance",
+          "+66900000020:operations,+66900000021:finance,+66900000022:finance,+66900000023:operations",
         // The suite drives hundreds of calls from one IP, which is not what the rate limit
         // is defending against. Raised, not disabled: the guard stays wired so a broken
         // throttle config still fails here rather than in production.

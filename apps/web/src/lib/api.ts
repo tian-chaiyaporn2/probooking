@@ -212,10 +212,25 @@ export interface CaseSummary {
 }
 
 export interface PendingVerification {
-  kind: "clinic" | "professional";
+  // "insurance" = a verified professional whose insurance evidence is awaiting review (VER-05).
+  kind: "clinic" | "professional" | "insurance";
   id: string;
   name: string;
 }
+
+/** A live booking Operations can act on (credential hold VER-06 / suspend VER-04). */
+export interface ActiveBooking {
+  bookingId: string;
+  professionalId: string;
+  professionalName: string;
+  clinicName: string;
+  state: string;
+  held: boolean;
+  credential: string; // professional's licence state: Verified | Suspended | ...
+}
+
+export const getOpsBookings = (token: string) =>
+  get<{ bookings: ActiveBooking[] }>("/ops/bookings", token);
 
 export const getOpsCases = (token: string) => get<{ cases: CaseSummary[] }>("/ops/cases", token);
 export const getOpsPending = (token: string) =>
@@ -297,6 +312,18 @@ export async function fetchFinanceExport(token: string): Promise<string> {
 }
 export const resolveHold = (bookingId: string, token: string) =>
   post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`, undefined, token);
+
+// Operations enforcement actions (VER-04/05/06).
+export const verifyInsurance = (professionalId: string, token: string) =>
+  post<{ state: string }>(`/ops/professionals/${professionalId}/verify-insurance`, undefined, token);
+export const suspendCredential = (professionalId: string, token: string) =>
+  post<{ professionalId: string; credential: string }>(
+    `/ops/professionals/${professionalId}/suspend-credential`,
+    undefined,
+    token,
+  );
+export const holdCredential = (bookingId: string, token: string) =>
+  post<{ id: string; held: boolean }>(`/bookings/${bookingId}/hold-credential`, undefined, token);
 
 // ----- Party self-service (clinic / professional dashboards) -----
 

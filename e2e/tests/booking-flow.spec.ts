@@ -748,6 +748,44 @@ test("operations walkthrough: verify pending parties and resolve a credential ho
   await expect(page.getByTestId("cases-list").locator("li", { hasText: bookingId.slice(0, 8) })).toHaveCount(0);
 });
 
+test("operations enforcement walkthrough: verify insurance, hold a booking, suspend a licence", async ({ page }) => {
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+
+  // A confirmed booking (its professional is verified) plus submitted insurance evidence
+  // waiting for review. Staff may submit on the professional's behalf (requireProfessional).
+  const { bookingId, proId, opsAuth } = await provisionConfirmedBooking(page, api, `en${uniq}`);
+  await page.request.post(`${api}/professionals/${proId}/insurance`, {
+    data: { validUntilHours: 8760 }, headers: opsAuth,
+  });
+
+  // A dedicated ops phone (distinct from the other ops walkthrough) so the two never land
+  // within the per-phone OTP interval of each other.
+  const opsToken = (await loginAs(page.request, api, "+66900000023")).authorization.slice("Bearer ".length);
+  await injectSession(page, "/ops", opsToken, "+66900000023");
+
+  // 1. Verify the submitted insurance from the verification queue (kind = insurance).
+  await expect(page.getByTestId(`pending-${proId}`)).toBeVisible();
+  await page.getByTestId(`pending-${proId}`).getByTestId("verify-btn").click();
+  await expect(page.getByTestId(`pending-${proId}`)).toHaveCount(0);
+
+  // 2. Place a credential hold on the live booking from the active-bookings section.
+  const row = page.getByTestId(`active-${bookingId}`);
+  await expect(row).toBeVisible();
+  await expect(row.getByTestId("hold-btn")).toBeVisible();
+  await row.getByTestId("hold-btn").click();
+  // The hold action is gone (already held) and a credential-hold case now exists.
+  await expect(page.getByTestId(`active-${bookingId}`).locator("[data-testid=hold-btn]")).toHaveCount(0);
+  await expect(page.getByTestId("cases-list").locator("li", { hasText: bookingId.slice(0, 8) }).first()).toBeVisible();
+
+  // 3. Suspend the professional's licence (VER-04) from the same row.
+  await expect(page.getByTestId(`active-${bookingId}`).getByTestId("suspend-btn")).toBeVisible();
+  await page.getByTestId(`active-${bookingId}`).getByTestId("suspend-btn").click();
+  // Suspended: the action is gone and the row shows the suspended badge.
+  await expect(page.getByTestId(`active-${bookingId}`).locator("[data-testid=suspend-btn]")).toHaveCount(0);
+  await expect(page.getByTestId(`active-${bookingId}`).getByText("ระงับแล้ว")).toBeVisible();
+});
+
 test("finance walkthrough: reconcile, export, and run a dual-control refund by hand", async ({ page }) => {
   const api = "http://localhost:4000";
   const uniq = `${Date.now()}`;

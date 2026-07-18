@@ -218,9 +218,21 @@ export interface CaseSummary {
 }
 
 export interface PendingVerification {
-  kind: "clinic" | "professional";
+  // "insurance" = a professional whose submitted insurance evidence awaits review (VER-05).
+  kind: "clinic" | "professional" | "insurance";
   id: string;
   name: string;
+}
+
+/** A live booking Operations can act on (VER-04 suspend / VER-06 credential hold). */
+export interface ActiveBookingRow {
+  bookingId: string;
+  professionalId: string;
+  professionalName: string;
+  clinicName: string;
+  state: string;
+  held: boolean;
+  credential: string; // professional's licence state: Verified | Suspended | ...
 }
 
 // ----- Finance (PAY-11 reconciliation view) -----
@@ -654,6 +666,8 @@ export interface MarketplaceRepository {
   // --- Operations dashboard (ADM-01) ---
   listOpenCases(): Promise<CaseSummary[]>;
   listPendingVerifications(): Promise<PendingVerification[]>;
+  /** Live bookings (Confirmed/InProgress/AwaitingCompletion) for the operations console. */
+  listActiveBookings(): Promise<ActiveBookingRow[]>;
 
   // --- Finance (PAY-11) ---
   reconcile(): Promise<Reconciliation>;

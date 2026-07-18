@@ -646,6 +646,13 @@ export class MarketplaceController {
     return { pending: await this.repo.listPendingVerifications() };
   }
 
+  @UseGuards(AuthGuard)
+  @Roles("operations", "administrator")
+  @Get("ops/bookings")
+  async listActiveBookings() {
+    return { bookings: await this.repo.listActiveBookings() };
+  }
+
   // REP-03: core marketplace + operations metrics for management (no liquidity dashboard).
   @UseGuards(AuthGuard)
   @Roles("operations", "administrator")
