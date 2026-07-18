@@ -312,9 +312,15 @@ export default function FinancePage() {
               {th.finance.refundAmount}
               <input
                 data-testid="refund-amount"
-                inputMode="numeric"
+                inputMode="decimal"
                 value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value.replace(/[^0-9]/g, ""))}
+                onChange={(e) => {
+                  // Allow baht with up to two decimal places (satang); keep only the first dot.
+                  let v = e.target.value.replace(/[^0-9.]/g, "");
+                  const dot = v.indexOf(".");
+                  if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+                  setRefundAmount(v);
+                }}
                 style={{ padding: "0.5rem 0.7rem", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)" }}
               />
             </label>
@@ -336,7 +342,7 @@ export default function FinancePage() {
                 data-testid="refund-submit"
                 variant="primary"
                 busy={busy}
-                disabled={!refundAmount || Number(refundAmount) <= 0}
+                disabled={!(Number(refundAmount) > 0)}
                 onClick={() => void submitRefund()}
               >
                 {th.finance.propose}
