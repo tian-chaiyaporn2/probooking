@@ -10,9 +10,10 @@ import {
   WalletIcon,
 } from "./icons";
 import { loginAs } from "../lib/api";
-import { getThaiErrorMessage } from "../lib/strings";
+import { getThaiErrorMessage, th } from "../lib/strings";
 import {
-  DEMO_ACCOUNTS,
+  DEMO_PARTY_ACCOUNTS,
+  DEMO_STAFF_ACCOUNTS,
   saveSession,
   clearSession,
   type DemoAccount,
@@ -26,11 +27,48 @@ const ICONS: Record<DemoIcon, typeof ClinicIcon> = {
   finance: WalletIcon,
 };
 
+function AccountCard({
+  acc,
+  busy,
+  onSignIn,
+}: {
+  acc: DemoAccount;
+  busy: string | null;
+  onSignIn: (acc: DemoAccount) => void;
+}) {
+  const Icon = ICONS[acc.icon];
+  return (
+    <button
+      type="button"
+      className="signin-card"
+      data-testid={`signin-${acc.id}`}
+      disabled={busy !== null}
+      onClick={() => onSignIn(acc)}
+    >
+      <span className="signin-card__top">
+        <span className="signin-card__icon" aria-hidden>
+          <Icon style={{ fontSize: "1.35rem" }} />
+        </span>
+        <span className="signin-card__body">
+          <span className="signin-card__label">{acc.label}</span>
+          <span className="signin-card__sub">{acc.sublabel}</span>
+          <span className="signin-card__phone">
+            <code>{acc.phone}</code> · OTP อัตโนมัติ
+          </span>
+        </span>
+      </span>
+      <span className="signin-card__go">
+        {busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}
+      </span>
+    </button>
+  );
+}
+
 /**
- * Demo "sign in as" picker. Each card logs in via OTP (AUTH_DEV_MODE) and lands on
- * that role's surface. Icons replace emoji so the picker matches the design system.
+ * Demo "sign in as" picker. Party and staff cards are grouped; each logs in via OTP
+ * (AUTH_DEV_MODE) and lands on that role's surface.
  */
-export function RolePicker() {
+export function RolePicker({ showGroups = true }: { showGroups?: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -48,37 +86,49 @@ export function RolePicker() {
     }
   }
 
-  return (
-    <div className="signin-grid">
-      {DEMO_ACCOUNTS.map((acc) => {
-        const Icon = ICONS[acc.icon];
-        return (
-          <button
+  if (!showGroups) {
+    return (
+      <div className="signin-grid">
+        {[...DEMO_PARTY_ACCOUNTS, ...DEMO_STAFF_ACCOUNTS].map((acc) => (
+          <AccountCard
             key={acc.phone}
-            type="button"
-            className="signin-card"
-            data-testid={`signin-${acc.id}`}
-            disabled={busy !== null}
-            onClick={() => void signInAs(acc)}
-          >
-            <span className="signin-card__top">
-              <span className="signin-card__icon" aria-hidden>
-                <Icon style={{ fontSize: "1.35rem" }} />
-              </span>
-              <span className="signin-card__body">
-                <span className="signin-card__label">{acc.label}</span>
-                <span className="signin-card__sub">{acc.sublabel}</span>
-                <span className="signin-card__phone">
-                  <code>{acc.phone}</code> · OTP อัตโนมัติ
-                </span>
-              </span>
-            </span>
-            <span className="signin-card__go">
-              {busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}
-            </span>
-          </button>
-        );
-      })}
+            acc={acc}
+            busy={busy}
+            onSignIn={(a) => void signInAs(a)}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="signin-groups">
+      <div className="signin-group" data-testid="signin-party-group">
+        <h3 className="signin-group__title">{th.home.partyGroup}</h3>
+        <div className="signin-grid">
+          {DEMO_PARTY_ACCOUNTS.map((acc) => (
+            <AccountCard
+              key={acc.phone}
+              acc={acc}
+              busy={busy}
+              onSignIn={(a) => void signInAs(a)}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="signin-group" id="staff" data-testid="signin-staff-group">
+        <h3 className="signin-group__title">{th.home.staffGroup}</h3>
+        <div className="signin-grid">
+          {DEMO_STAFF_ACCOUNTS.map((acc) => (
+            <AccountCard
+              key={acc.phone}
+              acc={acc}
+              busy={busy}
+              onSignIn={(a) => void signInAs(a)}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

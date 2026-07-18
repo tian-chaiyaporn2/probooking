@@ -158,7 +158,7 @@ export default function FlowPage() {
       <AppHeader current="/flow" />
       <main id="main" className="page page--flow">
         <PageHeader
-          eyebrow={<span className="hero__eyebrow">{th.home.phase}</span>}
+          eyebrow={<span className="hero__eyebrow">{th.home.marketSignal}</span>}
           title={th.flow.title}
           subtitle={th.flow.subtitle}
         />

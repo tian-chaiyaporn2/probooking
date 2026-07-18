@@ -8,69 +8,40 @@
  * existing imports keep working.
  */
 import type { SessionRole } from "./session";
+import {
+  DEMO_ACCOUNTS_DATA,
+  DEMO_PARTY_ACCOUNTS_DATA,
+  DEMO_STAFF_ACCOUNTS_DATA,
+  type DemoAccountData,
+  type DemoGroup,
+  type DemoIcon,
+} from "./demo-accounts.data";
 
 export type { SessionRole };
 export { saveSession, loadSession, clearSession } from "./session";
+export type { DemoIcon, DemoGroup };
+export {
+  DEMO_ACCOUNTS_DATA,
+  DEMO_PARTY_ACCOUNTS_DATA,
+  DEMO_STAFF_ACCOUNTS_DATA,
+};
 
-export type DemoIcon = "clinic" | "professional" | "operations" | "finance";
-
-export interface DemoAccount {
-  /** Stable, unique key for this card (used for the sign-in testid). */
-  id: string;
-  phone: string;
-  label: string;
-  sublabel: string;
+export interface DemoAccount extends DemoAccountData {
   role: SessionRole;
-  /** Where to land after signing in. */
-  route: string;
-  /** Icon key mapped in RolePicker (no emoji). */
-  icon: DemoIcon;
 }
 
-export const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    id: "clinic",
-    phone: "+66910000001",
-    label: "คลินิกสุขุมวิทสไมล์",
-    sublabel: "เจ้าของคลินิก ประกาศเวร ส่งข้อเสนอ ยืนยันการจอง",
-    role: "clinic",
-    route: "/clinic",
-    icon: "clinic",
-  },
-  {
-    id: "professional",
-    phone: "+66920000001",
-    label: "นพ. สมชาย ใจดี",
-    sublabel: "บุคลากร หาเวร ยอมรับข้อเสนอ ทำงาน รับเงิน",
-    role: "professional",
-    route: "/pro",
-    icon: "professional",
-  },
-  {
-    id: "operations",
-    phone: "+66900000008",
-    label: "ฝ่ายปฏิบัติการ",
-    sublabel: "ตรวจสอบคลินิก/บุคลากร จัดการเคส",
-    role: "operations",
-    route: "/ops",
-    icon: "operations",
-  },
-  {
-    id: "finance",
-    phone: "+66900000005",
-    label: "ฝ่ายการเงิน (ผู้เสนอ)",
-    sublabel: "กระทบยอด ส่งออก CSV เสนอคืนเงิน",
-    role: "finance",
-    route: "/finance",
-    icon: "finance",
-  },
-  {
-    id: "finance-approver",
-    phone: "+66900000006",
-    label: "ฝ่ายการเงิน (ผู้อนุมัติ)",
-    sublabel: "ผู้อนุมัติคนที่สองสำหรับการคืนเงิน (ต้องมีผู้อนุมัติสองคน)",
-    role: "finance",
-    route: "/finance",
-    icon: "finance",
-  },
-];
+export const DEMO_ACCOUNTS: DemoAccount[] = DEMO_ACCOUNTS_DATA as DemoAccount[];
+
+export const DEMO_PARTY_ACCOUNTS = DEMO_PARTY_ACCOUNTS_DATA as DemoAccount[];
+export const DEMO_STAFF_ACCOUNTS = DEMO_STAFF_ACCOUNTS_DATA as DemoAccount[];
+
+/** Resolve display label for a session (phone wins over role — e.g. finance approver). */
+export function demoAccountLabel(phone: string, role?: SessionRole): string | null {
+  const byPhone = DEMO_ACCOUNTS.find((a) => a.phone === phone);
+  if (byPhone) return byPhone.label;
+  if (role === "clinic") return null;
+  if (role === "professional") return null;
+  if (role === "operations") return DEMO_ACCOUNTS.find((a) => a.role === "operations")?.label ?? null;
+  if (role === "finance") return DEMO_ACCOUNTS.find((a) => a.role === "finance")?.label ?? null;
+  return null;
+}

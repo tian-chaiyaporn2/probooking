@@ -165,7 +165,7 @@ export default function JourneyPage() {
       <AppHeader current="/journey" />
       <main id="main" className="page page--journey">
         <PageHeader
-          eyebrow={<span className="hero__eyebrow">{th.home.phase}</span>}
+          eyebrow={<span className="hero__eyebrow">{th.home.marketSignal}</span>}
           title={th.journey.title}
           subtitle={th.journey.subtitle}
         />

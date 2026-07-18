@@ -1,28 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { RolePicker } from "../../components/RolePicker";
 import { useToast } from "../../components/Toast";
 import { resetDemo } from "../../lib/api";
-import { getThaiErrorMessage } from "../../lib/strings";
+import { getThaiErrorMessage, th } from "../../lib/strings";
 import { clearSession } from "../../lib/session";
+
+function scrollToStaffGroup() {
+  const el = document.getElementById("staff");
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+  el.focus({ preventScroll: true });
+}
 
 /**
  * "Sign in as" demo page. Pick a ready-made account for any role and land on that role's
- * surface, so the marketplace can be driven by hand from each side rather than one-click
- * everything. A "reset demo" control restores the seeded data for a clean run.
+ * surface. A "reset demo" control restores the seeded data for a clean run.
  */
 export default function SignInPage() {
   const toast = useToast();
   const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    if (window.location.hash === "#staff") scrollToStaffGroup();
+    const onHash = () => {
+      if (window.location.hash === "#staff") scrollToStaffGroup();
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   async function onReset() {
     setResetting(true);
     try {
       await resetDemo();
       clearSession();
-      toast.success("รีเซ็ตข้อมูล demo แล้ว");
+      toast.success(th.signin.resetDone);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
@@ -33,11 +50,23 @@ export default function SignInPage() {
   return (
     <>
       <AppHeader current="/signin" />
-      <main className="page" style={{ maxWidth: 720 }}>
+      <main id="main" className="page" style={{ maxWidth: 720 }}>
         <header style={{ marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: "0 0 var(--s2)" }}>เข้าใช้งานในบทบาทต่าง ๆ</h1>
+          <h1 style={{ margin: "0 0 var(--s2)" }}>{th.signin.title}</h1>
           <p className="muted" style={{ margin: 0 }}>
-            เลือกบัญชีทดลองเพื่อเข้าใช้งานในมุมมองของแต่ละบทบาท
+            {th.signin.subtitle}
+          </p>
+          <p
+            className="guided-demo muted"
+            style={{ margin: "var(--s3) 0 0" }}
+            data-testid="guided-demo"
+          >
+            {th.home.guidedDemo}
+          </p>
+          <p style={{ margin: "var(--s3) 0 0" }}>
+            <Link href="/" className="footer__link" data-testid="signin-back-home">
+              {th.signin.backHome}
+            </Link>
           </p>
         </header>
         <RolePicker />
@@ -50,10 +79,14 @@ export default function SignInPage() {
             gap: "var(--s3)",
           }}
         >
-          <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
-            บัญชีทดลองสำหรับ demo เท่านั้น (โหมด AUTH_DEV_MODE) รหัส OTP
-            จะกรอกให้อัตโนมัติ
-          </p>
+          <div>
+            <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+              {th.signin.demoHint}
+            </p>
+            <p className="muted" style={{ fontSize: "0.8rem", margin: "var(--s2) 0 0" }}>
+              {th.signin.resetHelper}
+            </p>
+          </div>
           <button
             type="button"
             className="btn btn--subtle"
@@ -61,7 +94,7 @@ export default function SignInPage() {
             disabled={resetting}
             onClick={() => void onReset()}
           >
-            {resetting ? "กำลังรีเซ็ต…" : "รีเซ็ตข้อมูล demo"}
+            {resetting ? th.signin.resetting : th.signin.resetLabel}
           </button>
         </div>
       </main>
