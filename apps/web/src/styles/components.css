@@ -251,6 +251,17 @@
 .auth-card .btn { width: 100%; }
 .auth-card .actions .btn { width: auto; }
 .auth-card .actions .btn--primary { flex: 1 1 auto; }
+.auth-card .staff-demo .btn {
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--s1);
+  height: auto;
+  min-height: var(--touch-min);
+  padding-block: var(--s3);
+  white-space: normal;
+}
 
 /* ---- Toasts ---- */
 .toast-viewport {
@@ -309,7 +320,7 @@
 .page--ops { --page-max: 960px; }
 .page--finance { --page-max: 1040px; }
 .page--flow { --page-max: 680px; }
-.page--signin { --page-max: 720px; }
+.page--signin { --page-max: 1080px; }
 .page--market { --page-max: 880px; }
 .page--gate {
   --page-max: 28rem;
@@ -357,8 +368,8 @@
   100% { transform: translateX(320%); }
 }
 
-.flow-start { display: grid; gap: var(--s3); margin-bottom: var(--s4); }
-.flow-progress { margin-top: 0; max-width: 22rem; }
+.flow-start { display: grid; gap: var(--s3); margin-bottom: var(--s4); justify-items: start; }
+.flow-progress { margin-top: 0; max-width: 22rem; width: 100%; }
 .flow-progress__meta {
   display: flex; justify-content: space-between; gap: var(--s3);
   font-size: var(--text-sm); color: var(--muted); margin-bottom: var(--s1);

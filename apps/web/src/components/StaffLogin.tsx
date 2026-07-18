@@ -113,7 +113,8 @@ export function StaffLogin({
               busy={busy}
               onClick={() => void sendCode(demoPhone)}
             >
-              {th.staffLogin.useDemo} · <code>{demoPhone}</code>
+              <span>{th.staffLogin.useDemo}</span>
+              <code>{demoPhone}</code>
             </Button>
           </div>
         )}
