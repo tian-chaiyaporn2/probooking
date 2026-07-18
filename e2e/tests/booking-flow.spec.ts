@@ -26,11 +26,21 @@ async function staffUiLogin(page: any, phone: string) {
  * session the picker would have stored, and reload so the page hydrates from it. Uses a
  * token minted once (avoids the per-phone OTP interval that re-login would hit).
  */
-async function injectSession(page: any, route: string, token: string, phone: string) {
+async function injectSession(
+  page: any,
+  route: string,
+  token: string,
+  phone: string,
+  role?: string,
+) {
   await page.goto(route);
   await page.evaluate(
-    ([t, p]: [string, string]) => sessionStorage.setItem("probook.session", JSON.stringify({ token: t, phone: p })),
-    [token, phone],
+    ([t, p, r]: [string, string, string | undefined]) =>
+      sessionStorage.setItem(
+        "probook.session",
+        JSON.stringify({ token: t, phone: p, ...(r ? { role: r } : {}) }),
+      ),
+    [token, phone, role],
   );
   await page.reload();
 }
@@ -72,6 +82,14 @@ async function provisionConfirmedBooking(page: any, api: string, uniq: string) {
  * with the 12% service fee reflected in the checkout total (10,000 THB comp +
  * 1,200 THB fee = ฿11,200.00).
  */
+test("readiness health reports the store and returns 200 (M9)", async ({ page }) => {
+  const res = await page.request.get("http://localhost:4000/health/ready");
+  expect(res.ok()).toBe(true);
+  const body = (await res.json()) as { status: string; store: string };
+  expect(body.status).toBe("ready");
+  expect(["in-memory", "postgres"]).toContain(body.store); // memory leg vs postgres leg
+});
+
 test("home links to the flow", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "ProBooking" })).toBeVisible(); // brand in the app header
@@ -134,14 +152,107 @@ test("mobile and tablet nav collapses into a drawer that opens and closes", asyn
     // The desktop nav is hidden; a menu button stands in for it.
     await expect(page.getByRole("navigation", { name: "เมนูหลัก" })).toBeHidden();
     await page.getByLabel("เปิดเมนู").click();
-    // Drawer opens as a labelled dialog; its links are visible and Escape dismisses it.
+    // Drawer opens as a labelled dialog; signed-out users see public links only (no staff/flow).
     const drawer = page.getByRole("dialog", { name: "เมนูหลัก" });
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByRole("link", { name: "Demo" })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "เข้าใช้งาน" })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "ทดสอบระบบ" })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
     await expect(page.getByLabel("เปิดเมนู")).toBeVisible();
   }
+});
+
+test("landing hero exposes demo and how-it-works CTAs with trust line", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByTestId("hero-cta-primary")).toHaveText("เริ่มเดโม");
+  await expect(page.getByTestId("hero-cta-secondary")).toHaveText("ดูวิธีทำงาน");
+  await expect(page.getByTestId("trust-line")).toBeVisible();
+  await expect(page.getByText("กรุงเทพฯ และปริมณฑล · แพทย์และทันตแพทย์")).toBeVisible();
+  await page.getByTestId("hero-cta-primary").click();
+  await expect(page).toHaveURL(/#start$/);
+});
+
+test("landing contact block captures real-interest clinics", async ({ page }) => {
+  await page.goto("/");
+  const contact = page.getByTestId("contact-block");
+  await expect(contact).toBeVisible();
+  await expect(page.getByTestId("contact-cta")).toHaveText("ติดต่อทีมคอนเซียร์จ");
+  await expect(page.getByTestId("contact-cta")).toHaveAttribute(
+    "href",
+    /mailto:concierge@probooking\.app\?subject=/,
+  );
+});
+
+test("how-it-works toggles clinic and professional perspectives", async ({ page }) => {
+  await page.goto("/#how");
+  await expect(page.getByTestId("how-steps")).toContainText("ประกาศเวร");
+  await page.getByTestId("how-pro").click();
+  await expect(page.getByTestId("how-steps")).toContainText("ยืนยันตัวตน");
+  await page.getByTestId("how-clinic").click();
+  await expect(page.getByTestId("how-steps")).toContainText("ประกาศเวร");
+});
+
+test("signed-in clinic nav hides staff links and supports sign out", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.evaluate(() => sessionStorage.clear());
+  await page.locator("#start").scrollIntoViewIfNeeded();
+  await page.getByTestId("signin-clinic").click();
+  await expect(page).toHaveURL(/\/clinic$/);
+  await expect(page.getByRole("link", { name: "ปฏิบัติการ" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "การเงิน" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "คลินิกของฉัน" })).toBeVisible();
+  await page.getByTestId("nav-signout").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.locator(".app-nav--desktop").getByRole("link", { name: "เข้าใช้งาน" }),
+  ).toBeVisible();
+});
+
+test("party session on ops hides workspace link until staff logs in", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = "http://localhost:4000";
+  const phone = "+66910000001";
+  const req = await page.request.post(`${api}/auth/otp/request`, { data: { phone } });
+  const { devCode } = (await req.json()) as { devCode: string };
+  const ver = await page.request.post(`${api}/auth/otp/verify`, {
+    data: { phone, code: devCode },
+  });
+  const { token } = (await ver.json()) as { token: string };
+  await injectSession(page, "/ops", token, phone, "clinic");
+  await expect(page.getByRole("link", { name: "คลินิกของฉัน" })).toHaveCount(0);
+  await expect(page.getByTestId("account-chip")).toHaveCount(0);
+  await expect(page.getByLabel("หมายเลขโทรศัพท์ของเจ้าหน้าที่")).toBeVisible();
+});
+
+test("staff path from home scrolls to staff picker on sign-in", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await expect(page.getByTestId("home-staff-path")).toContainText("เลือกบทบาททีม");
+  await page.getByTestId("home-staff-path").click();
+  await expect(page).toHaveURL(/\/signin#staff$/);
+  await expect(page.getByTestId("signin-staff-group")).toBeVisible();
+  const inView = await page.getByTestId("signin-staff-group").evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.top >= 0 && rect.top < window.innerHeight * 0.85;
+  });
+  expect(inView).toBe(true);
+});
+
+test("finance approver shows approver label in header", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = "http://localhost:4000";
+  const phone = "+66900000006";
+  const req = await page.request.post(`${api}/auth/otp/request`, { data: { phone } });
+  const { devCode } = (await req.json()) as { devCode: string };
+  const ver = await page.request.post(`${api}/auth/otp/verify`, {
+    data: { phone, code: devCode },
+  });
+  const { token } = (await ver.json()) as { token: string };
+  await injectSession(page, "/finance", token, phone, "finance");
+  await expect(page.getByTestId("account-chip")).toContainText("ผู้อนุมัติ");
 });
 
 test("landing keeps brand before product visual on phone", async ({ page }) => {
@@ -926,6 +1037,9 @@ test("a professional can decline a pending offer", async ({ page }) => {
 
 test("the sign-in picker offers an account per role", async ({ page }) => {
   await page.goto("/signin");
+  await expect(page.getByTestId("signin-party-group")).toBeVisible();
+  await expect(page.getByTestId("signin-staff-group")).toBeVisible();
+  await expect(page.getByTestId("guided-demo")).toBeVisible();
   for (const id of ["clinic", "professional", "operations", "finance", "finance-approver"]) {
     await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
   }
@@ -933,13 +1047,17 @@ test("the sign-in picker offers an account per role", async ({ page }) => {
 
 test("the home page leads with the role picker", async ({ page }) => {
   await page.goto("/");
-  // The picker is the primary entry point: every role card is on the landing page.
+  await expect(page.getByTestId("guided-demo")).toBeVisible();
+  await expect(page.getByTestId("contact-block")).toBeVisible();
+  // The picker lives in #start — scroll there for below-the-fold phones.
+  await page.locator("#start").scrollIntoViewIfNeeded();
   for (const id of ["clinic", "professional", "operations", "finance"]) {
     await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
   }
-  // Clicking a card signs in and lands on that role's surface.
-  await page.getByTestId("signin-clinic").click();
-  await expect(page).toHaveURL(/\/clinic$/);
+  // Clicking a card signs in and lands on that role's surface (professional avoids OTP
+  // interval collision with the signed-in clinic nav test above).
+  await page.getByTestId("signin-professional").click();
+  await expect(page).toHaveURL(/\/pro$/);
 });
 
 // Placed LAST: on the in-memory demo leg this wipes and re-seeds the shared store, so no

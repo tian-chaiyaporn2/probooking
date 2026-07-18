@@ -284,6 +284,19 @@ Gaps that hurt maintainability:
 11. Controller + money-path integration tests; coverage gates on `apps/api`.  
 12. Bound list endpoints; tighten arrival policy when product allows.
 
+### Status (updated 2026-07-18)
+
+- **P0 (1–4): done.** Unified remaining-funds via `money-ledger.util`, per-order money serialization, `isStaff` replaced by `isOpsCrossTenant`/`isInternalReader`, fail-closed `DATABASE_URL` (`ALLOW_IN_MEMORY_STORE`). (#38)
+- **P1.7 / P1.8: done.** `PaymentProvider` port injected; phones normalized before blind index. (#38)
+- **P2.9 (env schema + readiness): done.** `config/env-schema.ts` boot validation + `GET /health/ready`. (#43)
+- **P2.12 (bound lists): done.** Shared `LIST_LIMITS` applied in both stores. (#43)
+- **P2.11 (controller + money tests): done.** `controller-authz.test.ts` (REP-01 reader/actor split) + `store-parity.test.ts` (money conservation, ordering, caps). Coverage-gate wiring still open. (#44)
+- **P1.6 (memory/Prisma parity suite): done** as `store-parity.test.ts` — same scenarios asserted against both stores, prisma param gated on `DATABASE_URL`. (#44)
+- **P1.5 (controller split): done.** The 1,582-line `MarketplaceController` was carved into nine per-aggregate controllers under `controllers/` plus a shared `MarketplaceAccessService`; routes byte-identical, behaviour verified on both stores. The `MarketplaceRepository` and its two stores were **deliberately left intact** (single port is a clean seam; store split is higher-risk, lower-payoff). (#46)
+- **P2.10 (zod validation): done.** The hand-rolled `validateBody` field-spec checker is replaced by co-located `z.object` schemas + a `parseBody` helper (ZodError → 400), with inferred DTO types and preserved unknown-key stripping. `validate.util.ts` deleted. (#48)
+- **Coverage gates: done.** `@vitest/coverage-v8` + a ratcheted threshold (88/76/88/88, just under the current 91/81/91/91) scoped to the pure-logic units unit tests own — config, auth logic, marketplace utilities. Controllers/stores are e2e/BDD-covered and deliberately out of the gate's scope. Enforced in CI on both legs. (#49)
+- **Still open:** only the **store/repository split** (deferred from P1.5 — worth doing solely if the two stores start diverging in practice). Everything else in this review has shipped.
+
 ---
 
 ## 7. Suggested target shape (incremental)

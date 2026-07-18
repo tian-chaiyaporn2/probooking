@@ -4,9 +4,21 @@ import { BookingsModule } from "../bookings/bookings.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { devAuthEnabled } from "../auth/dev-mode.util.js";
-import { MarketplaceController } from "./marketplace.controller.js";
+import { OnboardingController } from "./controllers/onboarding.controller.js";
+import { MessagingController } from "./controllers/messaging.controller.js";
+import { ShiftsController } from "./controllers/shifts.controller.js";
+import { FinanceController } from "./controllers/finance.controller.js";
+import { OpsController } from "./controllers/ops.controller.js";
+import { OffersController } from "./controllers/offers.controller.js";
+import { BookingsController } from "./controllers/bookings.controller.js";
+import { ReviewsController } from "./controllers/reviews.controller.js";
+import { ReportingController } from "./controllers/reporting.controller.js";
 import { NotificationsService } from "./notifications.service.js";
-import { MARKETPLACE_REPOSITORY, type MarketplaceRepository } from "./marketplace.types.js";
+import { MarketplaceAccessService } from "./marketplace-access.service.js";
+import {
+  MARKETPLACE_REPOSITORY,
+  type MarketplaceRepository,
+} from "./marketplace.types.js";
 import { MarketplaceSeedService } from "../../fixtures/marketplace-seed.service.js";
 
 /**
@@ -19,13 +31,17 @@ const marketplaceRepositoryProvider = {
   useFactory: async (): Promise<MarketplaceRepository> => {
     const logger = new Logger("Marketplace");
     if (process.env.DATABASE_URL) {
-      const { PrismaMarketplaceStore } = await import("./marketplace.prisma-store.js");
+      const { PrismaMarketplaceStore } =
+        await import("./marketplace.prisma-store.js");
       logger.log("Using Prisma/Postgres store");
       return new PrismaMarketplaceStore();
     }
     if (process.env.ALLOW_IN_MEMORY_STORE === "true" || devAuthEnabled()) {
-      const { InMemoryMarketplaceStore } = await import("./marketplace.memory-store.js");
-      logger.log("Using in-memory store (ALLOW_IN_MEMORY_STORE or AUTH_DEV_MODE)");
+      const { InMemoryMarketplaceStore } =
+        await import("./marketplace.memory-store.js");
+      logger.log(
+        "Using in-memory store (ALLOW_IN_MEMORY_STORE or AUTH_DEV_MODE)",
+      );
       return new InMemoryMarketplaceStore();
     }
     throw new Error(
@@ -36,7 +52,22 @@ const marketplaceRepositoryProvider = {
 
 @Module({
   imports: [OffersModule, BookingsModule, PaymentsModule, AuthModule],
-  controllers: [MarketplaceController],
-  providers: [marketplaceRepositoryProvider, NotificationsService, MarketplaceSeedService],
+  controllers: [
+    OnboardingController,
+    MessagingController,
+    ShiftsController,
+    FinanceController,
+    OpsController,
+    OffersController,
+    BookingsController,
+    ReviewsController,
+    ReportingController,
+  ],
+  providers: [
+    marketplaceRepositoryProvider,
+    MarketplaceAccessService,
+    NotificationsService,
+    MarketplaceSeedService,
+  ],
 })
 export class MarketplaceModule {}

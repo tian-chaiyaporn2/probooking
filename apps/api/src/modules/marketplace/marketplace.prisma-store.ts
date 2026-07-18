@@ -8,6 +8,7 @@ import {
   DEFAULT_SERVICE_FEE_BPS,
 } from "@probook/domain";
 import { ConflictError, isConflict } from "./errors.util.js";
+import { LIST_LIMITS } from "./list-limits.js";
 import { encryptField, decryptField, blindIndex } from "./field-crypto.js";
 import {
   assertLedgerHeadroom,
@@ -475,6 +476,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     const list = await prisma.availability.findMany({
       where: { professionalId },
       orderBy: { startsAt: "asc" },
+      take: LIST_LIMITS.availability,
     });
     return list.map((a) => ({
       id: a.id,
@@ -1221,6 +1223,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
           : { shift: { workspaceId: id } },
       include: { shift: true, paymentOrder: { include: { allocation: true } } },
       orderBy: { confirmedAt: "desc" },
+      take: LIST_LIMITS.partyBookings,
     });
     return bookings.map((b) => {
       const alloc = b.paymentOrder?.allocation;
@@ -1245,6 +1248,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // REP-02: every payment order with its allocation and event ledger.
     const orders = await prisma.paymentOrder.findMany({
       include: { allocation: true, events: { orderBy: { createdAt: "asc" } } },
+      take: LIST_LIMITS.financeExport,
       orderBy: { createdAt: "desc" },
     });
     return orders.map((o) => ({
@@ -1536,6 +1540,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     const list = await prisma.message.findMany({
       where: { bookingId },
       orderBy: { createdAt: "asc" },
+      take: LIST_LIMITS.messages,
     });
     return list.map((m) => ({
       id: m.id,

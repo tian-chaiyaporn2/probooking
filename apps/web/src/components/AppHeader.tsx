@@ -2,59 +2,79 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { logout } from "../lib/api";
 import { th } from "../lib/strings";
-import { loadSession, type SessionRole } from "../lib/session";
+import {
+  clearSession,
+  loadSession,
+  onSessionChange,
+  type AppSession,
+  type SessionRole,
+} from "../lib/session";
+import { demoAccountLabel } from "../lib/demo-accounts";
+import { isStaffRole, sessionShowsWorkspace } from "../lib/nav-session";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "./icons";
 
 type NavLink = {
   href: string;
   label: string;
-  group?: "public" | "staff" | "session";
+  onClick?: () => void;
 };
-
-const LINKS: NavLink[] = [
-  { href: "/", label: th.nav.home, group: "public" },
-  { href: "/journey", label: th.nav.journey, group: "public" },
-  { href: "/signin", label: th.nav.signin, group: "public" },
-  { href: "/ops", label: th.nav.ops, group: "staff" },
-  { href: "/finance", label: th.nav.finance, group: "staff" },
-];
 
 const DRAWER_MQ = "(min-width: 960px)";
 
-function sessionLinks(role?: SessionRole): NavLink[] {
+function accountLabel(session: AppSession): string | null {
+  const fromDemo = demoAccountLabel(session.phone, session.role);
+  if (fromDemo) return fromDemo;
+  if (session.role === "clinic") return th.party.navClinic;
+  if (session.role === "professional") return th.party.navPro;
+  if (session.role === "operations") return th.nav.ops;
+  if (session.role === "finance") return th.nav.finance;
+  return session.role ?? null;
+}
+
+function workspaceLink(role: SessionRole): NavLink | null {
   if (role === "clinic")
-    return [{ href: "/clinic", label: th.party.navClinic, group: "session" }];
-  if (role === "professional")
-    return [{ href: "/pro", label: th.party.navPro, group: "session" }];
-  return [];
+    return { href: "/clinic", label: th.party.navClinic };
+  if (role === "professional") return { href: "/pro", label: th.party.navPro };
+  if (role === "operations") return { href: "/ops", label: th.nav.ops };
+  if (role === "finance") return { href: "/finance", label: th.nav.finance };
+  return null;
+}
+
+function publicLinks(signedIn: boolean): NavLink[] {
+  const links: NavLink[] = [
+    { href: "/", label: th.nav.home },
+    { href: "/journey", label: th.nav.journey },
+  ];
+  if (!signedIn) links.push({ href: "/signin", label: th.nav.signin });
+  return links;
 }
 
 /**
- * Shared app shell header: brand + section nav + theme toggle.
- * When a party session is present, surfaces /clinic or /pro in the public nav.
+ * Shared app shell header: brand + context-aware nav + theme toggle.
+ * Party users see their workspace; staff see ops/finance; signed-out users see public links only.
+ * Workspace links are hidden when the session role does not match the current surface.
  */
 export function AppHeader({ current }: { current?: string }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<SessionRole | undefined>();
+  // Start null so the first client render matches the signed-out HTML prerendered at build
+  // time (static export); the effect below hydrates the real session post-mount. Reading
+  // sessionStorage in the initializer would render a signed-in tree over signed-out HTML and
+  // trip a hydration mismatch on a hard reload while signed in.
+  const [session, setSession] = useState<AppSession | null>(null);
   const drawerId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const sync = () => {
-      const s = loadSession();
-      setRole(s?.role);
-    };
-    sync();
-    window.addEventListener("focus", sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener("focus", sync);
-      window.removeEventListener("storage", sync);
-    };
+    const refresh = () => setSession(loadSession());
+    refresh();
+    return onSessionChange(refresh);
   }, [current]);
 
   useEffect(() => {
@@ -111,19 +131,40 @@ export function AppHeader({ current }: { current?: string }) {
     return () => mq.removeListener(onChange);
   }, []);
 
-  const publicLinks = [
-    ...LINKS.filter((l) => l.group === "public"),
-    ...sessionLinks(role),
-  ];
-  const staffLinks = LINKS.filter((l) => l.group === "staff");
+  const signedIn = Boolean(session?.token);
+  const role = session?.role;
+  const showWorkspace =
+    signedIn && role && sessionShowsWorkspace(role, current);
+  const label = session ? accountLabel(session) : null;
+  const links: NavLink[] = [...publicLinks(signedIn)];
+  const workspace = showWorkspace && role ? workspaceLink(role) : null;
+  if (workspace) links.push(workspace);
 
-  function renderLinks(links: NavLink[], onNavigate?: () => void) {
-    return links.map((l) => (
+  async function signOut() {
+    const previous = session?.token;
+    const previousRole = session?.role;
+    clearSession();
+    setOpen(false);
+    if (previous && isStaffRole(previousRole)) {
+      try {
+        await logout(previous);
+      } catch {
+        // Best-effort revoke; local session is already cleared.
+      }
+    }
+    router.push("/");
+  }
+
+  function renderLinks(navLinks: NavLink[], onNavigate?: () => void) {
+    return navLinks.map((l) => (
       <Link
-        key={l.href}
+        key={l.href + l.label}
         href={l.href}
         aria-current={current === l.href ? "page" : undefined}
-        {...(onNavigate ? { onClick: onNavigate } : {})}
+        onClick={() => {
+          l.onClick?.();
+          onNavigate?.();
+        }}
       >
         {l.label}
       </Link>
@@ -143,14 +184,35 @@ export function AppHeader({ current }: { current?: string }) {
         <nav
           className="app-nav app-nav--desktop"
           aria-label={th.a11y.primaryNav}
+          aria-hidden={open ? true : undefined}
         >
-          {renderLinks(publicLinks)}
-          <span className="app-nav__divider" aria-hidden />
-          <span className="app-nav__group-label">{th.nav.staffGroup}</span>
-          {renderLinks(staffLinks)}
+          {renderLinks(links)}
+          {showWorkspace && label ? (
+            <span className="account-chip" data-testid="account-chip">
+              {label}
+            </span>
+          ) : null}
+          {signedIn ? (
+            <button
+              type="button"
+              className="nav-signout"
+              data-testid="nav-signout"
+              onClick={() => void signOut()}
+            >
+              {th.nav.signOut}
+            </button>
+          ) : null}
         </nav>
 
         <div className="app-header__right">
+          {showWorkspace && label ? (
+            <span
+              className="account-chip account-chip--compact"
+              data-testid="account-chip-mobile"
+            >
+              {label}
+            </span>
+          ) : null}
           <ThemeToggle />
           <button
             ref={toggleRef}
@@ -195,10 +257,24 @@ export function AppHeader({ current }: { current?: string }) {
                 <CloseIcon />
               </button>
             </div>
+            {showWorkspace && label ? (
+              <p className="app-nav--drawer__account" data-testid="drawer-account">
+                {th.nav.accountLabel(label)}
+              </p>
+            ) : null}
             <p className="app-nav--drawer__group">{th.nav.publicGroup}</p>
-            {renderLinks(publicLinks, () => setOpen(false))}
-            <p className="app-nav--drawer__group">{th.nav.staffGroup}</p>
-            {renderLinks(staffLinks, () => setOpen(false))}
+            {renderLinks(links, () => setOpen(false))}
+            {signedIn ? (
+              <button
+                type="button"
+                className="nav-drawer-signout"
+                data-testid="drawer-signout"
+                onClick={() => void signOut()}
+              >
+                {th.nav.signOut}
+              </button>
+            ) : null}
+            <p className="app-nav--drawer__foot">{th.home.marketSignal}</p>
           </nav>
         </>
       )}

@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { AppHeader } from "../components/AppHeader";
+import { ButtonAnchor } from "../components/Button";
+import { HowItWorks } from "../components/HowItWorks";
 import { RolePicker } from "../components/RolePicker";
+import { TrustLine } from "../components/TrustLine";
 import { ShieldCheckIcon, WalletIcon } from "../components/icons";
 import { th } from "../lib/strings";
 
 /**
- * Landing: RolePicker is the primary demo entry (investor walkthrough).
- * Journey + audience links sit below as secondary orientation — not a second hero.
+ * Landing: hero sells the promise, contact captures real interest, RolePicker is the demo entry.
+ * Journey + audience paths sit below as secondary orientation.
  */
 export default function Home() {
   return (
@@ -14,16 +17,38 @@ export default function Home() {
       <AppHeader current="/" />
       <main id="main" className="page page--wide">
         <section className="hero">
-          <div>
+          <div className="hero__copy">
             <p className="hero__brand">{th.brand}</p>
             <span className="hero__eyebrow">
-              <ShieldCheckIcon /> {th.home.phase}
+              <ShieldCheckIcon /> {th.home.marketSignal}
             </span>
             <h1>{th.home.tagline}</h1>
-            <p className="lead muted">{th.home.description}</p>
+            <p className="lead muted">{th.home.lead}</p>
+            <TrustLine className="trust-line--hero" />
+            <div className="hero__actions">
+              <ButtonAnchor
+                href="#start"
+                variant="primary"
+                size="lg"
+                data-testid="hero-cta-primary"
+              >
+                {th.home.ctaPrimary}
+              </ButtonAnchor>
+              <ButtonAnchor
+                href="#how"
+                variant="ghost"
+                size="lg"
+                data-testid="hero-cta-secondary"
+              >
+                {th.home.ctaSecondary}
+              </ButtonAnchor>
+            </div>
           </div>
 
           <div className="hero__visual" aria-hidden>
+            <p className="hero__visual-caption">
+              <WalletIcon /> คุ้มครองการชำระเงิน · ตัวอย่างสรุปค่าใช้จ่าย
+            </p>
             <div className="mockcard">
               <div className="mockcard__row">
                 <span className="mockcard__avatar">พ</span>
@@ -60,10 +85,29 @@ export default function Home() {
           </div>
         </section>
 
+        <section id="contact" className="contact-block" data-testid="contact-block">
+          <div className="section-head">
+            <h2>{th.home.contactTitle}</h2>
+            <p>{th.home.contactNote}</p>
+          </div>
+          <p className="contact-note">
+            <a
+              href={`mailto:${th.home.contactEmail}?subject=${encodeURIComponent(th.home.contactMailtoSubject)}`}
+              className="btn btn--primary btn--lg"
+              data-testid="contact-cta"
+            >
+              {th.home.contactCta}
+            </a>
+          </p>
+        </section>
+
         <section id="start">
           <div className="section-head">
             <h2>{th.home.pickTitle}</h2>
             <p>{th.home.pickSubtitle}</p>
+            <p className="guided-demo muted" data-testid="guided-demo">
+              {th.home.guidedDemo}
+            </p>
           </div>
           <RolePicker />
         </section>
@@ -73,10 +117,10 @@ export default function Home() {
             <h2 id="orient-heading">{th.home.audiencesTitle}</h2>
             <p>{th.home.audiencesSubtitle}</p>
           </div>
-          <div className="home-surfaces">
+          <div className="home-surfaces cta-grid--3">
             <Link
               href="/journey"
-              className="home-surface"
+              className="home-surface cta-card"
               data-testid="home-journey"
             >
               <span className="home-surface__title">{th.home.journeyLink}</span>
@@ -84,66 +128,39 @@ export default function Home() {
               <span className="home-surface__cta">{th.home.open} →</span>
             </Link>
             <Link
-              href="/signin"
-              className="home-surface"
-              data-testid="home-audience-clinic"
+              href="#contact"
+              className="home-surface cta-card"
+              data-testid="home-clinic-path"
             >
-              <span className="home-surface__title">
-                {th.home.audienceClinic}
-              </span>
+              <span className="home-surface__title">{th.home.audienceClinic}</span>
               <p className="home-surface__desc">{th.home.audienceClinicDesc}</p>
-              <span className="home-surface__cta">{th.party.pickAccount} →</span>
+              <span className="home-surface__cta">{th.home.audienceClinicCta} →</span>
             </Link>
             <Link
-              href="/signin"
-              className="home-surface"
-              data-testid="home-audience-pro"
+              href="#start"
+              className="home-surface cta-card"
+              data-testid="home-pro-path"
             >
               <span className="home-surface__title">{th.home.audiencePro}</span>
               <p className="home-surface__desc">{th.home.audienceProDesc}</p>
-              <span className="home-surface__cta">{th.party.pickAccount} →</span>
+              <span className="home-surface__cta">{th.home.audienceProCta} →</span>
             </Link>
             <Link
-              href="/signin"
-              className="home-surface"
-              data-testid="home-audience-staff"
+              href="/signin#staff"
+              className="home-surface cta-card"
+              data-testid="home-staff-path"
             >
-              <span className="home-surface__title">
-                {th.home.audienceStaff}
-              </span>
+              <span className="home-surface__title">{th.home.audienceStaff}</span>
               <p className="home-surface__desc">{th.home.audienceStaffDesc}</p>
-              <span className="home-surface__cta">{th.party.pickAccount} →</span>
+              <span className="home-surface__cta">{th.home.audienceStaffCta} →</span>
             </Link>
           </div>
         </section>
 
-        <section id="how">
-          <div className="section-head">
-            <h2>{th.home.howTitle}</h2>
-            <p>{th.home.howSubtitle}</p>
-          </div>
-          <div className="steps">
-            {th.home.steps.map((s, i) => (
-              <div key={s.t} className="step">
-                <div className="step__num">{i + 1}</div>
-                <h3>{s.t}</h3>
-                <p>{s.d}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <HowItWorks />
 
-        <p className="trust-line" aria-label={th.home.trust.join(" · ")}>
-          {th.home.trust.map((t, i) => (
-            <span key={t}>
-              {i > 0 && (
-                <span className="trust-line__dot" aria-hidden>
-                  ·
-                </span>
-              )}
-              {t}
-            </span>
-          ))}
+        <p className="phase-note muted" data-testid="phase-note">
+          {th.home.phaseNote}
         </p>
 
         <footer className="footer">
