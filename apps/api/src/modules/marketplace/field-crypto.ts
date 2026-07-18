@@ -3,6 +3,7 @@
 // re-export keeps the existing import paths in the API stable.
 export {
   encryptField,
+  encryptFieldIfPlain,
   decryptField,
   blindIndex,
   assertFieldKeyConfigured,

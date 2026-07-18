@@ -137,7 +137,7 @@ test("mobile and tablet nav collapses into a drawer that opens and closes", asyn
     // Drawer opens as a labelled dialog; its links are visible and Escape dismisses it.
     const drawer = page.getByRole("dialog", { name: "เมนูหลัก" });
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByRole("link", { name: "เดโม" })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "Demo" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
     await expect(page.getByLabel("เปิดเมนู")).toBeVisible();

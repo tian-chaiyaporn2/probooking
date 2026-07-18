@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   encryptField,
+  encryptFieldIfPlain,
   decryptField,
   blindIndex,
   resetFieldKeyCache,
@@ -31,9 +32,16 @@ describe("field-crypto (§7.3 encryption at rest)", () => {
     expect(decryptField("plain address, never encrypted")).toBe("plain address, never encrypted");
   });
 
-  it("does not double-wrap an already-encrypted value", () => {
+  it("does not double-wrap via encryptFieldIfPlain (migration/backfill only)", () => {
     const once = encryptField("x");
-    expect(encryptField(once)).toBe(once);
+    expect(encryptFieldIfPlain(once)).toBe(once);
+  });
+
+  it("re-encrypts a forged enc:v1: prefix from untrusted input", () => {
+    const forged = "enc:v1:not-valid-ciphertext";
+    const enc = encryptField(forged);
+    expect(enc).not.toBe(forged);
+    expect(decryptField(enc)).toBe(forged);
   });
 
   it("rejects a tampered ciphertext rather than returning garbage (GCM auth)", () => {
