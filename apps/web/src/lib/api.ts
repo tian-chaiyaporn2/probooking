@@ -269,3 +269,84 @@ export async function fetchFinanceExport(token: string): Promise<string> {
 }
 export const resolveHold = (bookingId: string, token: string) =>
   post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`, undefined, token);
+
+// ----- Party self-service (clinic / professional dashboards) -----
+
+export interface MeIdentity {
+  professionalId: string | null;
+  professionalName: string | null;
+  professionalVerification: string | null;
+  clinics: { workspaceId: string; name: string; role: string; verification: string }[];
+}
+export const getMe = (token: string) => get<MeIdentity>("/me", token);
+
+export interface ClinicShiftRow {
+  shiftId: string;
+  category: string;
+  compensation: number;
+  urgency: "standard" | "urgent";
+  startsAt: number;
+  state: string;
+  hasActiveOffer: boolean;
+  booked: boolean;
+  candidateCount: number;
+  offer: { id: string; state: string; professionalId: string } | null;
+}
+export const getClinicShifts = (clinicId: string, token: string) =>
+  get<{ shifts: ClinicShiftRow[] }>(`/clinics/${clinicId}/shifts`, token);
+
+export interface Candidate {
+  professionalId: string;
+  via: "application" | "invitation";
+  state: string;
+}
+export const getShiftCandidates = (shiftId: string, token: string) =>
+  get<{ candidates: Candidate[] }>(`/shifts/${shiftId}/candidates`, token);
+
+export interface ProfessionalOfferRow {
+  offerId: string;
+  shiftId: string;
+  category: string;
+  compensation: number;
+  urgency: "standard" | "urgent";
+  shiftStart: number;
+  state: string;
+  expiresAt: number;
+}
+export const getProfessionalOffers = (proId: string, token: string) =>
+  get<{ offers: ProfessionalOfferRow[] }>(`/professionals/${proId}/offers`, token);
+
+export interface OpenShift {
+  shiftId: string;
+  category: string;
+  compensation: number;
+  startsAt: number;
+  urgency: "standard" | "urgent";
+  urgent: boolean;
+}
+export const browseShifts = (token: string) => get<{ shifts: OpenShift[] }>("/shifts", token);
+
+export interface PartyBooking {
+  bookingId: string;
+  shiftId: string;
+  counterpartyId: string;
+  state: string;
+  compensation: number;
+  serviceFee: number;
+  tax: number;
+  total: number;
+  payoutState: string;
+}
+export const getClinicBookings = (clinicId: string, token: string) =>
+  get<{ bookings: PartyBooking[] }>(`/clinics/${clinicId}/bookings`, token);
+export const getProfessionalBookings = (proId: string, token: string) =>
+  get<{ bookings: PartyBooking[] }>(`/professionals/${proId}/bookings`, token);
+
+export const arriveBooking = (bookingId: string, token: string) =>
+  post<{ id: string; arrived: boolean }>(`/bookings/${bookingId}/arrive`, undefined, token);
+
+export const cancelBooking = (
+  bookingId: string,
+  input: { reason: string },
+  token: string,
+) => post<{ id: string; outcome: string; fraction?: number }>(`/bookings/${bookingId}/cancel`, input, token);

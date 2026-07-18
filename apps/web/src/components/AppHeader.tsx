@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/ops", label: th.nav.ops },
   { href: "/finance", label: th.nav.finance },
   { href: "/flow", label: th.nav.flow },
+  { href: "/signin", label: th.nav.signin },
 ] as const;
 
 /** Keep in sync with max-width: 959px drawer breakpoint in pages.css. */

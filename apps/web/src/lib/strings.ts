@@ -52,6 +52,7 @@ export const th = {
     ops: "ปฏิบัติการ",
     finance: "การเงิน",
     flow: "เดโม",
+    signin: "เข้าใช้งาน",
   },
   ops: {
     title: "แดชบอร์ดฝ่ายปฏิบัติการ",
