@@ -30,6 +30,20 @@ interface SnapshotableShift {
  * months on needs the numbers as they stood. Stored as JSON so adding a term never
  * rewrites history for existing rows.
  */
+/**
+ * Decrypt a value for DISPLAY only. A single row encrypted under a rotated/legacy key throws
+ * on GCM auth verification, which must not take down an entire list (e.g. the ops
+ * verification queue). Falls back to a placeholder. Never use on a money/credential path,
+ * where a decryption failure is a real error that must surface rather than be masked.
+ */
+function decryptForDisplay(stored: string): string {
+  try {
+    return decryptField(stored);
+  } catch {
+    return "—";
+  }
+}
+
 function buildTermsSnapshot(shift: SnapshotableShift, expiresAt: number) {
   return {
     version: 1,
@@ -1439,8 +1453,8 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         kind: "clinic" as const,
         id: c.id,
         name: c.branchName,
-        licenceNo: decryptField(c.licenceNo),
-        address: decryptField(c.address),
+        licenceNo: decryptForDisplay(c.licenceNo),
+        address: decryptForDisplay(c.address),
       })),
       ...pros.map((p) => ({
         kind: "professional" as const,
