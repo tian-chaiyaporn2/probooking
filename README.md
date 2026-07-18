@@ -9,6 +9,7 @@ accept clear terms, and receive traceable payout.
 Source of truth: [`docs/PRD_v1.5.md`](docs/PRD_v1.5.md) (product behavior) and
 [`docs/Rollout_Plan_v1.1.md`](docs/Rollout_Plan_v1.1.md) (execution cadence & phases).
 Surfaces and end-to-end flows: [`docs/information-architecture.md`](docs/information-architecture.md).
+Content & IA recommendations: [`docs/content-ia-review.md`](docs/content-ia-review.md).
 Current stage: **Phase 0 — Concierge Validation** (Bangkok + surrounding provinces).
 
 ## Monorepo layout
@@ -170,3 +171,4 @@ it. Full details, caveats, and the CORS lockdown: [`docs/deployment.md`](docs/de
 | Module/build strategy | `docs/adr/0002-module-and-build-strategy.md` |
 | Requirement → code map | `docs/requirements-traceability.md` |
 | Information architecture (all flows) | `docs/information-architecture.md` |
+| Content & IA review (page/flow suggestions) | `docs/content-ia-review.md` |

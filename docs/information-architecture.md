@@ -12,6 +12,7 @@ Companion docs:
 | [`PRD_v1.5.md`](PRD_v1.5.md) | Product behavior (source of truth) |
 | [`architecture.md`](architecture.md) | System shape and vertical slice |
 | [`investor-demo-capabilities.md`](investor-demo-capabilities.md) | Hands-on demo checklist |
+| [`content-ia-review.md`](content-ia-review.md) | Content & IA review — page/flow improvement recommendations |
 | [`ops-tools.md`](ops-tools.md) | Internal Ops/Finance tools note |
 | [`../features/README.md`](../features/README.md) | Executable acceptance catalog |
 
