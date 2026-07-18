@@ -91,11 +91,13 @@ jobs:
       - name: Unit tests (worker)
         run: pnpm --filter @probook/worker test
 
-      - name: Integration tests (Prisma store)
-        # Assert the invariants that exist only in Postgres — transaction atomicity and the
-        # unique constraints. They self-skip without DATABASE_URL, so the memory leg is a
-        # no-op here rather than a false pass.
-        run: pnpm --filter @probook/api test
+      - name: API unit + integration tests (coverage-gated)
+        # Runs the api suite with coverage and enforces the thresholds in vitest.config.ts
+        # (a ratchet on the pure-logic units unit tests own). The integration tests also
+        # assert the invariants that exist only in Postgres — transaction atomicity and the
+        # unique constraints — and self-skip without DATABASE_URL, so the memory leg is a
+        # no-op for those rather than a false pass.
+        run: pnpm --filter @probook/api test:coverage
 
       - name: BDD acceptance suite
         run: pnpm test:bdd
