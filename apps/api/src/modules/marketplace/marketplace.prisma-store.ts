@@ -194,8 +194,8 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         data: {
           branchName: input.branchName,
           // Encrypted at rest (§7.3): a DB dump yields ciphertext, not a clinic's licence
-          // number and street address. Neither is read back in any app flow, so there is no
-          // decrypt path to add — only the write is wrapped.
+          // number and street address. Read back only in the ops verification queue, which
+          // decrypts them for review via decryptForDisplay (resilient to a rotated key).
           licenceNo: encryptField(input.licenceNo),
           address: encryptField(input.address),
           verification: "Submitted",
