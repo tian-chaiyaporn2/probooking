@@ -5,6 +5,8 @@
  * echoed back, so a click signs in in one step.
  */
 export interface DemoAccount {
+  /** Stable, unique key for this card (used for the sign-in testid). */
+  id: string;
   phone: string;
   label: string;
   sublabel: string;
@@ -16,6 +18,7 @@ export interface DemoAccount {
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
   {
+    id: "clinic",
     phone: "+66910000001",
     label: "คลินิกสุขุมวิทสไมล์",
     sublabel: "เจ้าของคลินิก — ประกาศเวร ส่งข้อเสนอ ยืนยันการจอง",
@@ -24,6 +27,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     emoji: "🏥",
   },
   {
+    id: "professional",
     phone: "+66920000001",
     label: "นพ. สมชาย ใจดี",
     sublabel: "บุคลากร — หาเวร ยอมรับข้อเสนอ ทำงาน รับเงิน",
@@ -32,6 +36,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     emoji: "🩺",
   },
   {
+    id: "operations",
     phone: "+66900000008",
     label: "ฝ่ายปฏิบัติการ",
     sublabel: "Operations — ตรวจสอบคลินิก/บุคลากร จัดการเคส",
@@ -40,12 +45,22 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     emoji: "🛡️",
   },
   {
+    id: "finance",
     phone: "+66900000005",
-    label: "ฝ่ายการเงิน",
-    sublabel: "Finance — กระทบยอด ส่งออก CSV คืนเงิน (dual-control)",
+    label: "ฝ่ายการเงิน (ผู้เสนอ)",
+    sublabel: "Finance — กระทบยอด ส่งออก CSV เสนอคืนเงิน",
     role: "finance",
     route: "/finance",
     emoji: "💳",
+  },
+  {
+    id: "finance-approver",
+    phone: "+66900000006",
+    label: "ฝ่ายการเงิน (ผู้อนุมัติ)",
+    sublabel: "Finance — ผู้อนุมัติคนที่สองสำหรับคืนเงิน (§6.4 dual-control)",
+    role: "finance",
+    route: "/finance",
+    emoji: "🧾",
   },
 ];
 

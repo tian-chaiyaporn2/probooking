@@ -4,9 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getReconciliation,
   fetchFinanceExport,
+  proposeRefund,
+  getPendingRefunds,
+  approveRefund,
   formatThb,
   type Reconciliation,
   type ReconciliationRow,
+  type PendingApproval,
 } from "../../lib/api";
 import { AppHeader } from "../../components/AppHeader";
 import { Stat } from "../../components/Stat";
@@ -20,26 +24,42 @@ import { RefreshIcon, DownloadIcon, CheckIcon, AlertIcon } from "../../component
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
+import { loadSession, clearSession } from "../../lib/demo-accounts";
 
 const MAX_ROWS = 25;
 
 /** Finance dashboard (ADM-01, PAY-11): reconciles each payment order against captured funds. */
 export default function FinancePage() {
   const [data, setData] = useState<Reconciliation | null>(null);
+  const [pending, setPending] = useState<PendingApproval[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  // The reconciliation row a refund is being proposed against (null = form closed).
+  const [refundFor, setRefundFor] = useState<{ bookingId: string; captured: number } | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
   const toast = useToast();
   const loadSeq = useRef(0);
 
   const signOut = useCallback(() => {
     loadSeq.current += 1;
+    clearSession();
     setToken(null);
     setData(null);
+    setPending([]);
+    setRefundFor(null);
     setLoadError(null);
     setLoading(false);
     setExporting(false);
+  }, []);
+
+  // Honor a picker-created session (see /ops for the rationale).
+  useEffect(() => {
+    const s = loadSession();
+    if (s) setToken(s.token);
   }, []);
 
   const load = useCallback(async () => {
@@ -48,9 +68,10 @@ export default function FinancePage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const next = await getReconciliation(token);
+      const [next, approvals] = await Promise.all([getReconciliation(token), getPendingRefunds(token)]);
       if (seq !== loadSeq.current) return;
       setData(next);
+      setPending(approvals.pending);
     } catch (e) {
       if (seq !== loadSeq.current) return;
       const msg = getThaiErrorMessage(e);
@@ -92,6 +113,41 @@ export default function FinancePage() {
     }
   }
 
+  async function submitRefund() {
+    if (!token || !refundFor) return;
+    const auth = token;
+    const satang = Math.round(Number(refundAmount) * 100);
+    setBusy(true);
+    try {
+      await proposeRefund(refundFor.bookingId, satang, refundReason || "goodwill", auth);
+      setRefundFor(null);
+      setRefundAmount("");
+      setRefundReason("");
+      await load();
+      toast.success(th.finance.refundProposed);
+    } catch (e) {
+      toast.error(getThaiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approve(id: string) {
+    if (!token) return;
+    const auth = token;
+    setBusy(true);
+    try {
+      await approveRefund(id, auth);
+      await load();
+      toast.success(th.finance.refundApproved);
+    } catch (e) {
+      // §6.4: the initiator (or an unauthorized approver) is rejected here — surface it.
+      toast.error(getThaiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const s = data?.summary;
   const rows = data?.rows ?? [];
   const shown = rows.slice(0, MAX_ROWS);
@@ -115,6 +171,24 @@ export default function FinancePage() {
             <AlertIcon /> {th.finance.conservedNo}
           </Badge>
         ),
+    },
+    {
+      key: "refund",
+      header: "",
+      render: (r) =>
+        r.bookingId && r.captured - r.refunds > 0 ? (
+          <Button
+            data-testid="refund-btn"
+            variant="subtle"
+            onClick={() => {
+              setRefundFor({ bookingId: r.bookingId!, captured: r.captured - r.refunds });
+              setRefundAmount("");
+              setRefundReason("");
+            }}
+          >
+            {th.finance.refund}
+          </Button>
+        ) : null,
     },
   ];
 
@@ -199,7 +273,78 @@ export default function FinancePage() {
             {th.finance.showing(shown.length, rows.length)}
           </p>
         )}
+
+        {/* Pending refund approvals — §6.4 dual control: a second finance person executes. */}
+        <SectionBlock title={th.finance.pendingApprovals} count={pending.length}>
+          <div className="card">
+            <ul className="rowlist" data-testid="approvals-list">
+              {pending.length === 0 && <li className="empty">{th.finance.emptyApprovals}</li>}
+              {pending.map((a) => (
+                <li key={a.id} data-testid={`approval-${a.id}`}>
+                  <span className="row__main">
+                    <span className="row__name">{formatThb(a.amount)}</span>
+                    <span className="row__sub muted">
+                      {a.reason} · {th.finance.proposedBy} <code className="row__id">{a.initiatorId.slice(0, 10)}</code>
+                    </span>
+                  </span>
+                  <span className="row__actions">
+                    <Button data-testid="approve-btn" variant="primary" busy={busy} onClick={() => void approve(a.id)}>
+                      {th.finance.approve}
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SectionBlock>
       </main>
+
+      {/* Propose-refund dialog, opened from a reconciliation row. */}
+      {refundFor && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={th.finance.refundTitle} data-testid="refund-form">
+          <div className="modal card card--pad">
+            <h2 style={{ marginTop: 0 }}>{th.finance.refundTitle}</h2>
+            <p className="muted" style={{ fontSize: "0.85rem" }}>
+              {th.finance.colBooking} <code>{refundFor.bookingId.slice(0, 8)}</code> · {th.finance.captured}{" "}
+              {formatThb(refundFor.captured)}
+            </p>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.85rem", marginBottom: "var(--s3)" }}>
+              {th.finance.refundAmount}
+              <input
+                data-testid="refund-amount"
+                inputMode="numeric"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value.replace(/[^0-9]/g, ""))}
+                style={{ padding: "0.5rem 0.7rem", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)" }}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.85rem", marginBottom: "var(--s4)" }}>
+              {th.finance.refundReason}
+              <input
+                data-testid="refund-reason"
+                value={refundReason}
+                placeholder={th.finance.refundReasonPlaceholder}
+                onChange={(e) => setRefundReason(e.target.value)}
+                style={{ padding: "0.5rem 0.7rem", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)" }}
+              />
+            </label>
+            <div className="actions" style={{ justifyContent: "flex-end" }}>
+              <Button variant="subtle" onClick={() => setRefundFor(null)}>
+                {th.finance.cancel}
+              </Button>
+              <Button
+                data-testid="refund-submit"
+                variant="primary"
+                busy={busy}
+                disabled={!refundAmount || Number(refundAmount) <= 0}
+                onClick={() => void submitRefund()}
+              >
+                {th.finance.propose}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

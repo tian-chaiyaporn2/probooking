@@ -23,3 +23,7 @@
 .signin-card__label { font-weight: 700; color: var(--ink); }
 .signin-card__sub { font-size: 0.82rem; color: var(--muted); }
 .signin-card__go { color: var(--primary); font-weight: 700; font-size: 0.85rem; flex: none; }
+
+/* Modal dialog (finance refund proposal) */
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: var(--s4); background: color-mix(in srgb, #000 45%, transparent); }
+.modal { width: 100%; max-width: 420px; }

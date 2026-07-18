@@ -780,7 +780,9 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   async listPendingApprovals(): Promise<ApprovalRequestRecord[]> {
     const rows = await prisma.approvalRequest.findMany({
       where: { state: "Pending" },
-      orderBy: { createdAt: "asc" },
+      // Newest first: a fresh proposal awaiting a second approver must surface, not be hidden
+      // behind 100 stale ones once the cap is reached.
+      orderBy: { createdAt: "desc" },
       take: 100,
     });
     return rows.map(toApproval);
@@ -1058,6 +1060,13 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       if (isConflict(e)) throw new ConflictError("support case already exists");
       throw e;
     }
+  }
+
+  async resolveSupportCase(bookingId: string, kind: string): Promise<void> {
+    await prisma.supportCase.updateMany({
+      where: { refId: bookingId, kind, state: { not: "Resolved" } },
+      data: { state: "Resolved" },
+    });
   }
 
   async cancelBooking(input: CancelInput): Promise<CancelResult> {
@@ -1404,11 +1413,13 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     const clinics = await prisma.clinicWorkspace.findMany({
       where: { verification: "Submitted" },
       select: { id: true, branchName: true },
+      orderBy: { createdAt: "desc" }, // newest submissions first (and keeps the cap deterministic)
       take: 50,
     });
     const pros = await prisma.professionalProfile.findMany({
       where: { verification: "Submitted" },
       select: { id: true, displayName: true },
+      orderBy: { createdAt: "desc" },
       take: 50,
     });
     return [

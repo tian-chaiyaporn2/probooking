@@ -240,6 +240,34 @@ export interface Reconciliation {
 export const getReconciliation = (token: string) =>
   get<Reconciliation>("/finance/reconciliation", token);
 
+// ----- Refunds (§6.4 dual-control) -----
+export interface PendingApproval {
+  id: string;
+  capability: string;
+  refId: string; // bookingId
+  amount: number; // integer satang
+  reason: string;
+  state: "Pending" | "Executed" | "Rejected";
+  initiatorId: string;
+  initiatorRole: string;
+  createdAt: number;
+}
+
+/** A finance person proposes a refund; it moves no money until a *different* finance person approves. */
+export const proposeRefund = (bookingId: string, amount: number, reason: string, token: string) =>
+  post<{ id: string; state: string; amount: number }>(
+    "/finance/refunds",
+    { bookingId, amount, reason },
+    token,
+  );
+
+export const getPendingRefunds = (token: string) =>
+  get<{ pending: PendingApproval[] }>("/finance/refunds", token);
+
+/** Approve (execute) a proposed refund. Rejected with 403 if you are the initiator (§6.4). */
+export const approveRefund = (id: string, token: string) =>
+  post<{ id: string; state: string; refund?: number }>(`/finance/refunds/${id}/approve`, undefined, token);
+
 // ----- Reporting & exports (REP-02/03) -----
 export interface MarketplaceMetrics {
   shifts: { total: number; open: number };
