@@ -42,6 +42,7 @@ import {
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
+import { statusLabel, professionLabel } from "../../lib/status";
 import { badgeToneForKind } from "../../lib/tones";
 import { loadSession, clearSession, saveSession } from "../../lib/session";
 
@@ -380,7 +381,7 @@ export default function OpsPage() {
                           {p.profession ? (
                             <>
                               <dt>{th.ops.profession}</dt>
-                              <dd>{p.profession}</dd>
+                              <dd>{professionLabel(p.profession)}</dd>
                             </>
                           ) : null}
                           <dt>{th.ops.entityId}</dt>
@@ -526,7 +527,7 @@ export default function OpsPage() {
                   <span className="row__main">
                     <span className="row__name">{b.professionalName}</span>
                     <span className="row__sub">
-                      <Badge tone="info">{b.state}</Badge>
+                      <Badge tone="info">{statusLabel(b.state)}</Badge>
                       <span className="muted">{b.clinicName}</span>
                       {b.held && (
                         <Badge tone="warning">{th.ops.heldBadge}</Badge>
