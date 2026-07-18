@@ -3,17 +3,28 @@
  * are seeded by the demo fixtures (apps/api/src/fixtures/demo-fixtures.ts) with these exact
  * phones; the ops/finance phones come from STAFF_PHONES. Under AUTH_DEV_MODE the OTP code is
  * echoed back, so a click signs in in one step.
+ *
+ * Session persistence lives in `lib/session.ts` (canonical store) — re-exported here so
+ * existing imports keep working.
  */
+import type { SessionRole } from "./session";
+
+export type { SessionRole };
+export { saveSession, loadSession, clearSession } from "./session";
+
+export type DemoIcon = "clinic" | "professional" | "operations" | "finance";
+
 export interface DemoAccount {
   /** Stable, unique key for this card (used for the sign-in testid). */
   id: string;
   phone: string;
   label: string;
   sublabel: string;
-  role: "clinic" | "professional" | "operations" | "finance";
+  role: SessionRole;
   /** Where to land after signing in. */
   route: string;
-  emoji: string;
+  /** Icon key mapped in RolePicker (no emoji). */
+  icon: DemoIcon;
 }
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
@@ -24,7 +35,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     sublabel: "เจ้าของคลินิก — ประกาศเวร ส่งข้อเสนอ ยืนยันการจอง",
     role: "clinic",
     route: "/clinic",
-    emoji: "🏥",
+    icon: "clinic",
   },
   {
     id: "professional",
@@ -33,7 +44,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     sublabel: "บุคลากร — หาเวร ยอมรับข้อเสนอ ทำงาน รับเงิน",
     role: "professional",
     route: "/pro",
-    emoji: "🩺",
+    icon: "professional",
   },
   {
     id: "operations",
@@ -42,7 +53,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     sublabel: "Operations — ตรวจสอบคลินิก/บุคลากร จัดการเคส",
     role: "operations",
     route: "/ops",
-    emoji: "🛡️",
+    icon: "operations",
   },
   {
     id: "finance",
@@ -51,7 +62,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     sublabel: "Finance — กระทบยอด ส่งออก CSV เสนอคืนเงิน",
     role: "finance",
     route: "/finance",
-    emoji: "💳",
+    icon: "finance",
   },
   {
     id: "finance-approver",
@@ -60,34 +71,6 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     sublabel: "Finance — ผู้อนุมัติคนที่สองสำหรับคืนเงิน (§6.4 dual-control)",
     role: "finance",
     route: "/finance",
-    emoji: "🧾",
+    icon: "finance",
   },
 ];
-
-const KEY = "probook.session";
-
-/** Persist the signed-in token + who, so it survives navigation between party pages. */
-export function saveSession(token: string, phone: string): void {
-  try {
-    sessionStorage.setItem(KEY, JSON.stringify({ token, phone }));
-  } catch {
-    /* sessionStorage unavailable — the caller still holds the token in state */
-  }
-}
-
-export function loadSession(): { token: string; phone: string } | null {
-  try {
-    const raw = sessionStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as { token: string; phone: string }) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function clearSession(): void {
-  try {
-    sessionStorage.removeItem(KEY);
-  } catch {
-    /* ignore */
-  }
-}

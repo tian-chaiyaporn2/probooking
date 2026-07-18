@@ -222,6 +222,12 @@ export interface PendingVerification {
   kind: "clinic" | "professional" | "insurance";
   id: string;
   name: string;
+  /** Clinic licence (decrypted for Ops review). */
+  licenceNo?: string;
+  /** Clinic address (decrypted for Ops review). */
+  address?: string;
+  /** Professional self-declared profession. */
+  profession?: string;
 }
 
 /** A live booking Operations can act on (VER-04 suspend / VER-06 credential hold). */

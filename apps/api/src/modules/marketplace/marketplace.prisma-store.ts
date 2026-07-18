@@ -1411,15 +1411,17 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async listPendingVerifications(): Promise<PendingVerification[]> {
+    // Ops review needs licence/address/profession at verify time — decrypt here (write path
+    // encrypts them at rest). Only Submitted rows are returned, and the endpoint is ops-gated.
     const clinics = await prisma.clinicWorkspace.findMany({
       where: { verification: "Submitted" },
-      select: { id: true, branchName: true },
+      select: { id: true, branchName: true, licenceNo: true, address: true },
       orderBy: { createdAt: "desc" }, // newest submissions first (and keeps the cap deterministic)
       take: 50,
     });
     const pros = await prisma.professionalProfile.findMany({
       where: { verification: "Submitted" },
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, profession: true },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
@@ -1433,9 +1435,24 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       take: 50,
     });
     return [
-      ...clinics.map((c) => ({ kind: "clinic" as const, id: c.id, name: c.branchName })),
-      ...pros.map((p) => ({ kind: "professional" as const, id: p.id, name: p.displayName })),
-      ...insurance.map((i) => ({ kind: "insurance" as const, id: i.professionalId, name: i.professional.displayName })),
+      ...clinics.map((c) => ({
+        kind: "clinic" as const,
+        id: c.id,
+        name: c.branchName,
+        licenceNo: decryptField(c.licenceNo),
+        address: decryptField(c.address),
+      })),
+      ...pros.map((p) => ({
+        kind: "professional" as const,
+        id: p.id,
+        name: p.displayName,
+        profession: p.profession,
+      })),
+      ...insurance.map((i) => ({
+        kind: "insurance" as const,
+        id: i.professionalId,
+        name: i.professional.displayName,
+      })),
     ];
   }
 

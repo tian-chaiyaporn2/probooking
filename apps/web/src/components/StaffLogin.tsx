@@ -30,9 +30,12 @@ function normalizePhone(raw: string): string {
 export function StaffLogin({
   surface,
   onToken,
+  sessionNotice,
 }: {
   surface: "operations" | "finance";
   onToken: (token: string) => void;
+  /** Shown when the previous session expired or was cleared. */
+  sessionNotice?: string | null;
 }) {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -103,6 +106,11 @@ export function StaffLogin({
         </div>
         <h2>{th.staffLogin.title[surface]}</h2>
         <p className="lead muted">{th.staffLogin.description}</p>
+        {sessionNotice ? (
+          <p role="status" className="form-error form-error--info">
+            {sessionNotice}
+          </p>
+        ) : null}
         {demoPhone && stage === "phone" && (
           <div className="staff-demo">
             <p className="staff-demo__hint muted">{th.staffLogin.demoHint}</p>

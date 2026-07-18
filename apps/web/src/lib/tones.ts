@@ -19,6 +19,7 @@ export function resolveBadgeTone(tone: BadgeTone = "muted"): ResolvedBadgeTone {
 export function badgeToneForKind(kind: string): ResolvedBadgeTone {
   if (kind === "clinic") return "info";
   if (kind === "professional") return "accent";
+  if (kind === "insurance") return "success";
   if (kind === "credential_hold") return "warning";
   return "muted";
 }
