@@ -65,7 +65,9 @@ export function StaffLogin({
   }
 
   // The ready-made demo account for this surface (one-click sign-in; OTP auto-fills).
-  const demoPhone = DEMO_ACCOUNTS.find((a) => a.role === surface)?.phone;
+  const demoPhone = DEMO_ACCOUNTS.find(
+    (a) => a.id === (surface === "operations" ? "operations" : "finance"),
+  )?.phone;
 
   async function sendCode(withPhone?: string) {
     setBusy(true);

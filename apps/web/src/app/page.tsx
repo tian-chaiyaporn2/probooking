@@ -92,7 +92,7 @@ export default function Home() {
           </div>
           <p className="contact-note">
             <a
-              href={`mailto:${th.home.contactEmail}`}
+              href={`mailto:${th.home.contactEmail}?subject=${encodeURIComponent(th.home.contactMailtoSubject)}`}
               className="btn btn--primary btn--lg"
               data-testid="contact-cta"
             >

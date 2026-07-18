@@ -26,11 +26,21 @@ async function staffUiLogin(page: any, phone: string) {
  * session the picker would have stored, and reload so the page hydrates from it. Uses a
  * token minted once (avoids the per-phone OTP interval that re-login would hit).
  */
-async function injectSession(page: any, route: string, token: string, phone: string) {
+async function injectSession(
+  page: any,
+  route: string,
+  token: string,
+  phone: string,
+  role?: string,
+) {
   await page.goto(route);
   await page.evaluate(
-    ([t, p]: [string, string]) => sessionStorage.setItem("probook.session", JSON.stringify({ token: t, phone: p })),
-    [token, phone],
+    ([t, p, r]: [string, string, string | undefined]) =>
+      sessionStorage.setItem(
+        "probook.session",
+        JSON.stringify({ token: t, phone: p, ...(r ? { role: r } : {}) }),
+      ),
+    [token, phone, role],
   );
   await page.reload();
 }
@@ -171,7 +181,7 @@ test("landing contact block captures real-interest clinics", async ({ page }) =>
   await expect(page.getByTestId("contact-cta")).toHaveText("ติดต่อทีมคอนเซียร์จ");
   await expect(page.getByTestId("contact-cta")).toHaveAttribute(
     "href",
-    "mailto:concierge@probooking.app",
+    /mailto:concierge@probooking\.app\?subject=/,
   );
 });
 
@@ -199,6 +209,50 @@ test("signed-in clinic nav hides staff links and supports sign out", async ({ pa
   await expect(
     page.locator(".app-nav--desktop").getByRole("link", { name: "เข้าใช้งาน" }),
   ).toBeVisible();
+});
+
+test("party session on ops hides workspace link until staff logs in", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = "http://localhost:4000";
+  const phone = "+66910000001";
+  const req = await page.request.post(`${api}/auth/otp/request`, { data: { phone } });
+  const { devCode } = (await req.json()) as { devCode: string };
+  const ver = await page.request.post(`${api}/auth/otp/verify`, {
+    data: { phone, code: devCode },
+  });
+  const { token } = (await ver.json()) as { token: string };
+  await injectSession(page, "/ops", token, phone, "clinic");
+  await expect(page.getByRole("link", { name: "คลินิกของฉัน" })).toHaveCount(0);
+  await expect(page.getByTestId("account-chip")).toHaveCount(0);
+  await expect(page.getByLabel("หมายเลขโทรศัพท์ของเจ้าหน้าที่")).toBeVisible();
+});
+
+test("staff path from home scrolls to staff picker on sign-in", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await expect(page.getByTestId("home-staff-path")).toContainText("เลือกบทบาททีม");
+  await page.getByTestId("home-staff-path").click();
+  await expect(page).toHaveURL(/\/signin#staff$/);
+  await expect(page.getByTestId("signin-staff-group")).toBeVisible();
+  const inView = await page.getByTestId("signin-staff-group").evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.top >= 0 && rect.top < window.innerHeight * 0.85;
+  });
+  expect(inView).toBe(true);
+});
+
+test("finance approver shows approver label in header", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const api = "http://localhost:4000";
+  const phone = "+66900000006";
+  const req = await page.request.post(`${api}/auth/otp/request`, { data: { phone } });
+  const { devCode } = (await req.json()) as { devCode: string };
+  const ver = await page.request.post(`${api}/auth/otp/verify`, {
+    data: { phone, code: devCode },
+  });
+  const { token } = (await ver.json()) as { token: string };
+  await injectSession(page, "/finance", token, phone, "finance");
+  await expect(page.getByTestId("account-chip")).toContainText("ผู้อนุมัติ");
 });
 
 test("landing keeps brand before product visual on phone", async ({ page }) => {

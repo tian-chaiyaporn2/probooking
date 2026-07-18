@@ -3,14 +3,17 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { logout } from "../lib/api";
 import { th } from "../lib/strings";
 import {
   clearSession,
   loadSession,
   onSessionChange,
+  type AppSession,
   type SessionRole,
 } from "../lib/session";
-import { DEMO_ACCOUNTS } from "../lib/demo-accounts";
+import { demoAccountLabel } from "../lib/demo-accounts";
+import { isStaffRole, sessionShowsWorkspace } from "../lib/nav-session";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "./icons";
 
@@ -22,14 +25,14 @@ type NavLink = {
 
 const DRAWER_MQ = "(min-width: 960px)";
 
-function roleLabel(role: SessionRole): string {
-  const match = DEMO_ACCOUNTS.find((a) => a.role === role);
-  if (match) return match.label;
-  if (role === "clinic") return th.party.navClinic;
-  if (role === "professional") return th.party.navPro;
-  if (role === "operations") return th.nav.ops;
-  if (role === "finance") return th.nav.finance;
-  return role;
+function accountLabel(session: AppSession): string | null {
+  const fromDemo = demoAccountLabel(session.phone, session.role);
+  if (fromDemo) return fromDemo;
+  if (session.role === "clinic") return th.party.navClinic;
+  if (session.role === "professional") return th.party.navPro;
+  if (session.role === "operations") return th.nav.ops;
+  if (session.role === "finance") return th.nav.finance;
+  return session.role ?? null;
 }
 
 function workspaceLink(role: SessionRole): NavLink | null {
@@ -53,12 +56,14 @@ function publicLinks(signedIn: boolean): NavLink[] {
 /**
  * Shared app shell header: brand + context-aware nav + theme toggle.
  * Party users see their workspace; staff see ops/finance; signed-out users see public links only.
- * Flow smoke test is footer-only — not in the primary nav.
+ * Workspace links are hidden when the session role does not match the current surface.
  */
 export function AppHeader({ current }: { current?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [session, setSession] = useState<ReturnType<typeof loadSession>>(null);
+  const [session, setSession] = useState<AppSession | null>(() =>
+    typeof window === "undefined" ? null : loadSession(),
+  );
   const drawerId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
@@ -126,13 +131,25 @@ export function AppHeader({ current }: { current?: string }) {
 
   const signedIn = Boolean(session?.token);
   const role = session?.role;
+  const showWorkspace =
+    signedIn && role && sessionShowsWorkspace(role, current);
+  const label = session ? accountLabel(session) : null;
   const links: NavLink[] = [...publicLinks(signedIn)];
-  const workspace = role ? workspaceLink(role) : null;
+  const workspace = showWorkspace && role ? workspaceLink(role) : null;
   if (workspace) links.push(workspace);
 
-  function signOut() {
+  async function signOut() {
+    const previous = session?.token;
+    const previousRole = session?.role;
     clearSession();
     setOpen(false);
+    if (previous && isStaffRole(previousRole)) {
+      try {
+        await logout(previous);
+      } catch {
+        // Best-effort revoke; local session is already cleared.
+      }
+    }
     router.push("/");
   }
 
@@ -165,11 +182,12 @@ export function AppHeader({ current }: { current?: string }) {
         <nav
           className="app-nav app-nav--desktop"
           aria-label={th.a11y.primaryNav}
+          aria-hidden={open ? true : undefined}
         >
           {renderLinks(links)}
-          {signedIn && role ? (
+          {showWorkspace && label ? (
             <span className="account-chip" data-testid="account-chip">
-              {roleLabel(role)}
+              {label}
             </span>
           ) : null}
           {signedIn ? (
@@ -177,7 +195,7 @@ export function AppHeader({ current }: { current?: string }) {
               type="button"
               className="nav-signout"
               data-testid="nav-signout"
-              onClick={signOut}
+              onClick={() => void signOut()}
             >
               {th.nav.signOut}
             </button>
@@ -185,12 +203,12 @@ export function AppHeader({ current }: { current?: string }) {
         </nav>
 
         <div className="app-header__right">
-          {signedIn && role ? (
+          {showWorkspace && label ? (
             <span
               className="account-chip account-chip--compact"
               data-testid="account-chip-mobile"
             >
-              {roleLabel(role)}
+              {label}
             </span>
           ) : null}
           <ThemeToggle />
@@ -237,9 +255,9 @@ export function AppHeader({ current }: { current?: string }) {
                 <CloseIcon />
               </button>
             </div>
-            {signedIn && role ? (
+            {showWorkspace && label ? (
               <p className="app-nav--drawer__account" data-testid="drawer-account">
-                {th.nav.accountLabel(roleLabel(role))}
+                {th.nav.accountLabel(label)}
               </p>
             ) : null}
             <p className="app-nav--drawer__group">{th.nav.publicGroup}</p>
@@ -249,7 +267,7 @@ export function AppHeader({ current }: { current?: string }) {
                 type="button"
                 className="nav-drawer-signout"
                 data-testid="drawer-signout"
-                onClick={signOut}
+                onClick={() => void signOut()}
               >
                 {th.nav.signOut}
               </button>

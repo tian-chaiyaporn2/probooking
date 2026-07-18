@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { RolePicker } from "../../components/RolePicker";
 import { useToast } from "../../components/Toast";
 import { resetDemo } from "../../lib/api";
 import { getThaiErrorMessage, th } from "../../lib/strings";
 import { clearSession } from "../../lib/session";
+
+function scrollToStaffGroup() {
+  const el = document.getElementById("staff");
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+  el.focus({ preventScroll: true });
+}
 
 /**
  * "Sign in as" demo page. Pick a ready-made account for any role and land on that role's
@@ -16,6 +24,15 @@ import { clearSession } from "../../lib/session";
 export default function SignInPage() {
   const toast = useToast();
   const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    if (window.location.hash === "#staff") scrollToStaffGroup();
+    const onHash = () => {
+      if (window.location.hash === "#staff") scrollToStaffGroup();
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   async function onReset() {
     setResetting(true);
@@ -39,7 +56,11 @@ export default function SignInPage() {
           <p className="muted" style={{ margin: 0 }}>
             {th.signin.subtitle}
           </p>
-          <p className="guided-demo muted" style={{ margin: "var(--s3) 0 0" }} data-testid="guided-demo">
+          <p
+            className="guided-demo muted"
+            style={{ margin: "var(--s3) 0 0" }}
+            data-testid="guided-demo"
+          >
             {th.home.guidedDemo}
           </p>
           <p style={{ margin: "var(--s3) 0 0" }}>

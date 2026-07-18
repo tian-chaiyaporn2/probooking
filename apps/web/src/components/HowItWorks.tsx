@@ -29,6 +29,7 @@ export function HowItWorks() {
       >
         <Button
           variant={perspective === "clinic" ? "primary" : "subtle"}
+          aria-pressed={perspective === "clinic"}
           onClick={() => setPerspective("clinic")}
           data-testid="how-clinic"
         >
@@ -36,6 +37,7 @@ export function HowItWorks() {
         </Button>
         <Button
           variant={perspective === "pro" ? "primary" : "subtle"}
+          aria-pressed={perspective === "pro"}
           onClick={() => setPerspective("pro")}
           data-testid="how-pro"
         >

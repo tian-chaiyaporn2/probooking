@@ -28,3 +28,4 @@ Feature: Landing marketing copy
     Then there should be 2 party demo accounts
     And there should be 3 staff demo accounts
     And the guided demo path should mention operations and finance
+    And every finance approver sublabel should be Thai-only

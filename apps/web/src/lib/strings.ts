@@ -86,7 +86,7 @@ export const th = {
     audienceProCta: "เริ่มเดโม",
     audienceStaff: "สำหรับทีมภายใน",
     audienceStaffDesc: "ปฏิบัติการตรวจสอบและจัดการเคส การเงินกระทบยอดคำสั่งชำระเงิน",
-    audienceStaffCta: "เข้าใช้งาน",
+    audienceStaffCta: "เลือกบทบาททีม",
     pickTitle: "เลือกบทบาทเพื่อเริ่ม demo",
     pickSubtitle:
       "เข้าสู่ระบบด้วยบัญชีทดลองของแต่ละบทบาท แล้วขับเคลื่อนทั้งขั้นตอนด้วยตนเอง คลิกเดียว รหัส OTP กรอกให้อัตโนมัติ",
@@ -112,6 +112,7 @@ export const th = {
       "Phase 0 เปิดให้คลินิกในกรุงเทพฯ และปริมณฑลผ่านทีม concierge — ยังไม่เปิดจองด้วยตนเองสาธารณะ",
     contactCta: "ติดต่อทีมคอนเซียร์จ",
     contactEmail: "concierge@probooking.app",
+    contactMailtoSubject: "สนใจใช้งาน ProBooking Phase 0",
   },
   signin: {
     title: "เข้าใช้งานในบทบาทต่าง ๆ",

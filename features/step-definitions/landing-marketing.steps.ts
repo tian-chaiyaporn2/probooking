@@ -1,17 +1,18 @@
 import { Given, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
+import {
+  DEMO_ACCOUNTS_DATA,
+  DEMO_PARTY_ACCOUNTS_DATA,
+  DEMO_STAFF_ACCOUNTS_DATA,
+} from "../../apps/web/src/lib/demo-accounts.data.ts";
 import { th } from "../../apps/web/src/lib/strings.ts";
-
-/** Mirrors `demo-accounts.ts` grouping without pulling client session modules into BDD. */
-const DEMO_PARTY_IDS = ["clinic", "professional"] as const;
-const DEMO_STAFF_IDS = ["operations", "finance", "finance-approver"] as const;
 
 Given("the landing marketing strings are loaded", function () {
   assert.ok(th.home);
 });
 
 Given("the demo account catalogue is loaded", function () {
-  assert.ok(DEMO_PARTY_IDS.length + DEMO_STAFF_IDS.length > 0);
+  assert.ok(DEMO_ACCOUNTS_DATA.length > 0);
 });
 
 Then("the hero eyebrow should be {string}", function (expected: string) {
@@ -48,14 +49,20 @@ Then("the guided demo path should mention clinic and professional roles", functi
 });
 
 Then("there should be {int} party demo accounts", function (count: number) {
-  assert.equal(DEMO_PARTY_IDS.length, count);
+  assert.equal(DEMO_PARTY_ACCOUNTS_DATA.length, count);
 });
 
 Then("there should be {int} staff demo accounts", function (count: number) {
-  assert.equal(DEMO_STAFF_IDS.length, count);
+  assert.equal(DEMO_STAFF_ACCOUNTS_DATA.length, count);
 });
 
 Then("the guided demo path should mention operations and finance", function () {
   assert.match(th.home.guidedDemo, /ปฏิบัติการ/);
   assert.match(th.home.guidedDemo, /การเงิน/);
+});
+
+Then("every finance approver sublabel should be Thai-only", function () {
+  const approver = DEMO_ACCOUNTS_DATA.find((a) => a.id === "finance-approver");
+  assert.ok(approver);
+  assert.doesNotMatch(approver!.sublabel, /§|Operations|Finance/i);
 });
