@@ -293,7 +293,9 @@ Gaps that hurt maintainability:
 - **P2.11 (controller + money tests): done.** `controller-authz.test.ts` (REP-01 reader/actor split) + `store-parity.test.ts` (money conservation, ordering, caps). Coverage-gate wiring still open. (#44)
 - **P1.6 (memory/Prisma parity suite): done** as `store-parity.test.ts` — same scenarios asserted against both stores, prisma param gated on `DATABASE_URL`. (#44)
 - **P1.5 (controller split): done.** The 1,582-line `MarketplaceController` was carved into nine per-aggregate controllers under `controllers/` plus a shared `MarketplaceAccessService`; routes byte-identical, behaviour verified on both stores. The `MarketplaceRepository` and its two stores were **deliberately left intact** (single port is a clean seam; store split is higher-risk, lower-payoff). (#46)
-- **Still open:** the **store/repository split** (deferred from P1.5 — only if a real need emerges), **P2.10** (zod validation), and coverage-gate thresholds on `apps/api`.
+- **P2.10 (zod validation): done.** The hand-rolled `validateBody` field-spec checker is replaced by co-located `z.object` schemas + a `parseBody` helper (ZodError → 400), with inferred DTO types and preserved unknown-key stripping. `validate.util.ts` deleted. (#48)
+- **Coverage gates: done.** `@vitest/coverage-v8` + a ratcheted threshold (88/76/88/88, just under the current 91/81/91/91) scoped to the pure-logic units unit tests own — config, auth logic, marketplace utilities. Controllers/stores are e2e/BDD-covered and deliberately out of the gate's scope. Enforced in CI on both legs. (#49)
+- **Still open:** only the **store/repository split** (deferred from P1.5 — worth doing solely if the two stores start diverging in practice). Everything else in this review has shipped.
 
 ---
 
