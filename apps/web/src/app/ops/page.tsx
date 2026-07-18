@@ -36,6 +36,7 @@ import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
 import { badgeToneForKind } from "../../lib/tones";
+import { loadSession, clearSession } from "../../lib/demo-accounts";
 
 /**
  * Operations dashboard (ADM-01). Internal tool that calls controlled API actions:
@@ -54,6 +55,7 @@ export default function OpsPage() {
 
   const signOut = useCallback(() => {
     loadSeq.current += 1;
+    clearSession();
     setToken(null);
     setMetrics(null);
     setPending([]);
@@ -61,6 +63,14 @@ export default function OpsPage() {
     setLoadError(null);
     setLoading(false);
     setBusy(false);
+  }, []);
+
+  // Honor a session created by the "sign in as" picker so a click there lands here signed in,
+  // rather than showing the staff login form again. A wrong-role session fails the first load
+  // (403) and drops back to the form.
+  useEffect(() => {
+    const s = loadSession();
+    if (s) setToken(s.token);
   }, []);
 
   const load = useCallback(async () => {

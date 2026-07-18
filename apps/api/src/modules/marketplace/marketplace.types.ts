@@ -595,6 +595,8 @@ export interface MarketplaceRepository {
   // --- Operations cases (SUP-01) — one per (booking, kind) ---
   findSupportCase(bookingId: string, kind: string): Promise<ReviewCase | null>;
   createSupportCase(bookingId: string, kind: string, subject: string): Promise<ReviewCase>;
+  /** Mark the open case for (booking, kind) Resolved, if one exists. Idempotent. */
+  resolveSupportCase(bookingId: string, kind: string): Promise<void>;
 
   // --- Cancellation & refund (CAN-01..05) ---
   /**

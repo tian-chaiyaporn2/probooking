@@ -585,7 +585,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async listPendingApprovals(): Promise<ApprovalRequestRecord[]> {
     return [...this.approvals.values()]
       .filter((r) => r.state === "Pending")
-      .sort((a, b) => a.createdAt - b.createdAt)
+      .sort((a, b) => b.createdAt - a.createdAt) // newest first (matches Prisma; fresh proposals surface)
       .map((r) => ({ ...r }));
   }
 
@@ -717,6 +717,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const c: ReviewCase = { id: randomUUID(), state: "Open", bookingId };
     this.supportCases.set(key, c);
     return c;
+  }
+
+  async resolveSupportCase(bookingId: string, kind: string): Promise<void> {
+    const c = this.supportCases.get(`${bookingId}:${kind}`);
+    if (c && c.state !== "Resolved") c.state = "Resolved";
   }
 
   async createReview(input: ReviewInput): Promise<ReviewResult> {

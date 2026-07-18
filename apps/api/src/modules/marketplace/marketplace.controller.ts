@@ -240,6 +240,9 @@ export class MarketplaceController {
     const booking = await this.requireBooking(id);
     if (!booking.heldAt) return { id, held: false };
     await this.repo.resolveHold(id);
+    // The hold's support case is done once the hold is lifted — close it so it leaves the
+    // operations queue rather than lingering Open forever.
+    await this.repo.resolveSupportCase(id, "credential_hold");
     await this.audit(user, "resolve_hold", "booking", id);
     return { id, held: false };
   }

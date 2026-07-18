@@ -44,7 +44,7 @@ export default function SignInPage() {
               key={acc.phone}
               type="button"
               className="signin-card"
-              data-testid={`signin-${acc.role}`}
+              data-testid={`signin-${acc.id}`}
               disabled={busy !== null}
               onClick={() => void signInAs(acc)}
             >
