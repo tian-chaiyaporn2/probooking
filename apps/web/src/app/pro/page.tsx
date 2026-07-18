@@ -51,7 +51,7 @@ import {
 } from "../../lib/datetime";
 import { getThaiErrorMessage, th } from "../../lib/strings";
 import { statusLabel, nextActionHint, categoryLabel } from "../../lib/status";
-import { loadSession, clearSession } from "../../lib/session";
+import { loadSession } from "../../lib/session";
 
 function nameInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -160,11 +160,6 @@ export default function ProPage() {
     } finally {
       setBusy(false);
     }
-  }
-
-  function signOut() {
-    clearSession();
-    setToken(null);
   }
 
   const pendingOffers = useMemo(
@@ -276,9 +271,6 @@ export default function ProPage() {
               <Link href="/signin" className="btn btn--subtle">
                 {th.party.switchRole}
               </Link>
-              <Button variant="subtle" onClick={signOut}>
-                {th.staffLogin.signOut}
-              </Button>
             </div>
           </div>
 
