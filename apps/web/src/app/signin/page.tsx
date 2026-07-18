@@ -22,7 +22,7 @@ export default function SignInPage() {
     try {
       await resetDemo();
       clearSession();
-      toast.success("รีเซ็ตข้อมูลเดโมแล้ว");
+      toast.success("รีเซ็ตข้อมูล demo แล้ว");
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
@@ -51,7 +51,7 @@ export default function SignInPage() {
           }}
         >
           <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
-            บัญชีทดลองสำหรับเดโมเท่านั้น (โหมด AUTH_DEV_MODE) — รหัส OTP
+            บัญชีทดลองสำหรับ demo เท่านั้น (โหมด AUTH_DEV_MODE) รหัส OTP
             จะกรอกให้อัตโนมัติ
           </p>
           <button
@@ -61,7 +61,7 @@ export default function SignInPage() {
             disabled={resetting}
             onClick={() => void onReset()}
           >
-            {resetting ? "กำลังรีเซ็ต…" : "รีเซ็ตข้อมูลเดโม"}
+            {resetting ? "กำลังรีเซ็ต…" : "รีเซ็ตข้อมูล demo"}
           </button>
         </div>
       </main>

@@ -139,7 +139,7 @@ export default function Home() {
             ProBooking
           </span>
           <span className="footer__meta">
-            <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+            <span>Phase 0 · กรุงเทพฯ และปริมณฑล</span>
             <Link
               href="/journey"
               className="footer__link"
