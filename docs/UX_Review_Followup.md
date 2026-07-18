@@ -9,47 +9,55 @@
 
 ProBooking is now a **credible Phase 0 investor demo**: RolePicker → real `/clinic` and `/pro` happy paths, plus staff Ops/Finance. The original review’s “no marketplace IA” claim is obsolete.
 
-The remaining trust gap was **money clarity at commitment** on clinic/pro (landing and `/journey` showed fee breakdown; workspaces did not). That is the focus of this follow-up.
+Money clarity at commitment (CheckoutSummary on clinic confirm / pro accept) and Thai status labels shipped in the prior follow-up. This pass closes the remaining open items that were API-backed and IA-related.
 
 | Audience | Readiness | Notes |
 |---|---|---|
 | Investor / demo driver | High | RolePicker + clinic/pro walk a real booking |
-| Clinic / professional (Phase 1) | Medium | Happy path works; profiles, search, messaging still thin |
+| Clinic / professional (Phase 1) | Medium–High | Profiles, shift filters, search, booking thread |
 | Ops / Finance | High | Confirm dialogs, recon drill-down, dual-control refunds |
-| Design system | High | Tokens, Dialog, CheckoutSummary, timeline |
+| Design system | High | Tokens, Dialog, CheckoutSummary, timeline, icon RolePicker |
 
 ---
 
 ## What’s working
 
-- Landing leads with RolePicker (honest Phase 0 demo door) + Payment Protected mockcard
-- Clinic: post → offer → confirm → complete/cancel
-- Pro: apply → accept → arrive/complete → review
-- Ops: verify/resolve/hold/suspend with confirms; pending detail
-- Finance: exceptions filter, row legs, dual-control refund UI
+- Landing leads with RolePicker; journey + audience orientation sits **below** (no competing heroes)
+- Clinic: post → offer (named candidates) → confirm → complete/cancel + booking thread
+- Pro: profile panel, filtered browse, apply → accept → arrive/complete → review + thread
+- Ops/Finance: single canonical `probook.session` (legacy staff keys purged)
+- RolePicker uses design-system icons (no emoji)
 - `/journey` Thai guided path; `/flow` demoted to smoke/e2e
 
 ---
 
-## Findings → this follow-up
+## Findings → follow-ups shipped
 
-| Gap | Follow-up action |
+| Gap | Action |
 |---|---|
 | No checkout on clinic confirm / pro accept | `CheckoutSummary` + `buildCheckout` on commitment moments |
 | English machine states on party dashboards | Thai `statusLabel` + next-action hints |
-| Dual session leak (staff ↔ party) | `clearSession` clears both stores; RolePicker wipes before save |
-| Ops hold/suspend one-click | Confirm dialogs (aligned with verify/resolve) |
+| Dual session leak (staff ↔ party) | One `probook.session` store; RolePicker clears before save; Ops/Finance use same key |
+| Ops hold/suspend one-click | Confirm dialogs |
 | E2e walkthroughs missed `dialog-confirm` | Specs updated |
-| Stale UX_Review.md | This follow-up doc + note on original |
+| Candidate IDs only | Resolve display names via `GET /professionals/:id/profile` |
+| Emoji RolePicker | Icon keys → Clinic / Stethoscope / Shield / Wallet |
+| Thin Phase 1 surfaces | Profile panel, shift filters, pro search, BookingThread + §7.3 soft-warn |
+| Landing IA | RolePicker primary; journey/audience secondary section |
 
 ---
 
-## Still open (not in this follow-up)
+## Still open (later phases)
 
-1. Richer profiles, schedule, invite UI, booking thread (PRD Phase 1)
-2. Single canonical session store (httpOnly cookie) instead of dual sessionStorage keys
-3. Landing IA product call: RolePicker-only vs also surfacing journey/audience cards in the first viewport
-4. Candidate names instead of truncated IDs; emoji RolePicker vs icon system
+1. Full schedule / availability calendar UI (AVL API exists; UI not built)
+2. Invite-from-search → offer in one click from search results
+3. httpOnly cookie session via BFF (static export cannot set httpOnly today — documented in `lib/session.ts`)
+
+---
+
+## Session note
+
+Next `output: "export"` + Bearer-only API → client `sessionStorage` is the realistic Phase 0 store. Canonical key: `probook.session` `{ token, phone, role? }`. Compatible with e2e `injectSession`.
 
 ---
 

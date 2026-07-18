@@ -3,15 +3,32 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "./Toast";
+import {
+  ClinicIcon,
+  ShieldCheckIcon,
+  StethoscopeIcon,
+  WalletIcon,
+} from "./icons";
 import { loginAs } from "../lib/api";
 import { getThaiErrorMessage } from "../lib/strings";
-import { DEMO_ACCOUNTS, saveSession, clearSession, type DemoAccount } from "../lib/demo-accounts";
+import {
+  DEMO_ACCOUNTS,
+  saveSession,
+  clearSession,
+  type DemoAccount,
+  type DemoIcon,
+} from "../lib/demo-accounts";
+
+const ICONS: Record<DemoIcon, typeof ClinicIcon> = {
+  clinic: ClinicIcon,
+  professional: StethoscopeIcon,
+  operations: ShieldCheckIcon,
+  finance: WalletIcon,
+};
 
 /**
- * The "sign in as" demo picker. Each card logs in as a ready-made account for a role and
- * lands on that role's surface, so a tester can drive the marketplace by hand from each side
- * rather than one-click everything. The mock phone is shown on the card and, under
- * AUTH_DEV_MODE, the OTP is auto-filled — nothing to type.
+ * Demo "sign in as" picker. Each card logs in via OTP (AUTH_DEV_MODE) and lands on
+ * that role's surface. Icons replace emoji so the picker matches the design system.
  */
 export function RolePicker() {
   const router = useRouter();
@@ -22,9 +39,8 @@ export function RolePicker() {
     setBusy(acc.phone);
     try {
       const token = await loginAs(acc.phone);
-      // Wipe any prior party/staff session before writing the new one.
       clearSession();
-      saveSession(token, acc.phone);
+      saveSession(token, acc.phone, acc.role);
       router.push(acc.route);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
@@ -34,28 +50,33 @@ export function RolePicker() {
 
   return (
     <div className="signin-grid">
-      {DEMO_ACCOUNTS.map((acc) => (
-        <button
-          key={acc.phone}
-          type="button"
-          className="signin-card"
-          data-testid={`signin-${acc.id}`}
-          disabled={busy !== null}
-          onClick={() => void signInAs(acc)}
-        >
-          <span className="signin-card__emoji" aria-hidden>
-            {acc.emoji}
-          </span>
-          <span className="signin-card__body">
-            <span className="signin-card__label">{acc.label}</span>
-            <span className="signin-card__sub">{acc.sublabel}</span>
-            <span className="signin-card__phone">
-              <code>{acc.phone}</code> · OTP อัตโนมัติ
+      {DEMO_ACCOUNTS.map((acc) => {
+        const Icon = ICONS[acc.icon];
+        return (
+          <button
+            key={acc.phone}
+            type="button"
+            className="signin-card"
+            data-testid={`signin-${acc.id}`}
+            disabled={busy !== null}
+            onClick={() => void signInAs(acc)}
+          >
+            <span className="signin-card__icon" aria-hidden>
+              <Icon style={{ fontSize: "1.35rem" }} />
             </span>
-          </span>
-          <span className="signin-card__go">{busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}</span>
-        </button>
-      ))}
+            <span className="signin-card__body">
+              <span className="signin-card__label">{acc.label}</span>
+              <span className="signin-card__sub">{acc.sublabel}</span>
+              <span className="signin-card__phone">
+                <code>{acc.phone}</code> · OTP อัตโนมัติ
+              </span>
+            </span>
+            <span className="signin-card__go">
+              {busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -10,7 +10,10 @@ export const API_BASE =
  */
 export const formatThb = (s: number) => formatThbDomain(s);
 
-function authHeaders(base: Record<string, string> = {}, token?: string): Record<string, string> {
+function authHeaders(
+  base: Record<string, string> = {},
+  token?: string,
+): Record<string, string> {
   return token ? { ...base, authorization: `Bearer ${token}` } : base;
 }
 
@@ -24,7 +27,9 @@ async function errorFrom(res: Response): Promise<Error> {
   const text = await res.text();
   try {
     const body = JSON.parse(text) as { message?: string | string[] };
-    const msg = Array.isArray(body.message) ? body.message.join("; ") : body.message;
+    const msg = Array.isArray(body.message)
+      ? body.message.join("; ")
+      : body.message;
     if (msg) return new Error(msg);
   } catch {
     // not JSON — fall through to the raw text
@@ -32,7 +37,11 @@ async function errorFrom(res: Response): Promise<Error> {
   return new Error(text || `Request failed (${res.status})`);
 }
 
-async function post<T>(path: string, body?: unknown, token?: string): Promise<T> {
+async function post<T>(
+  path: string,
+  body?: unknown,
+  token?: string,
+): Promise<T> {
   const init: RequestInit = {
     method: "POST",
     headers: authHeaders({ "content-type": "application/json" }, token),
@@ -80,7 +89,8 @@ export const verifyOtp = (phone: string, code: string) =>
   post<{ token: string; role: string }>("/auth/otp/verify", { phone, code });
 
 /** Revoke the presented token so it cannot be reused (even before expiry). */
-export const logout = (token: string) => post<{ revoked: boolean }>("/auth/logout", undefined, token);
+export const logout = (token: string) =>
+  post<{ revoked: boolean }>("/auth/logout", undefined, token);
 
 /**
  * One-shot login for the demo flow, where the code is echoed back under AUTH_DEV_MODE.
@@ -90,7 +100,9 @@ export const logout = (token: string) => post<{ revoked: boolean }>("/auth/logou
 export async function loginAs(phone: string): Promise<string> {
   const { devCode } = await requestOtp(phone);
   if (!devCode) {
-    throw new Error("OTP code was not returned — set AUTH_DEV_MODE=true for the demo flow");
+    throw new Error(
+      "OTP code was not returned — set AUTH_DEV_MODE=true for the demo flow",
+    );
   }
   const { token, role } = await verifyOtp(phone, devCode);
   void role;
@@ -118,7 +130,12 @@ export interface Accepted {
 }
 
 export interface Confirmed {
-  booking: { id: string; state: string; shiftId: string; professionalId: string };
+  booking: {
+    id: string;
+    state: string;
+    shiftId: string;
+    professionalId: string;
+  };
   checkout: Checkout;
 }
 
@@ -157,13 +174,29 @@ export const postShift = (
     urgency?: "standard" | "urgent";
   },
   token: string,
-) => post<{ shiftId: string; state: string; urgent: boolean }>("/shifts", input, token);
+) =>
+  post<{ shiftId: string; state: string; urgent: boolean }>(
+    "/shifts",
+    input,
+    token,
+  );
 
-export const applyToShift = (shiftId: string, professionalId: string, token: string) =>
-  post<{ id: string; state: string }>(`/shifts/${shiftId}/apply`, { professionalId }, token);
+export const applyToShift = (
+  shiftId: string,
+  professionalId: string,
+  token: string,
+) =>
+  post<{ id: string; state: string }>(
+    `/shifts/${shiftId}/apply`,
+    { professionalId },
+    token,
+  );
 
-export const offerToProfessional = (shiftId: string, professionalId: string, token: string) =>
-  post<OfferCreated>(`/shifts/${shiftId}/offer`, { professionalId }, token);
+export const offerToProfessional = (
+  shiftId: string,
+  professionalId: string,
+  token: string,
+) => post<OfferCreated>(`/shifts/${shiftId}/offer`, { professionalId }, token);
 
 export const acceptOffer = (id: string, token: string) =>
   post<Accepted>(`/offers/${id}/accept`, undefined, token);
@@ -180,7 +213,11 @@ export interface Payout {
 }
 
 export const completeBooking = (bookingId: string, token: string) =>
-  post<{ id: string; state: string }>(`/bookings/${bookingId}/complete`, undefined, token);
+  post<{ id: string; state: string }>(
+    `/bookings/${bookingId}/complete`,
+    undefined,
+    token,
+  );
 
 export const acceptCompletion = (bookingId: string, token: string) =>
   post<Payout>(`/bookings/${bookingId}/accept-completion`, undefined, token);
@@ -241,7 +278,8 @@ export interface ActiveBooking {
 export const getOpsBookings = (token: string) =>
   get<{ bookings: ActiveBooking[] }>("/ops/bookings", token);
 
-export const getOpsCases = (token: string) => get<{ cases: CaseSummary[] }>("/ops/cases", token);
+export const getOpsCases = (token: string) =>
+  get<{ cases: CaseSummary[] }>("/ops/cases", token);
 export const getOpsPending = (token: string) =>
   get<{ pending: PendingVerification[] }>("/ops/pending", token);
 
@@ -258,7 +296,13 @@ export interface ReconciliationRow {
 
 export interface Reconciliation {
   rows: ReconciliationRow[];
-  summary: { count: number; captured: number; payouts: number; refunds: number; exceptions: number };
+  summary: {
+    count: number;
+    captured: number;
+    payouts: number;
+    refunds: number;
+    exceptions: number;
+  };
 }
 
 export const getReconciliation = (token: string) =>
@@ -278,7 +322,12 @@ export interface PendingApproval {
 }
 
 /** A finance person proposes a refund; it moves no money until a *different* finance person approves. */
-export const proposeRefund = (bookingId: string, amount: number, reason: string, token: string) =>
+export const proposeRefund = (
+  bookingId: string,
+  amount: number,
+  reason: string,
+  token: string,
+) =>
   post<{ id: string; state: string; amount: number }>(
     "/finance/refunds",
     { bookingId, amount, reason },
@@ -290,7 +339,11 @@ export const getPendingRefunds = (token: string) =>
 
 /** Approve (execute) a proposed refund. Rejected with 403 if you are the initiator (§6.4). */
 export const approveRefund = (id: string, token: string) =>
-  post<{ id: string; state: string; refund?: number }>(`/finance/refunds/${id}/approve`, undefined, token);
+  post<{ id: string; state: string; refund?: number }>(
+    `/finance/refunds/${id}/approve`,
+    undefined,
+    token,
+  );
 
 // ----- Reporting & exports (REP-02/03) -----
 export interface MarketplaceMetrics {
@@ -305,10 +358,16 @@ export interface MarketplaceMetrics {
     held: number;
   };
   cases: { open: number };
-  money: { captured: number; paidOut: number; refunded: number; reconciliationExceptions: number };
+  money: {
+    captured: number;
+    paidOut: number;
+    refunded: number;
+    reconciliationExceptions: number;
+  };
 }
 
-export const getMetrics = (token: string) => get<MarketplaceMetrics>("/ops/metrics", token);
+export const getMetrics = (token: string) =>
+  get<MarketplaceMetrics>("/ops/metrics", token);
 
 /** REP-02: fetch the Finance CSV export as text (Authorization header required). */
 export async function fetchFinanceExport(token: string): Promise<string> {
@@ -320,11 +379,19 @@ export async function fetchFinanceExport(token: string): Promise<string> {
   return res.text();
 }
 export const resolveHold = (bookingId: string, token: string) =>
-  post<{ id: string; held: boolean }>(`/bookings/${bookingId}/resolve-hold`, undefined, token);
+  post<{ id: string; held: boolean }>(
+    `/bookings/${bookingId}/resolve-hold`,
+    undefined,
+    token,
+  );
 
 // Operations enforcement actions (VER-04/05/06).
 export const verifyInsurance = (professionalId: string, token: string) =>
-  post<{ state: string }>(`/ops/professionals/${professionalId}/verify-insurance`, undefined, token);
+  post<{ state: string }>(
+    `/ops/professionals/${professionalId}/verify-insurance`,
+    undefined,
+    token,
+  );
 export const suspendCredential = (professionalId: string, token: string) =>
   post<{ professionalId: string; credential: string }>(
     `/ops/professionals/${professionalId}/suspend-credential`,
@@ -332,7 +399,11 @@ export const suspendCredential = (professionalId: string, token: string) =>
     token,
   );
 export const holdCredential = (bookingId: string, token: string) =>
-  post<{ id: string; held: boolean }>(`/bookings/${bookingId}/hold-credential`, undefined, token);
+  post<{ id: string; held: boolean }>(
+    `/bookings/${bookingId}/hold-credential`,
+    undefined,
+    token,
+  );
 
 // ----- Party self-service (clinic / professional dashboards) -----
 
@@ -340,7 +411,12 @@ export interface MeIdentity {
   professionalId: string | null;
   professionalName: string | null;
   professionalVerification: string | null;
-  clinics: { workspaceId: string; name: string; role: string; verification: string }[];
+  clinics: {
+    workspaceId: string;
+    name: string;
+    role: string;
+    verification: string;
+  }[];
 }
 export const getMe = (token: string) => get<MeIdentity>("/me", token);
 
@@ -378,7 +454,10 @@ export interface ProfessionalOfferRow {
   expiresAt: number;
 }
 export const getProfessionalOffers = (proId: string, token: string) =>
-  get<{ offers: ProfessionalOfferRow[] }>(`/professionals/${proId}/offers`, token);
+  get<{ offers: ProfessionalOfferRow[] }>(
+    `/professionals/${proId}/offers`,
+    token,
+  );
 
 export interface OpenShift {
   shiftId: string;
@@ -388,7 +467,89 @@ export interface OpenShift {
   urgency: "standard" | "urgent";
   urgent: boolean;
 }
-export const browseShifts = (token: string) => get<{ shifts: OpenShift[] }>("/shifts", token);
+export type ShiftBrowseFilters = {
+  category?: string;
+  urgency?: "standard" | "urgent";
+  minCompensation?: number; // satang
+  maxCompensation?: number; // satang
+};
+
+/** SRC-02/03: filtered open shifts (token optional — route is public). */
+export function browseShifts(token?: string, filters: ShiftBrowseFilters = {}) {
+  const q = new URLSearchParams();
+  if (filters.category) q.set("category", filters.category);
+  if (filters.urgency) q.set("urgency", filters.urgency);
+  if (filters.minCompensation !== undefined)
+    q.set("minCompensation", String(filters.minCompensation));
+  if (filters.maxCompensation !== undefined)
+    q.set("maxCompensation", String(filters.maxCompensation));
+  const qs = q.toString();
+  return get<{ shifts: OpenShift[]; hint?: string }>(
+    `/shifts${qs ? `?${qs}` : ""}`,
+    token,
+  );
+}
+
+export interface VerifiedProfile {
+  id: string;
+  selfDeclared: {
+    displayName: string;
+    profession: string;
+    specialty: string | null;
+  };
+  verified: {
+    identityVerified: boolean;
+    licence: { state: string; validUntil: number | null } | null;
+    insurance: { state: string; validUntil: number | null } | null;
+    rating: { count: number; average: number } | null;
+  };
+}
+
+/** VER-03: public marketplace profile (no PII). */
+export const getProfessionalProfile = (id: string) =>
+  get<VerifiedProfile>(`/professionals/${id}/profile`);
+
+export interface ProfessionalSearchResult {
+  id: string;
+  displayName: string;
+  profession: string;
+  specialty: string | null;
+  rating: number | null;
+}
+
+/** SRC-01: browse professionals by profession/specialty. */
+export function searchProfessionals(
+  filters: { profession?: string; specialty?: string } = {},
+) {
+  const q = new URLSearchParams();
+  if (filters.profession) q.set("profession", filters.profession);
+  if (filters.specialty) q.set("specialty", filters.specialty);
+  const qs = q.toString();
+  return get<{ professionals: ProfessionalSearchResult[] }>(
+    `/professionals${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export interface BookingMessage {
+  id: string;
+  senderId: string;
+  body: string;
+  createdAt: number;
+}
+
+export interface BookingContact {
+  clinicPhone: string | null;
+  professionalPhone: string | null;
+}
+
+export const listMessages = (bookingId: string, token: string) =>
+  get<{ messages: BookingMessage[] }>(`/bookings/${bookingId}/messages`, token);
+
+export const postMessage = (bookingId: string, body: string, token: string) =>
+  post<BookingMessage>(`/bookings/${bookingId}/messages`, { body }, token);
+
+export const getBookingContact = (bookingId: string, token: string) =>
+  get<BookingContact>(`/bookings/${bookingId}/contact`, token);
 
 export interface PartyBooking {
   bookingId: string;
@@ -407,10 +568,19 @@ export const getProfessionalBookings = (proId: string, token: string) =>
   get<{ bookings: PartyBooking[] }>(`/professionals/${proId}/bookings`, token);
 
 export const arriveBooking = (bookingId: string, token: string) =>
-  post<{ id: string; arrived: boolean }>(`/bookings/${bookingId}/arrive`, undefined, token);
+  post<{ id: string; arrived: boolean }>(
+    `/bookings/${bookingId}/arrive`,
+    undefined,
+    token,
+  );
 
 export const cancelBooking = (
   bookingId: string,
   input: { reason: string },
   token: string,
-) => post<{ id: string; outcome: string; fraction?: number }>(`/bookings/${bookingId}/cancel`, input, token);
+) =>
+  post<{ id: string; outcome: string; fraction?: number }>(
+    `/bookings/${bookingId}/cancel`,
+    input,
+    token,
+  );

@@ -43,11 +43,15 @@ import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
 import { badgeToneForKind } from "../../lib/tones";
-import { clearStaffSession, loadStaffSession, saveStaffSession } from "../../lib/session";
-import { loadSession, clearSession, saveSession } from "../../lib/demo-accounts";
+import { loadSession, clearSession, saveSession } from "../../lib/session";
 
 type ConfirmAction =
-  | { type: "verify"; kind: "clinic" | "professional" | "insurance"; id: string; name: string }
+  | {
+      type: "verify";
+      kind: "clinic" | "professional" | "insurance";
+      id: string;
+      name: string;
+    }
   | { type: "resolve"; bookingId: string; subject: string }
   | { type: "hold"; bookingId: string; name: string }
   | { type: "suspend"; professionalId: string; name: string };
@@ -74,20 +78,14 @@ export default function OpsPage() {
   const loadSeq = useRef(0);
 
   useEffect(() => {
-    // Prefer surface-scoped staff session; fall back to /signin picker session.
-    const staff = loadStaffSession("operations");
-    if (staff) {
-      setToken(staff.token);
-    } else {
-      const demo = loadSession();
-      if (demo) setToken(demo.token);
-    }
+    // Canonical session (RolePicker inject / OTP / e2e all write `probook.session`).
+    const sess = loadSession();
+    if (sess) setToken(sess.token);
     setBooting(false);
   }, []);
 
   const acceptToken = useCallback((next: string) => {
-    saveStaffSession("operations", next);
-    saveSession(next, "");
+    saveSession(next, "", "operations");
     setSessionNotice(null);
     setToken(next);
   }, []);
@@ -104,7 +102,6 @@ export default function OpsPage() {
     setLoading(false);
     setBusyId(null);
     setConfirm(null);
-    clearStaffSession("operations");
     clearSession();
     if (previous) {
       try {
@@ -116,7 +113,6 @@ export default function OpsPage() {
   }, [token]);
 
   const expireSession = useCallback(() => {
-    clearStaffSession("operations");
     clearSession();
     setToken(null);
     setSessionNotice(th.staffLogin.sessionExpiredBanner);
@@ -145,7 +141,12 @@ export default function OpsPage() {
       setLoadError(msg);
       toast.error(msg);
       const raw = e instanceof Error ? e.message.toLowerCase() : "";
-      if (raw.includes("403") || raw.includes("401") || raw.includes("forbidden") || raw.includes("authentication")) {
+      if (
+        raw.includes("403") ||
+        raw.includes("401") ||
+        raw.includes("forbidden") ||
+        raw.includes("authentication")
+      ) {
         expireSession();
       }
     } finally {
@@ -171,7 +172,8 @@ export default function OpsPage() {
     try {
       if (action.type === "verify") {
         if (action.kind === "clinic") await verifyClinic(action.id, auth);
-        else if (action.kind === "insurance") await verifyInsurance(action.id, auth);
+        else if (action.kind === "insurance")
+          await verifyInsurance(action.id, auth);
         else await verifyProfessional(action.id, auth);
         toast.success(
           action.kind === "clinic"
@@ -214,7 +216,11 @@ export default function OpsPage() {
     return (
       <>
         <AppHeader current="/ops" />
-        <StaffLogin surface="operations" onToken={acceptToken} sessionNotice={sessionNotice} />
+        <StaffLogin
+          surface="operations"
+          onToken={acceptToken}
+          sessionNotice={sessionNotice}
+        />
       </>
     );
   }
@@ -228,10 +234,19 @@ export default function OpsPage() {
           subtitle={th.ops.subtitle}
           actions={
             <>
-              <Button data-testid="refresh" onClick={() => void load()} disabled={busyId !== null || loading} icon={<RefreshIcon />}>
+              <Button
+                data-testid="refresh"
+                onClick={() => void load()}
+                disabled={busyId !== null || loading}
+                icon={<RefreshIcon />}
+              >
                 {th.common.refresh}
               </Button>
-              <Button data-testid="sign-out" variant="subtle" onClick={() => void signOut()}>
+              <Button
+                data-testid="sign-out"
+                variant="subtle"
+                onClick={() => void signOut()}
+              >
                 {th.staffLogin.signOut}
               </Button>
             </>
@@ -256,20 +271,36 @@ export default function OpsPage() {
                   hint={`${metrics.shifts.open} ${th.ops.openSuffix}`}
                   icon={<CalendarIcon />}
                 />
-                <Stat label={th.ops.metricBookings} value={String(metrics.bookings.total)} icon={<UsersIcon />} />
-                <Stat label={th.ops.metricCompleted} value={String(metrics.bookings.completed)} icon={<CheckIcon />} />
+                <Stat
+                  label={th.ops.metricBookings}
+                  value={String(metrics.bookings.total)}
+                  icon={<UsersIcon />}
+                />
+                <Stat
+                  label={th.ops.metricCompleted}
+                  value={String(metrics.bookings.completed)}
+                  icon={<CheckIcon />}
+                />
                 <Stat
                   label={th.ops.metricHeld}
                   value={String(metrics.bookings.held)}
                   icon={<AlertIcon />}
                   tone={metrics.bookings.held > 0 ? "danger" : "default"}
                 />
-                <Stat label={th.ops.metricCases} value={String(metrics.cases.open)} icon={<ShieldCheckIcon />} />
+                <Stat
+                  label={th.ops.metricCases}
+                  value={String(metrics.cases.open)}
+                  icon={<ShieldCheckIcon />}
+                />
                 <Stat
                   label={th.ops.metricExceptions}
                   value={String(metrics.money.reconciliationExceptions)}
                   icon={<WalletIcon />}
-                  tone={metrics.money.reconciliationExceptions === 0 ? "success" : "danger"}
+                  tone={
+                    metrics.money.reconciliationExceptions === 0
+                      ? "success"
+                      : "danger"
+                  }
                 />
               </>
             ) : null}
@@ -278,8 +309,13 @@ export default function OpsPage() {
 
         <SectionBlock title={th.ops.pending} count={pending.length}>
           <div className="card">
-            <ul data-testid="pending-list" className="rowlist" aria-busy={loading || undefined}>
-              {loading && pending.length === 0 &&
+            <ul
+              data-testid="pending-list"
+              className="rowlist"
+              aria-busy={loading || undefined}
+            >
+              {loading &&
+                pending.length === 0 &&
                 Array.from({ length: 3 }).map((_, i) => (
                   <li key={i} className="rowlist__skeleton" aria-hidden>
                     <Skeleton variant="avatar" />
@@ -300,14 +336,27 @@ export default function OpsPage() {
               {pending.map((p) => {
                 const open = expandedId === p.id;
                 return (
-                  <li key={`${p.kind}-${p.id}`} data-testid={`pending-${p.id}`} className={open ? "rowlist__item--open" : undefined}>
-                    <span className={`row__avatar row__avatar--${p.kind === "insurance" ? "professional" : p.kind}`} aria-hidden>
-                      {p.kind === "clinic" ? <ClinicIcon /> : <StethoscopeIcon />}
+                  <li
+                    key={`${p.kind}-${p.id}`}
+                    data-testid={`pending-${p.id}`}
+                    className={open ? "rowlist__item--open" : undefined}
+                  >
+                    <span
+                      className={`row__avatar row__avatar--${p.kind === "insurance" ? "professional" : p.kind}`}
+                      aria-hidden
+                    >
+                      {p.kind === "clinic" ? (
+                        <ClinicIcon />
+                      ) : (
+                        <StethoscopeIcon />
+                      )}
                     </span>
                     <span className="row__main">
                       <span className="row__name">{p.name}</span>
                       <span className="row__sub">
-                        <Badge tone={badgeToneForKind(p.kind)}>{th.ops.kind[p.kind]}</Badge>
+                        <Badge tone={badgeToneForKind(p.kind)}>
+                          {th.ops.kind[p.kind]}
+                        </Badge>
                         <code className="row__id">{p.id.slice(0, 8)}…</code>
                       </span>
                       {open && (
@@ -341,7 +390,9 @@ export default function OpsPage() {
                       <Button
                         variant="subtle"
                         aria-expanded={open}
-                        aria-label={open ? th.a11y.collapseRow : th.a11y.expandRow}
+                        aria-label={
+                          open ? th.a11y.collapseRow : th.a11y.expandRow
+                        }
                         onClick={() => setExpandedId(open ? null : p.id)}
                       >
                         {open ? th.common.hideDetails : th.common.details}
@@ -351,7 +402,14 @@ export default function OpsPage() {
                         variant="primary"
                         busy={busyId === p.id}
                         disabled={busyId !== null && busyId !== p.id}
-                        onClick={() => setConfirm({ type: "verify", kind: p.kind, id: p.id, name: p.name })}
+                        onClick={() =>
+                          setConfirm({
+                            type: "verify",
+                            kind: p.kind,
+                            id: p.id,
+                            name: p.name,
+                          })
+                        }
                       >
                         {th.ops.verify}
                       </Button>
@@ -365,8 +423,13 @@ export default function OpsPage() {
 
         <SectionBlock title={th.ops.openCases} count={cases.length}>
           <div className="card">
-            <ul data-testid="cases-list" className="rowlist" aria-busy={loading || undefined}>
-              {loading && cases.length === 0 &&
+            <ul
+              data-testid="cases-list"
+              className="rowlist"
+              aria-busy={loading || undefined}
+            >
+              {loading &&
+                cases.length === 0 &&
                 Array.from({ length: 2 }).map((_, i) => (
                   <li key={i} className="rowlist__skeleton" aria-hidden>
                     <Skeleton variant="chip" />
@@ -388,16 +451,26 @@ export default function OpsPage() {
                 const hint = th.ops.caseHint[c.kind];
                 return (
                   <li key={c.id} data-testid={`case-${c.id}`}>
-                    <Badge tone={badgeToneForKind(c.kind)}>{th.ops.caseKind[c.kind] ?? c.kind}</Badge>
+                    <Badge tone={badgeToneForKind(c.kind)}>
+                      {th.ops.caseKind[c.kind] ?? c.kind}
+                    </Badge>
                     <span className="row__main">
-                      <span className="row__name">{c.subject || (th.ops.caseState[c.state] ?? c.state)}</span>
+                      <span className="row__name">
+                        {c.subject || (th.ops.caseState[c.state] ?? c.state)}
+                      </span>
                       <span className="row__sub">
                         {c.subject ? (
-                          <span className="muted">{th.ops.caseState[c.state] ?? c.state}</span>
+                          <span className="muted">
+                            {th.ops.caseState[c.state] ?? c.state}
+                          </span>
                         ) : null}
-                        {refId && <code className="row__id">{refId.slice(0, 8)}…</code>}
+                        {refId && (
+                          <code className="row__id">{refId.slice(0, 8)}…</code>
+                        )}
                       </span>
-                      {hint ? <span className="row__hint muted">{hint}</span> : null}
+                      {hint ? (
+                        <span className="row__hint muted">{hint}</span>
+                      ) : null}
                     </span>
                     {c.kind === "credential_hold" && refId ? (
                       <span className="row__actions">
@@ -405,7 +478,13 @@ export default function OpsPage() {
                           data-testid="resolve-btn"
                           busy={busyId === refId}
                           disabled={busyId !== null && busyId !== refId}
-                          onClick={() => setConfirm({ type: "resolve", bookingId: refId, subject: c.subject })}
+                          onClick={() =>
+                            setConfirm({
+                              type: "resolve",
+                              bookingId: refId,
+                              subject: c.subject,
+                            })
+                          }
                         >
                           {th.ops.resolveHold}
                         </Button>
@@ -420,13 +499,24 @@ export default function OpsPage() {
 
         <SectionBlock title={th.ops.activeBookings} count={bookings.length}>
           <div className="card">
-            <ul data-testid="active-bookings" className="rowlist" aria-busy={loading || undefined}>
+            <ul
+              data-testid="active-bookings"
+              className="rowlist"
+              aria-busy={loading || undefined}
+            >
               {!loading && bookings.length === 0 && (
-                <EmptyState as="li" title={th.ops.emptyActive} icon={<CheckIcon />} />
+                <EmptyState
+                  as="li"
+                  title={th.ops.emptyActive}
+                  icon={<CheckIcon />}
+                />
               )}
               {bookings.map((b) => (
                 <li key={b.bookingId} data-testid={`active-${b.bookingId}`}>
-                  <span className="row__avatar row__avatar--professional" aria-hidden>
+                  <span
+                    className="row__avatar row__avatar--professional"
+                    aria-hidden
+                  >
                     <StethoscopeIcon />
                   </span>
                   <span className="row__main">
@@ -434,8 +524,12 @@ export default function OpsPage() {
                     <span className="row__sub">
                       <Badge tone="info">{b.state}</Badge>
                       <span className="muted">{b.clinicName}</span>
-                      {b.held && <Badge tone="warning">{th.ops.heldBadge}</Badge>}
-                      {b.credential === "Suspended" && <Badge tone="danger">{th.ops.suspendedBadge}</Badge>}
+                      {b.held && (
+                        <Badge tone="warning">{th.ops.heldBadge}</Badge>
+                      )}
+                      {b.credential === "Suspended" && (
+                        <Badge tone="danger">{th.ops.suspendedBadge}</Badge>
+                      )}
                     </span>
                   </span>
                   <span className="row__actions actions">
@@ -445,7 +539,11 @@ export default function OpsPage() {
                         busy={busyId === b.bookingId}
                         disabled={busyId !== null && busyId !== b.bookingId}
                         onClick={() =>
-                          setConfirm({ type: "hold", bookingId: b.bookingId, name: b.professionalName })
+                          setConfirm({
+                            type: "hold",
+                            bookingId: b.bookingId,
+                            name: b.professionalName,
+                          })
                         }
                       >
                         {th.ops.holdCredential}
@@ -456,7 +554,10 @@ export default function OpsPage() {
                         data-testid="suspend-btn"
                         variant="subtle"
                         busy={busyId === `suspend-${b.professionalId}`}
-                        disabled={busyId !== null && busyId !== `suspend-${b.professionalId}`}
+                        disabled={
+                          busyId !== null &&
+                          busyId !== `suspend-${b.professionalId}`
+                        }
                         onClick={() =>
                           setConfirm({
                             type: "suspend",
@@ -503,7 +604,12 @@ export default function OpsPage() {
         onConfirm={() => void runConfirm()}
       >
         {confirm?.type === "verify" ? (
-          <p>{th.ops.verifyConfirmBody(confirm.name, th.ops.kind[confirm.kind] ?? confirm.kind)}</p>
+          <p>
+            {th.ops.verifyConfirmBody(
+              confirm.name,
+              th.ops.kind[confirm.kind] ?? confirm.kind,
+            )}
+          </p>
         ) : confirm?.type === "resolve" ? (
           <p>{th.ops.resolveConfirmBody(confirm.subject)}</p>
         ) : confirm?.type === "hold" ? (

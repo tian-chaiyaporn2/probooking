@@ -18,26 +18,43 @@ export const th = {
     howTitle: "ทำงานอย่างไร",
     howSubtitle: "จากประกาศเวรถึงจ่ายเงิน สี่ขั้นตอนที่ตรวจสอบได้",
     steps: [
-      { t: "ประกาศเวร", d: "คลินิกที่ตรวจสอบแล้วลงเวรที่เปิดรับ พร้อมเงื่อนไขและค่าตอบแทนที่ชัดเจน" },
-      { t: "เชิญและเสนอ", d: "บุคลากรสมัครหรือถูกเชิญ คลินิกส่งข้อเสนอผูกพันหนึ่งฉบับ" },
-      { t: "ยืนยันและคุ้มครองเงิน", d: "ยอมรับข้อเสนอแล้วกันเงินไว้ (Payment Protected) ก่อนยืนยันการจอง" },
-      { t: "ทำงานและรับเงิน", d: "เมื่อเสร็จงาน ระบบจ่ายเงินให้บุคลากรพร้อมบันทึกที่ตรวจสอบได้" },
+      {
+        t: "ประกาศเวร",
+        d: "คลินิกที่ตรวจสอบแล้วลงเวรที่เปิดรับ พร้อมเงื่อนไขและค่าตอบแทนที่ชัดเจน",
+      },
+      {
+        t: "เชิญและเสนอ",
+        d: "บุคลากรสมัครหรือถูกเชิญ คลินิกส่งข้อเสนอผูกพันหนึ่งฉบับ",
+      },
+      {
+        t: "ยืนยันและคุ้มครองเงิน",
+        d: "ยอมรับข้อเสนอแล้วกันเงินไว้ (Payment Protected) ก่อนยืนยันการจอง",
+      },
+      {
+        t: "ทำงานและรับเงิน",
+        d: "เมื่อเสร็จงาน ระบบจ่ายเงินให้บุคลากรพร้อมบันทึกที่ตรวจสอบได้",
+      },
     ],
     audiencesTitle: "คุณคือใคร",
     audiencesSubtitle: "เลือกบทบาทเพื่อดูขั้นตอนถัดไปที่เหมาะกับคุณ",
     audienceClinic: "สำหรับคลินิก",
-    audienceClinicDesc: "เฟสนี้ทีมคอนเซียร์จช่วยประกาศเวร จอง และยืนยันการชำระเงินให้",
+    audienceClinicDesc:
+      "เฟสนี้ทีมคอนเซียร์จช่วยประกาศเวร จอง และยืนยันการชำระเงินให้",
     audiencePro: "สำหรับบุคลากร",
-    audienceProDesc: "ส่งเอกสารยืนยันตัวตน รับข้อเสนอที่ชัดเจน และติดตามการจ่ายเงิน",
+    audienceProDesc:
+      "ส่งเอกสารยืนยันตัวตน รับข้อเสนอที่ชัดเจน และติดตามการจ่ายเงิน",
     audienceStaff: "สำหรับทีมภายใน",
-    audienceStaffDesc: "ปฏิบัติการตรวจสอบและจัดการเคส การเงินกระทบยอดคำสั่งชำระเงิน",
+    audienceStaffDesc:
+      "ปฏิบัติการตรวจสอบและจัดการเคส การเงินกระทบยอดคำสั่งชำระเงิน",
     pickTitle: "เลือกบทบาทเพื่อเริ่มเดโม",
-    pickSubtitle: "เข้าสู่ระบบด้วยบัญชีทดลองของแต่ละบทบาท แล้วขับเคลื่อนทั้งขั้นตอนด้วยตนเอง — คลิกเดียว รหัส OTP กรอกให้อัตโนมัติ",
+    pickSubtitle:
+      "เข้าสู่ระบบด้วยบัญชีทดลองของแต่ละบทบาท แล้วขับเคลื่อนทั้งขั้นตอนด้วยตนเอง — คลิกเดียว รหัส OTP กรอกให้อัตโนมัติ",
     flowSmokeNote: "การสาธิตอัตโนมัติแบบคลิกเดียว (สำหรับทีมพัฒนา)",
     surfacesTitle: "เข้าใช้งาน",
     surfacesSubtitle: "เส้นทางจองสำหรับผู้ใช้ · เครื่องมือทีม · เดโมนักพัฒนา",
     journeyLink: "เส้นทางจอง",
-    journeyDesc: "เดินทีละขั้นจากข้อเสนอถึงคุ้มครองเงิน เสร็จงาน และจ่ายออก — ภาษาไทย",
+    journeyDesc:
+      "เดินทีละขั้นจากข้อเสนอถึงคุ้มครองเงิน เสร็จงาน และจ่ายออก — ภาษาไทย",
     flowLink: "เดโมสำหรับนักพัฒนา",
     flowDesc: "ฮาร์เนส e2e — เดินครบทั้งขั้นตอนอัตโนมัติ (ภาษาอังกฤษ)",
     opsLink: "แดชบอร์ดฝ่ายปฏิบัติการ",
@@ -45,7 +62,8 @@ export const th = {
     financeLink: "การกระทบยอดฝ่ายการเงิน",
     financeDesc: "กระทบยอดคำสั่งชำระเงินและตรวจสอบการอนุรักษ์ยอด",
     open: "เปิด",
-    contactNote: "สนใจใช้งานจริงในเฟส 0? ติดต่อทีมคอนเซียร์จ — เรายังไม่เปิดจองด้วยตนเองสาธารณะ",
+    contactNote:
+      "สนใจใช้งานจริงในเฟส 0? ติดต่อทีมคอนเซียร์จ — เรายังไม่เปิดจองด้วยตนเองสาธารณะ",
   },
   flow: {
     title: "เดโมสำหรับนักพัฒนา",
@@ -93,7 +111,8 @@ export const th = {
     timelineCaption: "สถานะเส้นทางจอง",
     bookingId: "รหัสการจอง",
     doneTitle: "เส้นทางครบแล้ว",
-    doneBody: "การจองได้รับการคุ้มครอง เสร็จงาน และจ่ายเงินแล้ว — นี่คือแกนของเฟส 1",
+    doneBody:
+      "การจองได้รับการคุ้มครอง เสร็จงาน และจ่ายเงินแล้ว — นี่คือแกนของเฟส 1",
     actingAs: (who: string) => `กำลังดำเนินการในนาม${who}`,
   },
   checkout: {
@@ -141,7 +160,11 @@ export const th = {
     metricExceptions: "รายการกระทบยอดผิดปกติ",
     pending: "รอการตรวจสอบ",
     openSuffix: "เปิดรับ",
-    kind: { clinic: "คลินิก", professional: "บุคลากร", insurance: "ประกันภัย" } as Record<string, string>,
+    kind: {
+      clinic: "คลินิก",
+      professional: "บุคลากร",
+      insurance: "ประกันภัย",
+    } as Record<string, string>,
     caseKind: {
       credential_hold: "ระงับคุณสมบัติ",
       completion_review: "ตรวจหลังเสร็จงาน",
@@ -199,7 +222,8 @@ export const th = {
     colConserved: "สมดุล",
     conservedYes: "สมดุล",
     conservedNo: "ผิดปกติ",
-    showing: (shown: number, total: number) => `แสดง ${shown} จาก ${total} รายการ`,
+    showing: (shown: number, total: number) =>
+      `แสดง ${shown} จาก ${total} รายการ`,
     emptyHint: "เมื่อมีการจองและเก็บเงิน รายการกระทบยอดจะปรากฏที่นี่",
     legsTitle: "องค์ประกอบเงิน",
     filterAll: "ทั้งหมด",
@@ -265,7 +289,8 @@ export const th = {
     sessionExpired: "เซสชันหมดอายุ กรุณารีเฟรชหน้าแล้วเข้าสู่ระบบอีกครั้ง",
     tooManyRequests: "ส่งคำขอถี่เกินไป กรุณารอสักครู่แล้วลองอีกครั้ง",
     phoneRequired: "กรุณากรอกหมายเลขโทรศัพท์",
-    invalidOtp: "รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว กรุณาลองอีกครั้งหรือขอรหัสใหม่",
+    invalidOtp:
+      "รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว กรุณาลองอีกครั้งหรือขอรหัสใหม่",
   },
   status: {
     // Offer
@@ -291,7 +316,8 @@ export const th = {
   } as Record<string, string>,
   nextAction: {
     PendingResponse: "บุคลากร: ตรวจค่าตอบแทนและค่ายบริการ แล้วยอมรับข้อเสนอ",
-    AwaitingPayment: "คลินิก: ยืนยันและกันเงิน (Payment Protected) เพื่อสร้างการจอง",
+    AwaitingPayment:
+      "คลินิก: ยืนยันและกันเงิน (Payment Protected) เพื่อสร้างการจอง",
     Confirmed: "บุคลากร: มาถึงและทำงานตามเวร",
     InProgress: "บุคลากร: ส่งงานเสร็จเมื่อทำงานครบ",
     AwaitingCompletion: "คลินิก: รับรองเสร็จงานเพื่อจ่ายเงิน",
@@ -331,7 +357,41 @@ export const th = {
     holdConfirmTitle: "ยืนยันการระงับการจอง",
     holdConfirmBody: "ระงับคุณสมบัติของการจองนี้จนกว่าฝ่ายปฏิบัติการจะปลด?",
     suspendConfirmTitle: "ยืนยันการระงับใบอนุญาต",
-    suspendConfirmBody: (name: string) => `ระงับใบอนุญาตของ「${name}」? การจองใหม่จะถูกบล็อก`,
+    suspendConfirmBody: (name: string) =>
+      `ระงับใบอนุญาตของ「${name}」? การจองใหม่จะถูกบล็อก`,
+    profileTitle: "โปรไฟล์",
+    identityVerified: "ยืนยันตัวตนแล้ว",
+    identityPending: "รอยืนยันตัวตน",
+    licence: "ใบอนุญาต",
+    insurance: "ประกันภัย",
+    ratingColdStart: "ยังไม่มีคะแนนรีวิว",
+    filterCategory: "หมวด",
+    filterUrgency: "ความด่วน",
+    filterMinBaht: "ค่าตอบแทนขั้นต่ำ (บาท)",
+    filterApply: "กรอง",
+    filterClear: "ล้าง",
+    urgencyAll: "ทั้งหมด",
+    urgencyUrgent: "ด่วน",
+    urgencyStandard: "ปกติ",
+    searchPros: "ค้นหาบุคลากร",
+    searchProfession: "วิชาชีพ",
+    searchGo: "ค้นหา",
+    noProsFound: "ไม่พบบุคลากรที่ตรงเงื่อนไข",
+    showThread: "ข้อความ",
+    hideThread: "ซ่อนข้อความ",
+    noMessages: "ยังไม่มีข้อความ",
+    messageHint:
+      "ข้อความธรรมดาเท่านั้น — ห้ามใส่รหัสผู้ป่วย / HN / เลขบัตร (§7.3)",
+    messagePlaceholder: "พิมพ์ข้อความถึงคู่สัญญา…",
+    messageSoftWarn: "พบข้อมูลที่อาจเป็นรหัสผู้ป่วย — ลบออกก่อนส่ง",
+    messageBlocked: "ส่งข้อความไม่สำเร็จ — ตรวจสอบว่าไม่มีรหัสผู้ป่วย",
+    sendMessage: "ส่ง",
+    contactReveal: "ติดต่อหลังยืนยัน",
+    clinicPhone: "คลินิก",
+    proPhone: "บุคลากร",
+    you: "คุณ",
+    navClinic: "คลินิกของฉัน",
+    navPro: "เวรของฉัน",
   },
 } as const;
 
@@ -340,7 +400,10 @@ export const th = {
  * in lib/api, which already extracts the server's message; this turns that (or a network
  * failure) into a sentence the user reads, falling back to the caller's default.
  */
-export function getThaiErrorMessage(error: unknown, fallback: string = th.errors.generic): string {
+export function getThaiErrorMessage(
+  error: unknown,
+  fallback: string = th.errors.generic,
+): string {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
   // API: "too many OTP requests; retry later" — match before/after errorFrom stripping.
   if (
@@ -353,10 +416,18 @@ export function getThaiErrorMessage(error: unknown, fallback: string = th.errors
   }
   if (message.includes("invalid or expired code")) return th.errors.invalidOtp;
   if (message.includes("phone required")) return th.errors.phoneRequired;
-  if (message.includes("requires role") || message.includes("not a member") || message.includes("forbidden") || message.startsWith("403:")) {
+  if (
+    message.includes("requires role") ||
+    message.includes("not a member") ||
+    message.includes("forbidden") ||
+    message.startsWith("403:")
+  ) {
     return th.errors.noPermission;
   }
-  if (message.includes("authentication required") || message.startsWith("401:")) {
+  if (
+    message.includes("authentication required") ||
+    message.startsWith("401:")
+  ) {
     return th.errors.sessionExpired;
   }
   if (

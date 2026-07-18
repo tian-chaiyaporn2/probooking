@@ -3,10 +3,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { th } from "../lib/strings";
+import { loadSession, type SessionRole } from "../lib/session";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "./icons";
 
-type NavLink = { href: string; label: string; group?: "public" | "staff" };
+type NavLink = {
+  href: string;
+  label: string;
+  group?: "public" | "staff" | "session";
+};
 
 const LINKS: NavLink[] = [
   { href: "/", label: th.nav.home, group: "public" },
@@ -17,21 +22,32 @@ const LINKS: NavLink[] = [
   { href: "/flow", label: th.nav.flow, group: "public" },
 ];
 
-/** Keep in sync with max-width: 959px drawer breakpoint in pages.css. */
 const DRAWER_MQ = "(min-width: 960px)";
+
+function sessionLinks(role?: SessionRole): NavLink[] {
+  if (role === "clinic")
+    return [{ href: "/clinic", label: th.party.navClinic, group: "session" }];
+  if (role === "professional")
+    return [{ href: "/pro", label: th.party.navPro, group: "session" }];
+  return [];
+}
 
 /**
  * Shared app shell header: brand + section nav + theme toggle.
- *
- * Nav separates public journey surfaces from staff tools (UX F7) while keeping
- * the developer demo link for e2e. On phone/tablet the nav collapses into a drawer.
+ * When a party session is present, surfaces /clinic or /pro in the public nav.
  */
 export function AppHeader({ current }: { current?: string }) {
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<SessionRole | undefined>();
   const drawerId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const s = loadSession();
+    setRole(s?.role);
+  }, [current]);
 
   useEffect(() => {
     if (!open) return;
@@ -87,7 +103,10 @@ export function AppHeader({ current }: { current?: string }) {
     return () => mq.removeListener(onChange);
   }, []);
 
-  const publicLinks = LINKS.filter((l) => l.group === "public");
+  const publicLinks = [
+    ...LINKS.filter((l) => l.group === "public"),
+    ...sessionLinks(role),
+  ];
   const staffLinks = LINKS.filter((l) => l.group === "staff");
 
   function renderLinks(links: NavLink[], onNavigate?: () => void) {
@@ -113,7 +132,10 @@ export function AppHeader({ current }: { current?: string }) {
           {th.brand}
         </Link>
 
-        <nav className="app-nav app-nav--desktop" aria-label={th.a11y.primaryNav}>
+        <nav
+          className="app-nav app-nav--desktop"
+          aria-label={th.a11y.primaryNav}
+        >
           {renderLinks(publicLinks)}
           <span className="app-nav__divider" aria-hidden />
           <span className="app-nav__group-label">{th.nav.staffGroup}</span>
@@ -138,7 +160,11 @@ export function AppHeader({ current }: { current?: string }) {
 
       {open && (
         <>
-          <button className="nav-backdrop" aria-label={th.a11y.closeMenu} onClick={() => setOpen(false)} />
+          <button
+            className="nav-backdrop"
+            aria-label={th.a11y.closeMenu}
+            onClick={() => setOpen(false)}
+          />
           <nav
             ref={drawerRef}
             id={drawerId}
@@ -148,7 +174,9 @@ export function AppHeader({ current }: { current?: string }) {
             aria-modal="true"
           >
             <div className="app-nav--drawer__top">
-              <span className="app-nav--drawer__title">{th.a11y.primaryNav}</span>
+              <span className="app-nav--drawer__title">
+                {th.a11y.primaryNav}
+              </span>
               <button
                 ref={closeRef}
                 type="button"

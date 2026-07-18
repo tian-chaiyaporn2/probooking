@@ -5,10 +5,8 @@ import { ShieldCheckIcon, WalletIcon } from "../components/icons";
 import { th } from "../lib/strings";
 
 /**
- * Landing: master leads with the interactive RolePicker (investor/demo entry).
- * Phase 0 honesty copy remains in `th.home.description`. Journey/surfaces cards from
- * the UX branch were dropped here — they conflicted with #26's "lead with role picker"
- * intent; `/journey` stays reachable via nav.
+ * Landing: RolePicker is the primary demo entry (investor walkthrough).
+ * Journey + audience links sit below as secondary orientation — not a second hero.
  */
 export default function Home() {
   return (
@@ -25,7 +23,6 @@ export default function Home() {
             <p className="lead muted">{th.home.description}</p>
           </div>
 
-          {/* Product moment: the protected booking checkout the marketplace actually settles. */}
           <div className="hero__visual" aria-hidden>
             <div className="mockcard">
               <div className="mockcard__row">
@@ -63,13 +60,46 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Primary entry point: pick a role and drive the marketplace by hand. */}
         <section id="start">
           <div className="section-head">
             <h2>{th.home.pickTitle}</h2>
             <p>{th.home.pickSubtitle}</p>
           </div>
           <RolePicker />
+        </section>
+
+        <section id="orient" aria-labelledby="orient-heading">
+          <div className="section-head">
+            <h2 id="orient-heading">{th.home.audiencesTitle}</h2>
+            <p>{th.home.audiencesSubtitle}</p>
+          </div>
+          <div className="home-surfaces">
+            <Link
+              href="/journey"
+              className="home-surface"
+              data-testid="home-journey"
+            >
+              <span className="home-surface__title">{th.home.journeyLink}</span>
+              <p className="home-surface__desc">{th.home.journeyDesc}</p>
+              <span className="home-surface__cta">{th.home.open} →</span>
+            </Link>
+            <div className="home-surface">
+              <span className="home-surface__title">
+                {th.home.audienceClinic}
+              </span>
+              <p className="home-surface__desc">{th.home.audienceClinicDesc}</p>
+            </div>
+            <div className="home-surface">
+              <span className="home-surface__title">{th.home.audiencePro}</span>
+              <p className="home-surface__desc">{th.home.audienceProDesc}</p>
+            </div>
+            <div className="home-surface">
+              <span className="home-surface__title">
+                {th.home.audienceStaff}
+              </span>
+              <p className="home-surface__desc">{th.home.audienceStaffDesc}</p>
+            </div>
+          </div>
         </section>
 
         <section id="how">
@@ -110,7 +140,11 @@ export default function Home() {
           </span>
           <span className="footer__meta">
             <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
-            <Link href="/journey" className="footer__link" data-testid="journey-link">
+            <Link
+              href="/journey"
+              className="footer__link"
+              data-testid="journey-link"
+            >
               {th.home.journeyLink}
             </Link>
             <Link href="/flow" className="footer__link" data-testid="flow-link">

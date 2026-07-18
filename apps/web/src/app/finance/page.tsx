@@ -24,12 +24,17 @@ import { StatSkeletonGrid } from "../../components/Skeleton";
 import { KeyValueTable } from "../../components/KeyValueTable";
 import { Field, Input } from "../../components/Field";
 import { Dialog } from "../../components/Dialog";
-import { RefreshIcon, DownloadIcon, CheckIcon, AlertIcon, InboxIcon } from "../../components/icons";
+import {
+  RefreshIcon,
+  DownloadIcon,
+  CheckIcon,
+  AlertIcon,
+  InboxIcon,
+} from "../../components/icons";
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
-import { clearStaffSession, loadStaffSession, saveStaffSession } from "../../lib/session";
-import { loadSession, clearSession, saveSession } from "../../lib/demo-accounts";
+import { loadSession, clearSession, saveSession } from "../../lib/session";
 
 const MAX_ROWS = 25;
 
@@ -46,26 +51,23 @@ export default function FinancePage() {
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
-  const [refundFor, setRefundFor] = useState<{ bookingId: string; captured: number } | null>(null);
+  const [refundFor, setRefundFor] = useState<{
+    bookingId: string;
+    captured: number;
+  } | null>(null);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
   const toast = useToast();
   const loadSeq = useRef(0);
 
   useEffect(() => {
-    const staff = loadStaffSession("finance");
-    if (staff) {
-      setToken(staff.token);
-    } else {
-      const demo = loadSession();
-      if (demo) setToken(demo.token);
-    }
+    const sess = loadSession();
+    if (sess) setToken(sess.token);
     setBooting(false);
   }, []);
 
   const acceptToken = useCallback((next: string) => {
-    saveStaffSession("finance", next);
-    saveSession(next, "");
+    saveSession(next, "", "finance");
     setSessionNotice(null);
     setToken(next);
   }, []);
@@ -80,7 +82,6 @@ export default function FinancePage() {
     setLoadError(null);
     setLoading(false);
     setExporting(false);
-    clearStaffSession("finance");
     clearSession();
     if (previous) {
       try {
@@ -92,7 +93,6 @@ export default function FinancePage() {
   }, [token]);
 
   const expireSession = useCallback(() => {
-    clearStaffSession("finance");
     clearSession();
     setToken(null);
     setSessionNotice(th.staffLogin.sessionExpiredBanner);
@@ -104,7 +104,10 @@ export default function FinancePage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [next, approvals] = await Promise.all([getReconciliation(token), getPendingRefunds(token)]);
+      const [next, approvals] = await Promise.all([
+        getReconciliation(token),
+        getPendingRefunds(token),
+      ]);
       if (seq !== loadSeq.current) return;
       setData(next);
       setPending(approvals.pending);
@@ -114,7 +117,12 @@ export default function FinancePage() {
       setLoadError(msg);
       toast.error(msg);
       const raw = e instanceof Error ? e.message.toLowerCase() : "";
-      if (raw.includes("403") || raw.includes("401") || raw.includes("forbidden") || raw.includes("authentication")) {
+      if (
+        raw.includes("403") ||
+        raw.includes("401") ||
+        raw.includes("forbidden") ||
+        raw.includes("authentication")
+      ) {
         expireSession();
       }
     } finally {
@@ -156,7 +164,12 @@ export default function FinancePage() {
     const satang = Math.round(Number(refundAmount) * 100);
     setBusy(true);
     try {
-      await proposeRefund(refundFor.bookingId, satang, refundReason || "goodwill", auth);
+      await proposeRefund(
+        refundFor.bookingId,
+        satang,
+        refundReason || "goodwill",
+        auth,
+      );
       setRefundFor(null);
       setRefundAmount("");
       setRefundReason("");
@@ -186,7 +199,9 @@ export default function FinancePage() {
 
   const s = data?.summary;
   const allRows = data?.rows ?? [];
-  const filtered = exceptionsOnly ? allRows.filter((r) => !r.conserved) : allRows;
+  const filtered = exceptionsOnly
+    ? allRows.filter((r) => !r.conserved)
+    : allRows;
   const shown = filtered.slice(0, MAX_ROWS);
 
   if (booting) {
@@ -204,7 +219,11 @@ export default function FinancePage() {
     return (
       <>
         <AppHeader current="/finance" />
-        <StaffLogin surface="finance" onToken={acceptToken} sessionNotice={sessionNotice} />
+        <StaffLogin
+          surface="finance"
+          onToken={acceptToken}
+          sessionNotice={sessionNotice}
+        />
       </>
     );
   }
@@ -218,7 +237,12 @@ export default function FinancePage() {
           subtitle={th.finance.subtitle}
           actions={
             <>
-              <Button data-testid="refresh" onClick={() => void load()} disabled={loading || exporting} icon={<RefreshIcon />}>
+              <Button
+                data-testid="refresh"
+                onClick={() => void load()}
+                disabled={loading || exporting}
+                icon={<RefreshIcon />}
+              >
                 {th.common.refresh}
               </Button>
               <Button
@@ -231,7 +255,11 @@ export default function FinancePage() {
               >
                 {th.finance.exportCsv}
               </Button>
-              <Button data-testid="sign-out" variant="subtle" onClick={() => void signOut()}>
+              <Button
+                data-testid="sign-out"
+                variant="subtle"
+                onClick={() => void signOut()}
+              >
                 {th.staffLogin.signOut}
               </Button>
             </>
@@ -250,8 +278,15 @@ export default function FinancePage() {
           <div className="stat-grid" data-testid="fin-summary">
             {s ? (
               <>
-                <Stat label={th.finance.paymentOrders} value={String(s.count)} testid="fin-count" />
-                <Stat label={th.finance.captured} value={formatThb(s.captured)} />
+                <Stat
+                  label={th.finance.paymentOrders}
+                  value={String(s.count)}
+                  testid="fin-count"
+                />
+                <Stat
+                  label={th.finance.captured}
+                  value={formatThb(s.captured)}
+                />
                 <Stat label={th.finance.payouts} value={formatThb(s.payouts)} />
                 <Stat label={th.finance.refunds} value={formatThb(s.refunds)} />
                 <Stat
@@ -265,8 +300,16 @@ export default function FinancePage() {
           </div>
         )}
 
-        <SectionBlock id="finance-recon" title={th.finance.reconciliation} count={s ? filtered.length : undefined}>
-          <div className="filter-bar" role="group" aria-label={th.finance.filterAll}>
+        <SectionBlock
+          id="finance-recon"
+          title={th.finance.reconciliation}
+          count={s ? filtered.length : undefined}
+        >
+          <div
+            className="filter-bar"
+            role="group"
+            aria-label={th.finance.filterAll}
+          >
             <Button
               variant={!exceptionsOnly ? "primary" : "subtle"}
               data-testid="filter-all"
@@ -283,9 +326,16 @@ export default function FinancePage() {
             </Button>
           </div>
 
-          <div className="table-scroll" tabIndex={0} role="region" aria-label={th.a11y.reconciliationTable}>
+          <div
+            className="table-scroll"
+            tabIndex={0}
+            role="region"
+            aria-label={th.a11y.reconciliationTable}
+          >
             <table className="data-table">
-              <caption className="sr-only">{th.a11y.reconciliationTable}</caption>
+              <caption className="sr-only">
+                {th.a11y.reconciliationTable}
+              </caption>
               <thead>
                 <tr>
                   <th scope="col">{th.finance.colBooking}</th>
@@ -331,11 +381,16 @@ export default function FinancePage() {
                       row={r}
                       expanded={expandedId === r.paymentOrderId}
                       onToggle={() =>
-                        setExpandedId((id) => (id === r.paymentOrderId ? null : r.paymentOrderId))
+                        setExpandedId((id) =>
+                          id === r.paymentOrderId ? null : r.paymentOrderId,
+                        )
                       }
                       onRefund={() => {
                         if (!r.bookingId) return;
-                        setRefundFor({ bookingId: r.bookingId, captured: r.captured - r.refunds });
+                        setRefundFor({
+                          bookingId: r.bookingId,
+                          captured: r.captured - r.refunds,
+                        });
                         setRefundAmount("");
                         setRefundReason("");
                       }}
@@ -352,11 +407,18 @@ export default function FinancePage() {
           </p>
         )}
 
-        <SectionBlock title={th.finance.pendingApprovals} count={pending.length}>
+        <SectionBlock
+          title={th.finance.pendingApprovals}
+          count={pending.length}
+        >
           <div className="card">
             <ul className="rowlist" data-testid="approvals-list">
               {pending.length === 0 && (
-                <EmptyState as="li" title={th.finance.emptyApprovals} icon={<CheckIcon />} />
+                <EmptyState
+                  as="li"
+                  title={th.finance.emptyApprovals}
+                  icon={<CheckIcon />}
+                />
               )}
               {pending.map((a) => (
                 <li key={a.id} data-testid={`approval-${a.id}`}>
@@ -364,11 +426,18 @@ export default function FinancePage() {
                     <span className="row__name">{formatThb(a.amount)}</span>
                     <span className="row__sub muted">
                       {a.reason} · {th.finance.proposedBy}{" "}
-                      <code className="row__id">{a.initiatorId.slice(0, 10)}</code>
+                      <code className="row__id">
+                        {a.initiatorId.slice(0, 10)}
+                      </code>
                     </span>
                   </span>
                   <span className="row__actions">
-                    <Button data-testid="approve-btn" variant="primary" busy={busy} onClick={() => void approve(a.id)}>
+                    <Button
+                      data-testid="approve-btn"
+                      variant="primary"
+                      busy={busy}
+                      onClick={() => void approve(a.id)}
+                    >
                       {th.finance.approve}
                     </Button>
                   </span>
@@ -394,8 +463,9 @@ export default function FinancePage() {
         {refundFor ? (
           <div className="refund-form" data-testid="refund-form">
             <p className="muted">
-              {th.finance.colBooking} <code>{refundFor.bookingId.slice(0, 8)}</code> · {th.finance.captured}{" "}
-              {formatThb(refundFor.captured)}
+              {th.finance.colBooking}{" "}
+              <code>{refundFor.bookingId.slice(0, 8)}</code> ·{" "}
+              {th.finance.captured} {formatThb(refundFor.captured)}
             </p>
             <Field label={th.finance.refundAmount} htmlFor="refund-amount">
               <Input
@@ -407,7 +477,13 @@ export default function FinancePage() {
                   // Allow baht with up to two decimal places (satang); keep only the first dot.
                   let v = e.target.value.replace(/[^0-9.]/g, "");
                   const dot = v.indexOf(".");
-                  if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+                  if (dot !== -1)
+                    v =
+                      v.slice(0, dot + 1) +
+                      v
+                        .slice(dot + 1)
+                        .replace(/\./g, "")
+                        .slice(0, 2);
                   setRefundAmount(v);
                 }}
               />
@@ -473,7 +549,11 @@ function FinanceRow({
               {expanded ? th.common.hideDetails : th.common.details}
             </Button>
             {canRefund ? (
-              <Button data-testid="refund-btn" variant="subtle" onClick={onRefund}>
+              <Button
+                data-testid="refund-btn"
+                variant="subtle"
+                onClick={onRefund}
+              >
                 {th.finance.refund}
               </Button>
             ) : null}
@@ -481,19 +561,35 @@ function FinanceRow({
         </td>
       </tr>
       {expanded ? (
-        <tr className="data-table__detail" data-testid={`recon-detail-${row.paymentOrderId}`}>
+        <tr
+          className="data-table__detail"
+          data-testid={`recon-detail-${row.paymentOrderId}`}
+        >
           <td colSpan={7}>
             <div className="recon-detail">
               <p className="recon-detail__title">{th.finance.legsTitle}</p>
               <KeyValueTable
                 caption={th.finance.legsTitle}
                 rows={[
-                  { label: th.finance.colOrder, value: <code>{row.paymentOrderId}</code> },
-                  { label: th.finance.colBooking, value: <code>{row.bookingId ?? "—"}</code> },
-                  { label: th.finance.captured, value: formatThb(row.captured) },
+                  {
+                    label: th.finance.colOrder,
+                    value: <code>{row.paymentOrderId}</code>,
+                  },
+                  {
+                    label: th.finance.colBooking,
+                    value: <code>{row.bookingId ?? "—"}</code>,
+                  },
+                  {
+                    label: th.finance.captured,
+                    value: formatThb(row.captured),
+                  },
                   { label: th.finance.payouts, value: formatThb(row.payouts) },
                   { label: th.finance.refunds, value: formatThb(row.refunds) },
-                  { label: th.finance.colUndistributed, value: formatThb(row.undistributed), total: true },
+                  {
+                    label: th.finance.colUndistributed,
+                    value: formatThb(row.undistributed),
+                    total: true,
+                  },
                 ]}
               />
             </div>

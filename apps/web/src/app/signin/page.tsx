@@ -6,7 +6,7 @@ import { RolePicker } from "../../components/RolePicker";
 import { useToast } from "../../components/Toast";
 import { resetDemo } from "../../lib/api";
 import { getThaiErrorMessage } from "../../lib/strings";
-import { clearSession } from "../../lib/demo-accounts";
+import { clearSession } from "../../lib/session";
 
 /**
  * "Sign in as" demo page. Pick a ready-made account for any role and land on that role's
@@ -36,12 +36,23 @@ export default function SignInPage() {
       <main className="page" style={{ maxWidth: 720 }}>
         <header style={{ marginBottom: "var(--s5)" }}>
           <h1 style={{ margin: "0 0 var(--s2)" }}>เข้าใช้งานในบทบาทต่าง ๆ</h1>
-          <p className="muted" style={{ margin: 0 }}>เลือกบัญชีทดลองเพื่อเข้าใช้งานในมุมมองของแต่ละบทบาท</p>
+          <p className="muted" style={{ margin: 0 }}>
+            เลือกบัญชีทดลองเพื่อเข้าใช้งานในมุมมองของแต่ละบทบาท
+          </p>
         </header>
         <RolePicker />
-        <div className="actions" style={{ justifyContent: "space-between", marginTop: "var(--s5)", flexWrap: "wrap", gap: "var(--s3)" }}>
+        <div
+          className="actions"
+          style={{
+            justifyContent: "space-between",
+            marginTop: "var(--s5)",
+            flexWrap: "wrap",
+            gap: "var(--s3)",
+          }}
+        >
           <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
-            บัญชีทดลองสำหรับเดโมเท่านั้น (โหมด AUTH_DEV_MODE) — รหัส OTP จะกรอกให้อัตโนมัติ
+            บัญชีทดลองสำหรับเดโมเท่านั้น (โหมด AUTH_DEV_MODE) — รหัส OTP
+            จะกรอกให้อัตโนมัติ
           </p>
           <button
             type="button"
