@@ -6,19 +6,24 @@
 export const th = {
   brand: "ProBooking",
   home: {
-    tagline: "หาเวรคลินิกได้บุคลากรที่ตรวจสอบแล้ว จ่ายเงินอย่างปลอดภัย",
-    lead: "คลินิกจองบุคลากรที่ตรวจสอบแล้ว — เงินถูกคุ้มครองจนกว่าเวรจะเสร็จ",
+    // EN intent → Thai: "Book verified professionals for clinic shifts — payment protected"
+    tagline: "จองบุคลากรที่ตรวจสอบแล้วสำหรับเวรคลินิก — คุ้มครองการชำระเงิน",
+    // EN: "Clinics pay when the professional accepts — funds stay protected until the shift is done"
+    lead: "คลินิกจ่ายเมื่อบุคลากรยอมรับ — เงินถูกคุ้มครองจนกว่าเวรจะเสร็จ",
     phaseNote:
       "Phase 0 เป็น concierge: ทีม ProBooking ช่วยจองให้ครบวงจร หน้านี้แสดงเส้นทางธุรกรรมและเครื่องมือทีมภายใน",
     marketSignal: "กรุงเทพฯ และปริมณฑล · แพทย์และทันตแพทย์",
     phase: "Phase 0 · กรุงเทพฯ และปริมณฑล",
+    // EN: "Book verified professionals for temporary clinic shifts in Thailand — with payment protection"
     metadataDescription:
-      "ตลาดสองด้านสำหรับเวรคลินิกชั่วคราวในประเทศไทย จองบุคลากรที่ตรวจสอบแล้ว พร้อมการชำระเงินที่คุ้มครอง",
-    ctaPrimary: "เริ่มเดโม",
+      "จองบุคลากรที่ตรวจสอบแล้วสำหรับเวรคลินิกชั่วคราวในไทย พร้อมคุ้มครองการชำระเงิน",
+    ctaPrimary: "เริ่ม demo",
     ctaSecondary: "ดูวิธีทำงาน",
-    trust: ["ตรวจสอบแล้ว", "พร้อมทำงาน", "จองได้", "คุ้มครองการชำระเงิน"],
+    // EN: Verified · Available · Bookable · Payment Protected
+    trust: ["ตรวจสอบแล้ว", "พร้อมรับเวร", "จองได้", "คุ้มครองการชำระเงิน"],
     howTitle: "ทำงานอย่างไร",
-    howSubtitle: "จากประกาศเวรถึงจ่ายเงิน สี่ขั้นตอนที่ตรวจสอบได้",
+    // EN: "From posting a shift to payout — four clear steps"
+    howSubtitle: "จากประกาศเวรถึงจ่ายเงิน — สี่ขั้นตอนชัดเจน",
     howPerspectiveClinic: "มุมคลินิก",
     howPerspectivePro: "มุมบุคลากร",
     stepsClinic: [
@@ -32,7 +37,8 @@ export const th = {
       },
       {
         t: "ยืนยันและคุ้มครองเงิน",
-        d: "เมื่อบุคลากรยอมรับ กันเงินไว้ (คุ้มครองการชำระเงิน) ก่อนยืนยันการจอง",
+        // EN: "When they accept, you pay to confirm the booking — funds are held protected"
+        d: "เมื่อบุคลากรยอมรับ จ่ายเงินเพื่อยืนยันการจอง — เงินถูกคุ้มครองไว้",
       },
       {
         t: "รับรองและจ่าย",
@@ -42,7 +48,7 @@ export const th = {
     stepsPro: [
       {
         t: "ยืนยันตัวตน",
-        d: "ส่งเอกสารให้ทีมตรวจสอบ แล้วเปิดรับเวรที่ตรงกับความเชี่ยวชาญ",
+        d: "ส่งเอกสารให้ทีมตรวจสอบ แล้วเปิดรับเวรที่ตรงความเชี่ยวชาญ",
       },
       {
         t: "รับข้อเสนอ",
@@ -69,30 +75,32 @@ export const th = {
       },
       {
         t: "ยืนยันและคุ้มครองเงิน",
-        d: "ยอมรับข้อเสนอแล้วกันเงินไว้ (คุ้มครองการชำระเงิน) ก่อนยืนยันการจอง",
+        d: "เมื่อบุคลากรยอมรับ จ่ายเงินเพื่อยืนยันการจอง — เงินถูกคุ้มครองไว้",
       },
       {
         t: "ทำงานและรับเงิน",
-        d: "เมื่อเสร็จงาน ระบบจ่ายเงินให้บุคลากรพร้อมบันทึกที่ตรวจสอบได้",
+        d: "เมื่อเสร็จงาน ระบบจ่ายเงินให้บุคลากรพร้อมบันทึก",
       },
     ],
     audiencesTitle: "เลือกเส้นทางของคุณ",
-    audiencesSubtitle:
-      "ทดลองระบบ ดูเส้นทางจอง หรือติดต่อทีมสำหรับการใช้งานจริง",
+    // EN: "Try the demo, walk a booking, or talk to us about going live"
+    audiencesSubtitle: "ทดลอง demo เดินเส้นทางจอง หรือติดต่อทีมเพื่อใช้งานจริง",
     audienceClinic: "สำหรับคลินิก",
     audienceClinicDesc:
-      "ต้องการจองบุคลากรชั่วคราว — ทีม concierge ช่วยประสานให้ครบวงจร",
+      "ต้องการบุคลากรชั่วคราว — ทีม concierge ช่วยประสานให้ครบวงจร",
     audienceClinicCta: "ติดต่อทีม",
     audiencePro: "สำหรับบุคลากร",
-    audienceProDesc: "หาเวรที่ชัดเจน เงินถูกคุ้มครอง และติดตามการจ่ายได้",
-    audienceProCta: "เริ่มเดโม",
+    // EN: "Clear shift terms, protected pay, and payouts you can track"
+    audienceProDesc: "หาเวรที่เงื่อนไขชัด เงินถูกคุ้มครอง และติดตามการจ่ายได้",
+    audienceProCta: "เริ่ม demo",
     audienceStaff: "สำหรับทีมภายใน",
     audienceStaffDesc:
       "ปฏิบัติการตรวจสอบและจัดการเคส การเงินกระทบยอดคำสั่งชำระเงิน",
     audienceStaffCta: "เลือกบทบาททีม",
     pickTitle: "เลือกบทบาทเพื่อเริ่ม demo",
+    // EN: "Use a trial account for each role. One click signs you in — OTP fills automatically."
     pickSubtitle:
-      "เข้าสู่ระบบด้วยบัญชีทดลองของแต่ละบทบาท แล้วขับเคลื่อนทั้งขั้นตอนด้วยตนเอง คลิกเดียว รหัส OTP กรอกให้อัตโนมัติ",
+      "ใช้บัญชีทดลองของแต่ละบทบาท คลิกเดียวเข้าสู่ระบบ — รหัส OTP กรอกให้อัตโนมัติ",
     guidedDemo: "แนะนำ: เริ่มที่คลินิก → สลับไปบุคลากร → ปฏิบัติการ → การเงิน",
     partyGroup: "คู่สัญญา",
     staffGroup: "ทีมภายใน",
@@ -101,8 +109,7 @@ export const th = {
     surfacesSubtitle:
       "เส้นทางจองสำหรับผู้ใช้ เครื่องมือทีม และ demo สำหรับนักพัฒนา",
     journeyLink: "เส้นทางจอง",
-    journeyDesc:
-      "เดินทีละขั้นจากข้อเสนอถึงคุ้มครองเงิน เสร็จงาน และจ่ายออก (ภาษาไทย)",
+    journeyDesc: "เดินทีละขั้นจากข้อเสนอถึงคุ้มครองเงิน เสร็จงาน และจ่ายออก",
     flowLink: "Demo สำหรับนักพัฒนา",
     flowDesc: "harness e2e เดินครบทั้งขั้นตอนอัตโนมัติ (ภาษาอังกฤษ)",
     opsLink: "Dashboard ฝ่ายปฏิบัติการ",
@@ -113,7 +120,7 @@ export const th = {
     contactTitle: "สนใจใช้งานจริง?",
     contactNote:
       "Phase 0 เปิดให้คลินิกในกรุงเทพฯ และปริมณฑลผ่านทีม concierge — ยังไม่เปิดจองด้วยตนเองสาธารณะ",
-    contactCta: "ติดต่อทีมคอนเซียร์จ",
+    contactCta: "ติดต่อทีม concierge",
     contactEmail: "concierge@probooking.app",
     contactMailtoSubject: "สนใจใช้งาน ProBooking Phase 0",
   },
@@ -121,13 +128,12 @@ export const th = {
     title: "เข้าใช้งานในบทบาทต่าง ๆ",
     subtitle: "เลือกบัญชีทดลองเพื่อเข้าใช้งานในมุมมองของแต่ละบทบาท",
     backHome: "หรือเริ่มจากหน้าแรก",
-    demoHint:
-      "บัญชีทดลองสำหรับ demo เท่านั้น (โหมด AUTH_DEV_MODE) รหัส OTP จะกรอกให้อัตโนมัติ",
+    demoHint: "บัญชีทดลองสำหรับ demo เท่านั้น รหัส OTP จะกรอกให้อัตโนมัติ",
     resetLabel: "รีเซ็ตข้อมูล demo",
     resetting: "กำลังรีเซ็ต…",
     resetDone: "รีเซ็ตข้อมูล demo แล้ว",
     resetHelper:
-      "ล้างข้อมูลเดโมกลับชุดตั้งต้น — การจองและการยืนยันที่ทำไว้จะหาย",
+      "ล้างข้อมูล demo กลับชุดตั้งต้น — การจองและการยืนยันที่ทำไว้จะหาย",
   },
   flow: {
     title: "Demo สำหรับนักพัฒนา",
@@ -158,7 +164,7 @@ export const th = {
     stepDetail: {
       setup: "ลงทะเบียนและให้ฝ่ายปฏิบัติการตรวจสอบคลินิกกับบุคลากร",
       offer: "คลินิกส่งข้อเสนอผูกพันหนึ่งฉบับพร้อมค่าตอบแทนและค่าบริการ",
-      accept: "บุคลากรตรวจเงื่อนไขแล้วยอมรับ (กันเงินไว้ แต่ยังไม่ใช่การจอง)",
+      accept: "บุคลากรตรวจเงื่อนไขแล้วยอมรับ — ยังไม่ใช่การจองจนกว่าคลินิกจะชำระเงิน",
       confirm: "คลินิกยืนยันหลังคุ้มครองเงิน → การจองได้รับการยืนยัน",
       complete: "บุคลากรแจ้งเสร็จงาน",
       payout: "คลินิกรับรอง → จ่ายค่าตอบแทนให้บุคลากร",
@@ -415,9 +421,9 @@ export const th = {
     nurse: "พยาบาล",
   } as Record<string, string>,
   nextAction: {
-    PendingResponse: "บุคลากร: ตรวจค่าตอบแทนและค่ายบริการ แล้วยอมรับข้อเสนอ",
+    PendingResponse: "บุคลากร: ตรวจค่าตอบแทนและค่าบริการ แล้วยอมรับข้อเสนอ",
     AwaitingPayment:
-      "คลินิก: ยืนยันและกันเงิน (คุ้มครองการชำระเงิน) เพื่อสร้างการจอง",
+      "คลินิก: ยืนยันและคุ้มครองเงินเพื่อสร้างการจอง",
     Confirmed: "บุคลากร: มาถึงและทำงานตามเวร",
     InProgress: "บุคลากร: ส่งงานเสร็จเมื่อทำงานครบ",
     AwaitingCompletion: "คลินิก: รับรองเสร็จงานเพื่อจ่ายเงิน",
@@ -430,12 +436,12 @@ export const th = {
     pickAccount: "เลือกบัญชีเข้าสู่ระบบ",
     postShift: "ประกาศเวรใหม่",
     compensationBaht: "ค่าตอบแทน (บาท)",
-    urgent: "ด่วน (Urgent)",
+    urgent: "ด่วน",
     myShifts: "เวรของฉัน",
     noShifts: "ยังไม่มีเวร ประกาศเวรด้านบน",
     candidates: "ผู้สมัคร",
     sendOffer: "ส่งข้อเสนอ",
-    confirmPay: "ยืนยัน & กันเงิน",
+    confirmPay: "ยืนยันและคุ้มครองเงิน",
     myBookings: "การจอง",
     noBookings: "ยังไม่มีการจอง",
     acceptPayout: "รับงาน & จ่ายเงิน",
@@ -502,7 +508,7 @@ export const th = {
     marketPulseEmpty: "ยังไม่มีเวรเด่นในตอนนี้",
     browseAllShifts: "ดูเวรทั้งหมด",
     paymentProtectedHint: "ค่าตอบแทนคุ้มครองเมื่อยืนยันจอง",
-    homeTrustLine: "ตรวจสอบแล้ว · พร้อมรับงาน · คุ้มครองการชำระเงิน",
+    homeTrustLine: "ตรวจสอบแล้ว · พร้อมรับเวร · คุ้มครองการชำระเงิน",
     filterCategory: "หมวด",
     filterUrgency: "ความด่วน",
     filterMinBaht: "ค่าตอบแทนขั้นต่ำ (บาท)",

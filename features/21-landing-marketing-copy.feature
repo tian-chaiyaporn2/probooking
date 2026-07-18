@@ -10,11 +10,11 @@ Feature: Landing marketing copy
     Given the landing marketing strings are loaded
     Then the hero eyebrow should be "กรุงเทพฯ และปริมณฑล · แพทย์และทันตแพทย์"
     And the hero lead should mention payment protection
-    And the hero primary CTA should be "เริ่มเดโม"
+    And the hero primary CTA should be "เริ่ม demo"
 
   Scenario: Contact path is defined for real-interest clinics
     Given the landing marketing strings are loaded
-    Then the contact CTA should be "ติดต่อทีมคอนเซียร์จ"
+    Then the contact CTA should be "ติดต่อทีม concierge"
     And the contact email should be a valid mailbox address
 
   Scenario: How-it-works has clinic and professional perspectives

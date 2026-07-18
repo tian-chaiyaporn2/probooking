@@ -412,7 +412,7 @@ export default function ClinicPage() {
                         void run(
                           `confirm-${s.offer!.id}`,
                           () => confirmOffer(s.offer!.id, token),
-                          "ยืนยันและกันเงินแล้ว",
+                          "ยืนยันและคุ้มครองเงินแล้ว",
                         )
                       }
                     >
