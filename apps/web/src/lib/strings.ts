@@ -298,17 +298,11 @@ export const th = {
     PendingResponse: "รอตอบรับ",
     AwaitingPayment: "รอชำระเงิน",
     Accepted: "ยอมรับแล้ว",
-<<<<<<< HEAD
-    Converted: "แปลงเป็นจองแล้ว",
-=======
     Converted: "จองแล้ว",
     Withdrawn: "ถอนข้อเสนอแล้ว",
     PaymentFailed: "ชำระเงินไม่สำเร็จ",
->>>>>>> origin/master
     Expired: "หมดอายุ",
     Declined: "ปฏิเสธ",
-    Withdrawn: "ถอนแล้ว",
-    PaymentFailed: "ชำระเงินไม่สำเร็จ",
     // Booking
     Confirmed: "ยืนยันแล้ว คุ้มครองเงิน",
     InProgress: "กำลังทำงาน",
@@ -321,17 +315,9 @@ export const th = {
     Pending: "รอจ่าย",
     Processing: "กำลังดำเนินการจ่าย",
     Paid: "จ่ายแล้ว",
-<<<<<<< HEAD
-    NotEligible: "ยังไม่ถึงกำหนดจ่าย",
-    Processing: "กำลังจ่าย",
-    Failed: "จ่ายไม่สำเร็จ",
-    Held: "ระงับการจ่าย",
-    Reversed: "คืนรายการแล้ว",
-=======
     Failed: "จ่ายไม่สำเร็จ",
     Held: "ระงับการจ่าย",
     Reversed: "เรียกคืนแล้ว",
->>>>>>> origin/master
     // Shift / misc
     Open: "เปิดรับ",
     Filled: "เต็มแล้ว",
