@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { containsProhibitedPatientData } from "@probook/domain";
 import {
   listMessages,
@@ -11,11 +11,12 @@ import {
 } from "../lib/api";
 import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
+import { EmptyState } from "./EmptyState";
 import { useToast } from "./Toast";
 
 /**
  * Booking thread (MSG-01/02): plain-text messages + contact reveal after confirm.
- * Soft-warns client-side when §7.3 prohibited patient identifiers appear in draft text.
+ * Soft-warns client-side when prohibited patient identifiers appear in draft text.
  */
 export function BookingThread({
   bookingId,
@@ -28,6 +29,7 @@ export function BookingThread({
   selfId?: string | null;
 }) {
   const toast = useToast();
+  const warnId = useId();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<BookingMessage[]>([]);
   const [contact, setContact] = useState<BookingContact | null>(null);
@@ -87,10 +89,7 @@ export function BookingThread({
       {open && (
         <div className="thread__panel">
           {contact && (contact.clinicPhone || contact.professionalPhone) ? (
-            <p
-              className="muted"
-              style={{ fontSize: "0.82rem", margin: "0 0 var(--s3)" }}
-            >
+            <p className="thread__contact muted">
               {th.party.contactReveal}:{" "}
               {contact.clinicPhone
                 ? `${th.party.clinicPhone} ${contact.clinicPhone}`
@@ -106,7 +105,7 @@ export function BookingThread({
           ) : (
             <ul className="thread__list" data-testid="thread-messages">
               {messages.length === 0 && (
-                <li className="empty muted">{th.party.noMessages}</li>
+                <EmptyState as="li" title={th.party.noMessages} />
               )}
               {messages.map((m) => {
                 const mine = selfId && m.senderId === selfId;
@@ -118,7 +117,7 @@ export function BookingThread({
                     }
                   >
                     <span className="thread__meta muted">
-                      {mine ? th.party.you : m.senderId.slice(0, 8)} ·{" "}
+                      {mine ? th.party.you : th.party.otherParty} ·{" "}
                       {new Date(m.createdAt).toLocaleString("th-TH")}
                     </span>
                     <span className="thread__body">{m.body}</span>
@@ -128,29 +127,34 @@ export function BookingThread({
             </ul>
           )}
           <label className="thread__compose">
-            <span className="muted" style={{ fontSize: "0.82rem" }}>
-              {th.party.messageHint}
-            </span>
+            <span className="muted thread__hint">{th.party.messageHint}</span>
             <textarea
               data-testid="thread-draft"
               rows={2}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={th.party.messagePlaceholder}
-              className={softWarn ? "thread__draft--warn" : undefined}
+              className={[
+                "input",
+                softWarn ? "thread__draft--warn" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-invalid={softWarn || undefined}
+              aria-describedby={softWarn ? warnId : undefined}
             />
           </label>
           {softWarn ? (
             <p
+              id={warnId}
               role="status"
-              className="form-error"
+              className="form-warn"
               data-testid="thread-soft-warn"
-              style={{ marginTop: 6 }}
             >
               {th.party.messageSoftWarn}
             </p>
           ) : null}
-          <div className="actions" style={{ marginTop: 8 }}>
+          <div className="actions thread__send">
             <Button
               data-testid="thread-send"
               variant="primary"

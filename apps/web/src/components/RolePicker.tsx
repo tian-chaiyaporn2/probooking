@@ -37,12 +37,14 @@ function AccountCard({
   onSignIn: (acc: DemoAccount) => void;
 }) {
   const Icon = ICONS[acc.icon];
+  const isBusy = busy === acc.phone;
   return (
     <button
       type="button"
       className="signin-card"
       data-testid={`signin-${acc.id}`}
       disabled={busy !== null}
+      aria-busy={isBusy || undefined}
       onClick={() => onSignIn(acc)}
     >
       <span className="signin-card__top">
@@ -58,7 +60,14 @@ function AccountCard({
         </span>
       </span>
       <span className="signin-card__go">
-        {busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}
+        {isBusy ? (
+          <>
+            <span className="btn__spinner" aria-hidden />
+            {th.common.loading}
+          </>
+        ) : (
+          "เข้าสู่ระบบ →"
+        )}
       </span>
     </button>
   );
@@ -88,7 +97,7 @@ export function RolePicker({ showGroups = true }: { showGroups?: boolean }) {
 
   if (!showGroups) {
     return (
-      <div className="signin-grid">
+      <div className="signin-grid" aria-busy={busy !== null || undefined}>
         {[...DEMO_PARTY_ACCOUNTS, ...DEMO_STAFF_ACCOUNTS].map((acc) => (
           <AccountCard
             key={acc.phone}
@@ -102,7 +111,7 @@ export function RolePicker({ showGroups = true }: { showGroups?: boolean }) {
   }
 
   return (
-    <div className="signin-groups">
+    <div className="signin-groups" aria-busy={busy !== null || undefined}>
       <div className="signin-group" data-testid="signin-party-group">
         <h3 className="signin-group__title">{th.home.partyGroup}</h3>
         <div className="signin-grid">

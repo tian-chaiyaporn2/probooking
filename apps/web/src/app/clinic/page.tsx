@@ -8,6 +8,8 @@ import { Badge } from "../../components/Badge";
 import { BookingThread } from "../../components/BookingThread";
 import { CheckoutSummary } from "../../components/CheckoutSummary";
 import { Dialog } from "../../components/Dialog";
+import { EmptyState } from "../../components/EmptyState";
+import { Skeleton } from "../../components/Skeleton";
 import { useToast } from "../../components/Toast";
 import {
   getMe,
@@ -32,22 +34,41 @@ import { checkoutFromCompensation } from "../../lib/checkout";
 import { getThaiErrorMessage, th } from "../../lib/strings";
 import { statusLabel, nextActionHint, professionLabel } from "../../lib/status";
 import { loadSession, clearSession } from "../../lib/session";
+import { verificationBadgeTone } from "../../lib/tones";
+
+function RowSkeleton({ count = 3 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <li key={i} className="rowlist__skeleton" aria-hidden>
+          <span className="row__main">
+            <Skeleton variant="line" />
+            <Skeleton variant="line-short" />
+          </span>
+        </li>
+      ))}
+    </>
+  );
+}
 
 export default function ClinicPage() {
   const toast = useToast();
   const [token, setToken] = useState<string | null>(null);
   const [me, setMe] = useState<MeIdentity | null>(null);
+  const [meLoading, setMeLoading] = useState(false);
   const [shifts, setShifts] = useState<ClinicShiftRow[]>([]);
   const [candidates, setCandidates] = useState<Record<string, Candidate[]>>({});
   const [names, setNames] = useState<Record<string, string>>({});
   const [bookings, setBookings] = useState<PartyBooking[]>([]);
+  const [listLoading, setListLoading] = useState(false);
   const [comp, setComp] = useState("10000");
   const [urgent, setUrgent] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [profession, setProfession] = useState("");
   const [searchHits, setSearchHits] = useState<ProfessionalSearchResult[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
+  const [searched, setSearched] = useState(false);
 
   const clinic =
     me?.clinics.find((c) => c.role === "clinic_owner") ??
@@ -55,43 +76,50 @@ export default function ClinicPage() {
     null;
 
   const load = useCallback(async (workspaceId: string, tok: string) => {
-    const [s, b] = await Promise.all([
-      getClinicShifts(workspaceId, tok),
-      getClinicBookings(workspaceId, tok),
-    ]);
-    setShifts(s.shifts);
-    setBookings(b.bookings);
-    const withCands = s.shifts.filter(
-      (x) => x.candidateCount > 0 && !x.offer && !x.booked,
-    );
-    const cs = await Promise.all(
-      withCands.map((x) =>
-        getShiftCandidates(x.shiftId, tok)
-          .then((r) => [x.shiftId, r.candidates] as const)
-          .catch(() => [x.shiftId, [] as Candidate[]] as const),
-      ),
-    );
-    setCandidates(Object.fromEntries(cs));
-    const ids = new Set(
-      cs.flatMap(([, list]) => list.map((c) => c.professionalId)),
-    );
-    const profiles = await Promise.all(
-      [...ids].map((id) =>
-        getProfessionalProfile(id)
-          .then((p) => [id, p.selfDeclared.displayName] as const)
-          .catch(() => [id, id.slice(0, 8)] as const),
-      ),
-    );
-    setNames(Object.fromEntries(profiles));
+    setListLoading(true);
+    try {
+      const [s, b] = await Promise.all([
+        getClinicShifts(workspaceId, tok),
+        getClinicBookings(workspaceId, tok),
+      ]);
+      setShifts(s.shifts);
+      setBookings(b.bookings);
+      const withCands = s.shifts.filter(
+        (x) => x.candidateCount > 0 && !x.offer && !x.booked,
+      );
+      const cs = await Promise.all(
+        withCands.map((x) =>
+          getShiftCandidates(x.shiftId, tok)
+            .then((r) => [x.shiftId, r.candidates] as const)
+            .catch(() => [x.shiftId, [] as Candidate[]] as const),
+        ),
+      );
+      setCandidates(Object.fromEntries(cs));
+      const ids = new Set(
+        cs.flatMap(([, list]) => list.map((c) => c.professionalId)),
+      );
+      const profiles = await Promise.all(
+        [...ids].map((id) =>
+          getProfessionalProfile(id)
+            .then((p) => [id, p.selfDeclared.displayName] as const)
+            .catch(() => [id, id.slice(0, 8)] as const),
+        ),
+      );
+      setNames(Object.fromEntries(profiles));
+    } finally {
+      setListLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     const sess = loadSession();
     if (!sess) return;
     setToken(sess.token);
+    setMeLoading(true);
     getMe(sess.token)
       .then(setMe)
-      .catch((e) => toast.error(getThaiErrorMessage(e)));
+      .catch((e) => toast.error(getThaiErrorMessage(e)))
+      .finally(() => setMeLoading(false));
   }, [toast]);
 
   useEffect(() => {
@@ -101,8 +129,8 @@ export default function ClinicPage() {
       );
   }, [clinic, token, load, toast]);
 
-  async function run(fn: () => Promise<unknown>, ok: string) {
-    setBusy(true);
+  async function run(id: string, fn: () => Promise<unknown>, ok: string) {
+    setBusyId(id);
     try {
       await fn();
       if (clinic && token) await load(clinic.workspaceId, token);
@@ -110,7 +138,7 @@ export default function ClinicPage() {
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
-      setBusy(false);
+      setBusyId(null);
     }
   }
 
@@ -121,6 +149,7 @@ export default function ClinicPage() {
         profession.trim() ? { profession: profession.trim() } : {},
       );
       setSearchHits(r.professionals);
+      setSearched(true);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
@@ -153,17 +182,27 @@ export default function ClinicPage() {
     );
   }
 
+  const cancelBusy = busyId === "cancel";
+
   return (
     <>
       <AppHeader current="/clinic" />
       <main id="main" className="page page--party">
         <div className="workspace-head">
           <div>
-            <h1>{clinic?.name ?? "คลินิก"}</h1>
+            <h1>
+              {meLoading && !clinic ? (
+                <Skeleton variant="line" />
+              ) : (
+                (clinic?.name ?? "คลินิก")
+              )}
+            </h1>
             <span className="workspace-head__meta">
               เจ้าของคลินิก ·{" "}
               {clinic ? (
-                <Badge tone="success">{statusLabel(clinic.verification)}</Badge>
+                <Badge tone={verificationBadgeTone(clinic.verification)}>
+                  {statusLabel(clinic.verification)}
+                </Badge>
               ) : null}
             </span>
           </div>
@@ -200,10 +239,16 @@ export default function ClinicPage() {
             <Button
               data-testid="post-shift"
               variant="primary"
-              busy={busy}
-              disabled={!comp || Number(comp) <= 0}
+              busy={busyId === "post-shift"}
+              disabled={
+                !comp ||
+                Number(comp) <= 0 ||
+                !clinic ||
+                (busyId !== null && busyId !== "post-shift")
+              }
               onClick={() =>
                 void run(
+                  "post-shift",
                   () =>
                     postShift(
                       {
@@ -251,8 +296,9 @@ export default function ClinicPage() {
             </Button>
           </div>
           <ul className="rowlist" data-testid="pro-search-results">
-            {searchHits.length === 0 && (
-              <li className="empty muted">{th.party.noProsFound}</li>
+            {!searched && <EmptyState as="li" title={th.party.searchIdle} />}
+            {searched && searchHits.length === 0 && (
+              <EmptyState as="li" title={th.party.noProsFound} />
             )}
             {searchHits.slice(0, 12).map((p) => (
               <li key={p.id}>
@@ -270,12 +316,18 @@ export default function ClinicPage() {
         </div>
 
         <h2>
-          {th.party.myShifts} ({shifts.length})
+          {th.party.myShifts} (
+          {listLoading && shifts.length === 0 ? "…" : shifts.length})
         </h2>
         <div className="card" style={{ marginBottom: "var(--s5)" }}>
-          <ul className="rowlist" data-testid="clinic-shifts">
-            {shifts.length === 0 && (
-              <li className="empty">{th.party.noShifts}</li>
+          <ul
+            className="rowlist"
+            data-testid="clinic-shifts"
+            aria-busy={listLoading || undefined}
+          >
+            {listLoading && shifts.length === 0 && <RowSkeleton />}
+            {!listLoading && shifts.length === 0 && (
+              <EmptyState as="li" title={th.party.noShifts} />
             )}
             {shifts.map((s) => (
               <li
@@ -315,28 +367,35 @@ export default function ClinicPage() {
                     !s.offer &&
                     (candidates[s.shiftId]?.length ?? 0) > 0 && (
                       <span className="actions" style={{ marginTop: 6 }}>
-                        {candidates[s.shiftId]!.map((c) => (
-                          <Button
-                            key={c.professionalId}
-                            data-testid="send-offer"
-                            busy={busy}
-                            onClick={() =>
-                              void run(
-                                () =>
-                                  offerToProfessional(
-                                    s.shiftId,
-                                    c.professionalId,
-                                    token,
-                                  ),
-                                "ส่งข้อเสนอแล้ว",
-                              )
-                            }
-                          >
-                            {th.party.sendOffer} →{" "}
-                            {names[c.professionalId] ??
-                              c.professionalId.slice(0, 6)}
-                          </Button>
-                        ))}
+                        {candidates[s.shiftId]!.map((c) => {
+                          const offerBusyId = `offer-${s.shiftId}-${c.professionalId}`;
+                          return (
+                            <Button
+                              key={c.professionalId}
+                              data-testid="send-offer"
+                              busy={busyId === offerBusyId}
+                              disabled={
+                                busyId !== null && busyId !== offerBusyId
+                              }
+                              onClick={() =>
+                                void run(
+                                  offerBusyId,
+                                  () =>
+                                    offerToProfessional(
+                                      s.shiftId,
+                                      c.professionalId,
+                                      token,
+                                    ),
+                                  "ส่งข้อเสนอแล้ว",
+                                )
+                              }
+                            >
+                              {th.party.sendOffer} →{" "}
+                              {names[c.professionalId] ??
+                                c.professionalId.slice(0, 6)}
+                            </Button>
+                          );
+                        })}
                       </span>
                     )}
                 </span>
@@ -345,9 +404,13 @@ export default function ClinicPage() {
                     <Button
                       data-testid="confirm-offer"
                       variant="primary"
-                      busy={busy}
+                      busy={busyId === `confirm-${s.offer.id}`}
+                      disabled={
+                        busyId !== null && busyId !== `confirm-${s.offer.id}`
+                      }
                       onClick={() =>
                         void run(
+                          `confirm-${s.offer!.id}`,
                           () => confirmOffer(s.offer!.id, token),
                           "ยืนยันและกันเงินแล้ว",
                         )
@@ -363,12 +426,18 @@ export default function ClinicPage() {
         </div>
 
         <h2>
-          {th.party.myBookings} ({bookings.length})
+          {th.party.myBookings} (
+          {listLoading && bookings.length === 0 ? "…" : bookings.length})
         </h2>
         <div className="card">
-          <ul className="rowlist" data-testid="clinic-bookings">
-            {bookings.length === 0 && (
-              <li className="empty">{th.party.noBookings}</li>
+          <ul
+            className="rowlist"
+            data-testid="clinic-bookings"
+            aria-busy={listLoading || undefined}
+          >
+            {listLoading && bookings.length === 0 && <RowSkeleton />}
+            {!listLoading && bookings.length === 0 && (
+              <EmptyState as="li" title={th.party.noBookings} />
             )}
             {bookings.map((b) => (
               <li
@@ -415,9 +484,13 @@ export default function ClinicPage() {
                     <Button
                       data-testid="accept-completion"
                       variant="primary"
-                      busy={busy}
+                      busy={busyId === `complete-${b.bookingId}`}
+                      disabled={
+                        busyId !== null && busyId !== `complete-${b.bookingId}`
+                      }
                       onClick={() =>
                         void run(
+                          `complete-${b.bookingId}`,
                           () => acceptCompletion(b.bookingId, token),
                           "รับงานและจ่ายเงินแล้ว",
                         )
@@ -429,7 +502,8 @@ export default function ClinicPage() {
                   {(b.state === "Confirmed" || b.state === "InProgress") && (
                     <Button
                       data-testid="cancel-booking"
-                      busy={busy}
+                      busy={busyId === "cancel" && cancelId === b.bookingId}
+                      disabled={busyId !== null && busyId !== "cancel"}
                       onClick={() => setCancelId(b.bookingId)}
                     >
                       {th.party.cancel}
@@ -446,13 +520,14 @@ export default function ClinicPage() {
         open={cancelId !== null}
         title={th.party.cancelConfirmTitle}
         confirmLabel={th.party.cancel}
-        busy={busy}
+        busy={cancelBusy}
         onCancel={() => {
-          if (!busy) setCancelId(null);
+          if (!cancelBusy) setCancelId(null);
         }}
         onConfirm={() => {
           if (!cancelId) return;
           void run(
+            "cancel",
             () => cancelBooking(cancelId, { reason: "ordinary" }, token),
             "ยกเลิกแล้ว",
           ).then(() => setCancelId(null));

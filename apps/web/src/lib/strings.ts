@@ -136,6 +136,7 @@ export const th = {
     run: "เริ่มขั้นตอนการจอง",
     running: "กำลังเดินขั้นตอน…",
     progress: (done: number, total: number) => `ขั้นตอน ${done} จาก ${total}`,
+    runFailed: "ขั้นตอนหยุดกลางคัน กรุณาลองใหม่",
   },
   journey: {
     title: "เส้นทางจอง",
@@ -297,6 +298,7 @@ export const th = {
     refund: "คืนเงิน",
     refundTitle: "คืนเงิน (ต้องมีผู้อนุมัติสองคน)",
     refundAmount: "จำนวนเงิน (บาท)",
+    refundAmountInvalid: "กรุณากรอกจำนวนเงินที่มากกว่าศูนย์",
     refundReason: "เหตุผล",
     refundReasonPlaceholder: "เช่น คืนเงินตามดุลยพินิจ",
     propose: "เสนอคืนเงิน",
@@ -326,6 +328,7 @@ export const th = {
     sessionExpiredBanner: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง",
     demoHint: "Demo: ใช้บัญชีทดลองด้านล่าง (รหัส OTP กรอกให้อัตโนมัติ)",
     useDemo: "เข้าสู่ระบบด้วยบัญชีทดลอง",
+    codeSentTo: (phone: string) => `ส่งรหัสไปที่ ${phone} แล้ว`,
   },
   a11y: {
     primaryNav: "เมนูหลัก",
@@ -357,6 +360,9 @@ export const th = {
     phoneRequired: "กรุณากรอกหมายเลขโทรศัพท์",
     invalidOtp:
       "รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว กรุณาลองอีกครั้งหรือขอรหัสใหม่",
+    pageTitle: "เกิดข้อผิดพลาด",
+    pageBody: "ไม่สามารถแสดงหน้านี้ได้ชั่วคราว กรุณาลองใหม่อีกครั้ง",
+    retry: "ลองอีกครั้ง",
   },
   status: {
     // Offer
@@ -374,6 +380,7 @@ export const th = {
     AwaitingCompletion: "รอรับรองเสร็จงาน",
     ServiceCompleted: "เสร็จงานแล้ว",
     Cancelled: "ยกเลิก",
+    Archived: "เก็บถาวร",
     // Payout
     NotEligible: "ยังไม่ถึงกำหนดจ่าย",
     Pending: "รอจ่าย",
@@ -385,8 +392,15 @@ export const th = {
     // Shift / misc
     Open: "เปิดรับ",
     Filled: "เต็มแล้ว",
-    Verified: "ตรวจสอบแล้ว",
+    // Verification (VER)
+    Draft: "ร่าง",
     Submitted: "ส่งแล้ว",
+    UnderReview: "กำลังตรวจสอบ",
+    NeedsInformation: "ต้องการข้อมูลเพิ่ม",
+    Verified: "ตรวจสอบแล้ว",
+    Rejected: "ไม่ผ่าน",
+    Suspended: "ระงับ",
+    Closed: "ปิดแล้ว",
   } as Record<string, string>,
   /** Medical shift categories (SRC). Falls back to the raw value if unmapped. */
   category: {
@@ -500,7 +514,9 @@ export const th = {
     searchPros: "ค้นหาบุคลากร",
     searchProfession: "วิชาชีพ",
     searchGo: "ค้นหา",
+    searchIdle: "ค้นหาบุคลากรด้วยวิชาชีพด้านบน",
     noProsFound: "ไม่พบบุคลากรที่ตรงเงื่อนไข",
+    profileLoadFailed: "โหลดโปรไฟล์ไม่สำเร็จ ลองรีเฟรชหน้า",
     showThread: "ข้อความ",
     hideThread: "ซ่อนข้อความ",
     noMessages: "ยังไม่มีข้อความ",
@@ -513,6 +529,7 @@ export const th = {
     clinicPhone: "คลินิก",
     proPhone: "บุคลากร",
     you: "คุณ",
+    otherParty: "คู่สัญญา",
     navClinic: "คลินิกของฉัน",
     navPro: "เวรของฉัน",
   },

@@ -48,8 +48,7 @@
   opacity: 0.6;
   cursor: default;
 }
-.signin-card__icon,
-.signin-card__emoji {
+.signin-card__icon {
   font-size: 1.6rem;
   flex: none;
   width: 2.6rem;
@@ -99,22 +98,6 @@
   flex: none;
   align-self: flex-end;
   margin-top: auto;
-}
-
-/* Modal dialog (finance refund proposal) */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: grid;
-  place-items: center;
-  padding: max(var(--s4), var(--safe-top)) max(var(--s4), var(--safe-right))
-    max(var(--s4), var(--safe-bottom)) max(var(--s4), var(--safe-left));
-  background: color-mix(in srgb, #000 45%, transparent);
-}
-.modal {
-  width: 100%;
-  max-width: 420px;
 }
 
 /* Staff-login demo shortcut */

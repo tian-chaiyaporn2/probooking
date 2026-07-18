@@ -5,6 +5,7 @@ import { ShieldCheckIcon } from "./icons";
 import type { VerifiedProfile } from "../lib/api";
 import { statusLabel, professionLabel } from "../lib/status";
 import { th } from "../lib/strings";
+import { verificationBadgeTone } from "../lib/tones";
 
 /** VER-03 readiness strip — trust facts without repeating the home hero name. */
 export function ProfilePanel({
@@ -42,18 +43,18 @@ export function ProfilePanel({
           {selfDeclared.specialty ? ` · ${selfDeclared.specialty}` : ""}
         </p>
         <div className="identity-card__chips">
-          {!verified.identityVerified ? (
-            <Badge tone="warn">{th.party.identityPending}</Badge>
-          ) : (
-            <Badge tone="success">{th.party.identityVerified}</Badge>
-          )}
+          <Badge tone={verified.identityVerified ? "success" : "warn"}>
+            {verified.identityVerified
+              ? th.party.identityVerified
+              : th.party.identityPending}
+          </Badge>
           {verified.licence ? (
-            <Badge tone="info">
+            <Badge tone={verificationBadgeTone(verified.licence.state)}>
               {th.party.licence}: {statusLabel(verified.licence.state)}
             </Badge>
           ) : null}
           {verified.insurance ? (
-            <Badge tone="info">
+            <Badge tone={verificationBadgeTone(verified.insurance.state)}>
               {th.party.insurance}: {statusLabel(verified.insurance.state)}
             </Badge>
           ) : null}

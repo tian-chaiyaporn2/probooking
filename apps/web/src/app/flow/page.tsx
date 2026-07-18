@@ -7,7 +7,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { KeyValueTable } from "../../components/KeyValueTable";
 import { useToast } from "../../components/Toast";
 import { CheckIcon } from "../../components/icons";
-import { th } from "../../lib/strings";
+import { th, getThaiErrorMessage } from "../../lib/strings";
 import {
   registerClinic,
   registerProfessional,
@@ -52,6 +52,7 @@ export default function FlowPage() {
   const [running, setRunning] = useState(false);
   const [payingOut, setPayingOut] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [runFailed, setRunFailed] = useState(false);
 
   const FLOW_TOTAL = 7;
   const progressPct = Math.min(100, Math.round((steps.length / FLOW_TOTAL) * 100));
@@ -66,6 +67,7 @@ export default function FlowPage() {
     setReviewsPublished(false);
     setRating(null);
     setTokens(null);
+    setRunFailed(false);
     const log = (label: string, detail: string) =>
       setSteps((s) => [...s, { label, detail }]);
     try {
@@ -116,7 +118,8 @@ export default function FlowPage() {
       setCheckout(confirmed.checkout);
       setBookingId(confirmed.booking.id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Flow failed");
+      setRunFailed(true);
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setRunning(false);
     }
@@ -130,7 +133,7 @@ export default function FlowPage() {
       const result = await acceptCompletion(bookingId, tokens.clinic); // the clinic accepts + pays
       setPayout(result);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Payout failed");
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setPayingOut(false);
     }
@@ -147,7 +150,7 @@ export default function FlowPage() {
       setReviewsPublished(r.published);
       setRating(await getRating(professionalId)); // hasRating false until 3 reviews (REV-04)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Reviews failed");
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setReviewing(false);
     }
@@ -186,6 +189,12 @@ export default function FlowPage() {
               />
             </div>
           </div>
+        )}
+
+        {runFailed && !bookingId && (
+          <p role="alert" className="form-error" data-testid="flow-failed">
+            {th.flow.runFailed}
+          </p>
         )}
 
         {/* Preview the flow before it runs, so the page is not an empty button in a void. */}

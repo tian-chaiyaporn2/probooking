@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
+import { Button } from "../../components/Button";
 import { RolePicker } from "../../components/RolePicker";
 import { useToast } from "../../components/Toast";
 import { resetDemo } from "../../lib/api";
@@ -87,15 +88,15 @@ export default function SignInPage() {
               {th.signin.resetHelper}
             </p>
           </div>
-          <button
+          <Button
             type="button"
-            className="btn btn--subtle"
+            variant="subtle"
             data-testid="reset-demo"
-            disabled={resetting}
+            busy={resetting}
             onClick={() => void onReset()}
           >
-            {resetting ? th.signin.resetting : th.signin.resetLabel}
-          </button>
+            {th.signin.resetLabel}
+          </Button>
         </div>
       </main>
     </>

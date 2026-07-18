@@ -168,7 +168,7 @@ export default function Home() {
             <span className="brand__mark" aria-hidden>
               P
             </span>
-            ProBooking
+            {th.brand}
           </span>
           <span className="footer__meta">
             <span>{th.home.phase}</span>
