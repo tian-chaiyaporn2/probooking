@@ -8,6 +8,7 @@ accept clear terms, and receive traceable payout.
 
 Source of truth: [`docs/PRD_v1.5.md`](docs/PRD_v1.5.md) (product behavior) and
 [`docs/Rollout_Plan_v1.1.md`](docs/Rollout_Plan_v1.1.md) (execution cadence & phases).
+Surfaces and end-to-end flows: [`docs/information-architecture.md`](docs/information-architecture.md).
 Current stage: **Phase 0 — Concierge Validation** (Bangkok + surrounding provinces).
 
 ## Monorepo layout
@@ -23,7 +24,7 @@ probook/
 │  └─ db/        Prisma schema + client + migrations (PostgreSQL)
 ├─ features/     BDD (.feature) — the 14 acceptance areas from PRD §9.4
 ├─ e2e/          Playwright end-to-end tests (browser drives the live flow)
-└─ docs/         PRD, Rollout Plan, architecture, ADRs, ops-tools note, traceability
+└─ docs/         PRD, Rollout Plan, information architecture, architecture, ADRs, ops-tools, traceability
 ```
 
 The Phase 0 booking flow (create offer → accept → confirm) lives in
@@ -168,3 +169,4 @@ it. Full details, caveats, and the CORS lockdown: [`docs/deployment.md`](docs/de
 | End-to-end tests | `e2e/`, `playwright.config.ts` |
 | Module/build strategy | `docs/adr/0002-module-and-build-strategy.md` |
 | Requirement → code map | `docs/requirements-traceability.md` |
+| Information architecture (all flows) | `docs/information-architecture.md` |
