@@ -3,33 +3,51 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { th } from "../lib/strings";
+import { loadSession, type SessionRole } from "../lib/session";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "./icons";
 
-const LINKS = [
-  { href: "/", label: th.nav.home },
-  { href: "/ops", label: th.nav.ops },
-  { href: "/finance", label: th.nav.finance },
-  { href: "/flow", label: th.nav.flow },
-  { href: "/signin", label: th.nav.signin },
-] as const;
+type NavLink = {
+  href: string;
+  label: string;
+  group?: "public" | "staff" | "session";
+};
 
-/** Keep in sync with max-width: 959px drawer breakpoint in pages.css. */
+const LINKS: NavLink[] = [
+  { href: "/", label: th.nav.home, group: "public" },
+  { href: "/journey", label: th.nav.journey, group: "public" },
+  { href: "/signin", label: th.nav.signin, group: "public" },
+  { href: "/ops", label: th.nav.ops, group: "staff" },
+  { href: "/finance", label: th.nav.finance, group: "staff" },
+  { href: "/flow", label: th.nav.flow, group: "public" },
+];
+
 const DRAWER_MQ = "(min-width: 960px)";
+
+function sessionLinks(role?: SessionRole): NavLink[] {
+  if (role === "clinic")
+    return [{ href: "/clinic", label: th.party.navClinic, group: "session" }];
+  if (role === "professional")
+    return [{ href: "/pro", label: th.party.navPro, group: "session" }];
+  return [];
+}
 
 /**
  * Shared app shell header: brand + section nav + theme toggle.
- *
- * On phone and tablet the nav collapses into a drawer behind a menu button. The drawer
- * closes on Escape, backdrop tap, resize into the desktop band, and navigation; scroll
- * is locked on <html> while open; Tab cycles inside the panel.
+ * When a party session is present, surfaces /clinic or /pro in the public nav.
  */
 export function AppHeader({ current }: { current?: string }) {
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<SessionRole | undefined>();
   const drawerId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const s = loadSession();
+    setRole(s?.role);
+  }, [current]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,8 +77,6 @@ export function AppHeader({ current }: { current?: string }) {
       }
     };
     document.addEventListener("keydown", onKey);
-    // Lock scroll on <html> — locking body alone can shrink the fixed containing
-    // block in WebKit/Blink and collapse the drawer to content height.
     const root = document.documentElement;
     const prevOverflow = root.style.overflow;
     root.style.overflow = "hidden";
@@ -73,8 +89,6 @@ export function AppHeader({ current }: { current?: string }) {
     };
   }, [open]);
 
-  // If the viewport grows into the desktop nav band, dismiss the drawer so it
-  // cannot linger as an invisible overlay after orientation change.
   useEffect(() => {
     const mq = window.matchMedia(DRAWER_MQ);
     const onChange = () => {
@@ -85,10 +99,28 @@ export function AppHeader({ current }: { current?: string }) {
       mq.addEventListener("change", onChange);
       return () => mq.removeEventListener("change", onChange);
     }
-    // Safari < 14
     mq.addListener(onChange);
     return () => mq.removeListener(onChange);
   }, []);
+
+  const publicLinks = [
+    ...LINKS.filter((l) => l.group === "public"),
+    ...sessionLinks(role),
+  ];
+  const staffLinks = LINKS.filter((l) => l.group === "staff");
+
+  function renderLinks(links: NavLink[], onNavigate?: () => void) {
+    return links.map((l) => (
+      <Link
+        key={l.href}
+        href={l.href}
+        aria-current={current === l.href ? "page" : undefined}
+        {...(onNavigate ? { onClick: onNavigate } : {})}
+      >
+        {l.label}
+      </Link>
+    ));
+  }
 
   return (
     <header className="app-header">
@@ -100,13 +132,14 @@ export function AppHeader({ current }: { current?: string }) {
           {th.brand}
         </Link>
 
-        {/* Desktop nav */}
-        <nav className="app-nav app-nav--desktop" aria-label={th.a11y.primaryNav}>
-          {LINKS.map((l) => (
-            <Link key={l.href} href={l.href} aria-current={current === l.href ? "page" : undefined}>
-              {l.label}
-            </Link>
-          ))}
+        <nav
+          className="app-nav app-nav--desktop"
+          aria-label={th.a11y.primaryNav}
+        >
+          {renderLinks(publicLinks)}
+          <span className="app-nav__divider" aria-hidden />
+          <span className="app-nav__group-label">{th.nav.staffGroup}</span>
+          {renderLinks(staffLinks)}
         </nav>
 
         <div className="app-header__right">
@@ -125,10 +158,13 @@ export function AppHeader({ current }: { current?: string }) {
         </div>
       </div>
 
-      {/* Mobile / tablet drawer */}
       {open && (
         <>
-          <button className="nav-backdrop" aria-label={th.a11y.closeMenu} onClick={() => setOpen(false)} />
+          <button
+            className="nav-backdrop"
+            aria-label={th.a11y.closeMenu}
+            onClick={() => setOpen(false)}
+          />
           <nav
             ref={drawerRef}
             id={drawerId}
@@ -138,7 +174,9 @@ export function AppHeader({ current }: { current?: string }) {
             aria-modal="true"
           >
             <div className="app-nav--drawer__top">
-              <span className="app-nav--drawer__title">{th.a11y.primaryNav}</span>
+              <span className="app-nav--drawer__title">
+                {th.a11y.primaryNav}
+              </span>
               <button
                 ref={closeRef}
                 type="button"
@@ -149,16 +187,10 @@ export function AppHeader({ current }: { current?: string }) {
                 <CloseIcon />
               </button>
             </div>
-            {LINKS.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                aria-current={current === l.href ? "page" : undefined}
-                onClick={() => setOpen(false)}
-              >
-                {l.label}
-              </Link>
-            ))}
+            <p className="app-nav--drawer__group">{th.nav.publicGroup}</p>
+            {renderLinks(publicLinks, () => setOpen(false))}
+            <p className="app-nav--drawer__group">{th.nav.staffGroup}</p>
+            {renderLinks(staffLinks, () => setOpen(false))}
             <p className="app-nav--drawer__foot">{th.home.phase}</p>
           </nav>
         </>

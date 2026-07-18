@@ -81,7 +81,7 @@ test("home links to the flow", async ({ page }) => {
 
 test("pages are responsive — no horizontal page overflow on a small screen", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 }); // small phone
-  for (const path of ["/", "/flow", "/ops", "/finance"]) {
+  for (const path of ["/", "/journey", "/flow", "/ops", "/finance"]) {
     await page.goto(path);
     // /ops and /finance now open on a staff sign-in form; sign in, then wait for the
     // data-driven dashboard to settle so the overflow check runs against real content.
@@ -158,6 +158,7 @@ test("ops dashboard verifies a pending clinic", async ({ page }) => {
   const row = page.getByTestId(`pending-${clinic.id}`);
   await expect(row).toBeVisible();
   await row.getByTestId("verify-btn").click();
+  await page.getByTestId("dialog-confirm").click();
   // After verifying, the clinic leaves the pending list.
   await expect(page.getByTestId(`pending-${clinic.id}`)).toHaveCount(0);
 });
@@ -706,7 +707,8 @@ test("interactive multi-role flow: clinic and professional drive a booking by ha
   const bk2 = page.getByTestId("clinic-bookings").locator("li", { hasText: total }).first();
   await expect(bk2.getByTestId("accept-completion")).toBeVisible();
   await bk2.getByTestId("accept-completion").click();
-  await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: "ServiceCompleted" }).first()).toBeVisible();
+  // The booking-state badge is localized (statusLabel); ServiceCompleted → "เสร็จงานแล้ว".
+  await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: "เสร็จงานแล้ว" }).first()).toBeVisible();
 });
 
 test("operations walkthrough: verify pending parties and resolve a credential hold by hand", async ({ page }) => {
@@ -734,17 +736,20 @@ test("operations walkthrough: verify pending parties and resolve a credential ho
   // Verify the pending clinic through the console.
   await expect(page.getByTestId(`pending-${clinic.id}`)).toBeVisible();
   await page.getByTestId(`pending-${clinic.id}`).getByTestId("verify-btn").click();
+  await page.getByTestId("dialog-confirm").click();
   await expect(page.getByTestId(`pending-${clinic.id}`)).toHaveCount(0);
 
   // Verify the pending professional through the console.
   await expect(page.getByTestId(`pending-${pro.id}`)).toBeVisible();
   await page.getByTestId(`pending-${pro.id}`).getByTestId("verify-btn").click();
+  await page.getByTestId("dialog-confirm").click();
   await expect(page.getByTestId(`pending-${pro.id}`)).toHaveCount(0);
 
   // Resolve the credential hold from the open-cases list.
   const caseRow = page.getByTestId("cases-list").locator("li", { hasText: bookingId.slice(0, 8) }).first();
   await expect(caseRow.getByTestId("resolve-btn")).toBeVisible();
   await caseRow.getByTestId("resolve-btn").click();
+  await page.getByTestId("dialog-confirm").click();
   await expect(page.getByTestId("cases-list").locator("li", { hasText: bookingId.slice(0, 8) })).toHaveCount(0);
 });
 
@@ -767,6 +772,7 @@ test("operations enforcement walkthrough: verify insurance, hold a booking, susp
   // 1. Verify the submitted insurance from the verification queue (kind = insurance).
   await expect(page.getByTestId(`pending-${proId}`)).toBeVisible();
   await page.getByTestId(`pending-${proId}`).getByTestId("verify-btn").click();
+  await page.getByTestId("dialog-confirm").click();
   await expect(page.getByTestId(`pending-${proId}`)).toHaveCount(0);
 
   // 2. Place a credential hold on the live booking from the active-bookings section.
@@ -774,6 +780,7 @@ test("operations enforcement walkthrough: verify insurance, hold a booking, susp
   await expect(row).toBeVisible();
   await expect(row.getByTestId("hold-btn")).toBeVisible();
   await row.getByTestId("hold-btn").click();
+  await page.getByTestId("dialog-confirm").click();
   // The hold action is gone (already held) and a credential-hold case now exists.
   await expect(page.getByTestId(`active-${bookingId}`).locator("[data-testid=hold-btn]")).toHaveCount(0);
   await expect(page.getByTestId("cases-list").locator("li", { hasText: bookingId.slice(0, 8) }).first()).toBeVisible();
@@ -781,6 +788,7 @@ test("operations enforcement walkthrough: verify insurance, hold a booking, susp
   // 3. Suspend the professional's licence (VER-04) from the same row.
   await expect(page.getByTestId(`active-${bookingId}`).getByTestId("suspend-btn")).toBeVisible();
   await page.getByTestId(`active-${bookingId}`).getByTestId("suspend-btn").click();
+  await page.getByTestId("dialog-confirm").click();
   // Suspended: the action is gone and the row shows the suspended badge.
   await expect(page.getByTestId(`active-${bookingId}`).locator("[data-testid=suspend-btn]")).toHaveCount(0);
   await expect(page.getByTestId(`active-${bookingId}`).getByText("ระงับแล้ว")).toBeVisible();

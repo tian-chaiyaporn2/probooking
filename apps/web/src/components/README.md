@@ -29,7 +29,9 @@ Domain helpers: `badgeToneForKind("clinic" | "professional" | "credential_hold")
 - `PageHeader`, `SectionBlock` — dashboard chrome
 - `Field` + `Input` — forms
 - `EmptyState`, `Skeleton` / `StatSkeletonGrid` — loading & empty
-- `DataTable` — tabular data; `KeyValueTable` — checkout/summary pairs
+- `DataTable` — tabular data; `KeyValueTable` / `CheckoutSummary` — checkout/summary pairs
+- `Dialog` — confirm irreversible Ops/Finance actions
+- `StatusTimeline` — offer → Payment Protected → complete lifecycle
 - `Badge` (`tone` + `badgeToneForKind`), `Stat`, `Toast`
 
 ## Typography (Thai-first)
@@ -43,3 +45,5 @@ Domain helpers: `badgeToneForKind("clinic" | "professional" | "credential_hold")
 - Preserve `data-testid` contracts and English `/flow` result copy
 - Cards are for interactive/contained ops lists — not decorative chrome
 - Keep the teal clinical palette; no purple/cream defaults
+- Prefer `Dialog` for irreversible staff confirms; `CheckoutSummary` for fee breakdowns; `StatusTimeline` for booking lifecycle
+- Staff sessions use `lib/session.ts` (sessionStorage) until httpOnly cookies land
