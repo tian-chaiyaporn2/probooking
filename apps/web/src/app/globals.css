@@ -7,3 +7,19 @@
 @import "../styles/base.css";
 @import "../styles/components.css";
 @import "../styles/pages.css";
+
+/* ---- Sign-in / demo account picker ---- */
+.signin-grid { display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.signin-card {
+  display: flex; align-items: center; gap: var(--s3); text-align: left; width: 100%;
+  padding: var(--s4); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); cursor: pointer; color: inherit;
+  transition: border-color .12s, box-shadow .12s, transform .12s;
+}
+.signin-card:hover:not(:disabled) { border-color: var(--primary); box-shadow: var(--shadow); transform: translateY(-2px); }
+.signin-card:disabled { opacity: 0.6; cursor: default; }
+.signin-card__emoji { font-size: 1.6rem; flex: none; width: 2.6rem; height: 2.6rem; display: grid; place-items: center; background: var(--primary-050); border-radius: 50%; }
+.signin-card__body { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.signin-card__label { font-weight: 700; color: var(--ink); }
+.signin-card__sub { font-size: 0.82rem; color: var(--muted); }
+.signin-card__go { color: var(--primary); font-weight: 700; font-size: 0.85rem; flex: none; }

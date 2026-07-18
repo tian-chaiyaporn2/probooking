@@ -40,6 +40,9 @@ import type {
   AuditEntry,
   AuditRow,
   CallerIdentity,
+  MeIdentity,
+  ClinicShiftRow,
+  ProfessionalOfferRow,
   ApprovalRequestRecord,
   CreateApprovalInput,
   ExecuteApprovalInput,
@@ -161,6 +164,69 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       professionalId: this.professionalByPhone.get(phone) ?? null,
       memberships: this.membershipsByPhone.get(phone) ?? [],
     };
+  }
+
+  async describeMe(phone: string): Promise<MeIdentity> {
+    const professionalId = this.professionalByPhone.get(phone) ?? null;
+    const prof = professionalId ? this.professionalProfiles.get(professionalId) : undefined;
+    const memberships = this.membershipsByPhone.get(phone) ?? [];
+    return {
+      professionalId,
+      professionalName: prof?.displayName ?? null,
+      professionalVerification: professionalId ? (this.professionals.get(professionalId) ?? null) : null,
+      clinics: memberships.map((m) => ({
+        workspaceId: m.workspaceId,
+        name: this.clinicProfiles.get(m.workspaceId)?.branchName ?? "",
+        role: m.role,
+        verification: this.clinics.get(m.workspaceId) ?? "Draft",
+      })),
+    };
+  }
+
+  async listClinicShifts(workspaceId: string): Promise<ClinicShiftRow[]> {
+    return [...this.shifts.values()]
+      .filter((s) => s.clinicWorkspaceId === workspaceId)
+      .sort((a, b) => a.startsAt - b.startsAt)
+      .map((s) => {
+        const offersForShift = [...this.offers.values()].filter((o) => o.shiftId === s.id);
+        const booked = [...this.bookingByOffer.keys()].some((offerId) =>
+          offersForShift.some((o) => o.id === offerId),
+        );
+        const active = offersForShift.find(
+          (o) => o.state === "PendingResponse" || o.state === "AwaitingPayment",
+        );
+        return {
+          shiftId: s.id,
+          category: s.category,
+          compensation: s.compensation,
+          urgency: s.urgency,
+          startsAt: s.startsAt,
+          state: s.state,
+          hasActiveOffer: active !== undefined,
+          booked,
+          candidateCount: this.candidates.filter((c) => c.shiftId === s.id).length,
+          offer: active ? { id: active.id, state: active.state, professionalId: active.professionalId } : null,
+        };
+      });
+  }
+
+  async listProfessionalOffers(professionalId: string): Promise<ProfessionalOfferRow[]> {
+    return [...this.offers.values()]
+      .filter((o) => o.professionalId === professionalId)
+      .sort((a, b) => b.sentAt - a.sentAt)
+      .map((o) => {
+        const shift = this.shifts.get(o.shiftId);
+        return {
+          offerId: o.id,
+          shiftId: o.shiftId,
+          category: shift?.category ?? "general",
+          compensation: shift?.compensation ?? o.compensation,
+          urgency: o.urgency,
+          shiftStart: o.shiftStart,
+          state: o.state,
+          expiresAt: o.expiresAt,
+        };
+      });
   }
 
   async verifyClinic(id: string): Promise<EntityRef | null> {

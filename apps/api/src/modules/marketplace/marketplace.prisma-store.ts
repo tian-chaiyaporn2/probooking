@@ -97,6 +97,9 @@ import type {
   AuditEntry,
   AuditRow,
   CallerIdentity,
+  MeIdentity,
+  ClinicShiftRow,
+  ProfessionalOfferRow,
   ApprovalRequestRecord,
   CreateApprovalInput,
   ExecuteApprovalInput,
@@ -689,6 +692,77 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         role: m.role as Role,
       })),
     };
+  }
+
+  async describeMe(phone: string): Promise<MeIdentity> {
+    const user = await prisma.user.findUnique({
+      where: { phoneHash: blindIndex(phone) },
+      include: {
+        professional: { select: { id: true, displayName: true, verification: true } },
+        memberships: { include: { workspace: { select: { branchName: true, verification: true } } } },
+      },
+    });
+    if (!user) {
+      return { professionalId: null, professionalName: null, professionalVerification: null, clinics: [] };
+    }
+    return {
+      professionalId: user.professional?.id ?? null,
+      professionalName: user.professional?.displayName ?? null,
+      professionalVerification: user.professional?.verification ?? null,
+      clinics: user.memberships.map((m) => ({
+        workspaceId: m.workspaceId,
+        name: m.workspace.branchName,
+        role: m.role as Role,
+        verification: m.workspace.verification,
+      })),
+    };
+  }
+
+  async listClinicShifts(workspaceId: string): Promise<ClinicShiftRow[]> {
+    const shifts = await prisma.shift.findMany({
+      where: { workspaceId },
+      orderBy: { startsAt: "asc" },
+      take: 100,
+      include: {
+        _count: { select: { applications: true, invitations: true } },
+        offers: { select: { id: true, state: true, professionalId: true }, orderBy: { sentAt: "desc" } },
+        booking: { select: { id: true } },
+      },
+    });
+    return shifts.map((s) => {
+      const active = s.offers.find((o) => o.state === "PendingResponse" || o.state === "AwaitingPayment");
+      return {
+        shiftId: s.id,
+        category: s.category,
+        compensation: s.compensation,
+        urgency: s.urgency,
+        startsAt: s.startsAt.getTime(),
+        state: s.state,
+        hasActiveOffer: active !== undefined,
+        booked: s.booking !== null,
+        candidateCount: s._count.applications + s._count.invitations,
+        offer: active ? { id: active.id, state: active.state, professionalId: active.professionalId } : null,
+      };
+    });
+  }
+
+  async listProfessionalOffers(professionalId: string): Promise<ProfessionalOfferRow[]> {
+    const offers = await prisma.offer.findMany({
+      where: { professionalId },
+      orderBy: { sentAt: "desc" },
+      take: 100,
+      include: { shift: { select: { id: true, category: true, compensation: true, urgency: true, startsAt: true } } },
+    });
+    return offers.map((o) => ({
+      offerId: o.id,
+      shiftId: o.shift.id,
+      category: o.shift.category,
+      compensation: o.shift.compensation,
+      urgency: o.shift.urgency,
+      shiftStart: o.shift.startsAt.getTime(),
+      state: o.state,
+      expiresAt: o.expiresAt.getTime(),
+    }));
   }
 
   // ----- §6.4 dual control -----

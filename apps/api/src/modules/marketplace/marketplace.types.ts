@@ -332,6 +332,41 @@ export interface CallerIdentity {
   memberships: { workspaceId: string; role: Role }[];
 }
 
+/** Enriched "who am I" for the party UIs — ids plus the human names they render. */
+export interface MeIdentity {
+  professionalId: string | null;
+  professionalName: string | null;
+  professionalVerification: string | null;
+  clinics: { workspaceId: string; name: string; role: Role; verification: string }[];
+}
+
+/** A shift a clinic posted, with the rollup its dashboard needs to drive the flow. */
+export interface ClinicShiftRow {
+  shiftId: string;
+  category: string;
+  compensation: number; // satang
+  urgency: ShiftUrgency;
+  startsAt: number; // epoch ms UTC
+  state: string;
+  hasActiveOffer: boolean;
+  booked: boolean;
+  candidateCount: number;
+  /** The current non-terminal offer (so the clinic can confirm once the pro accepts). */
+  offer: { id: string; state: string; professionalId: string } | null;
+}
+
+/** An offer made to a professional, with the shift summary their dashboard shows. */
+export interface ProfessionalOfferRow {
+  offerId: string;
+  shiftId: string;
+  category: string;
+  compensation: number; // satang
+  urgency: ShiftUrgency;
+  shiftStart: number; // epoch ms UTC
+  state: string;
+  expiresAt: number; // epoch ms UTC
+}
+
 /** §6.4: a money action proposed by one authorized person, executed by a different one. */
 export interface ApprovalRequestRecord {
   id: string;
@@ -503,6 +538,12 @@ export interface MarketplaceRepository {
    * self-certification.
    */
   resolveIdentity(phone: string): Promise<CallerIdentity>;
+  /** Enriched identity (names + verification) for the caller's own dashboards. */
+  describeMe(phone: string): Promise<MeIdentity>;
+  /** Shifts a clinic workspace posted, with candidate/offer/booking rollup. */
+  listClinicShifts(workspaceId: string): Promise<ClinicShiftRow[]>;
+  /** Offers currently made to a professional. */
+  listProfessionalOffers(professionalId: string): Promise<ProfessionalOfferRow[]>;
 
   // ----- §6.4 dual control -----
   /** Propose a money action. Writes no money — it only records the request. */

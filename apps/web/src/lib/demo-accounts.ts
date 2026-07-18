@@ -1,0 +1,78 @@
+/**
+ * Ready-made demo logins for the "sign in as" picker. The clinic owner and professional
+ * are seeded by the demo fixtures (apps/api/src/fixtures/demo-fixtures.ts) with these exact
+ * phones; the ops/finance phones come from STAFF_PHONES. Under AUTH_DEV_MODE the OTP code is
+ * echoed back, so a click signs in in one step.
+ */
+export interface DemoAccount {
+  phone: string;
+  label: string;
+  sublabel: string;
+  role: "clinic" | "professional" | "operations" | "finance";
+  /** Where to land after signing in. */
+  route: string;
+  emoji: string;
+}
+
+export const DEMO_ACCOUNTS: DemoAccount[] = [
+  {
+    phone: "+66910000001",
+    label: "คลินิกสุขุมวิทสไมล์",
+    sublabel: "เจ้าของคลินิก — ประกาศเวร ส่งข้อเสนอ ยืนยันการจอง",
+    role: "clinic",
+    route: "/clinic",
+    emoji: "🏥",
+  },
+  {
+    phone: "+66920000001",
+    label: "นพ. สมชาย ใจดี",
+    sublabel: "บุคลากร — หาเวร ยอมรับข้อเสนอ ทำงาน รับเงิน",
+    role: "professional",
+    route: "/pro",
+    emoji: "🩺",
+  },
+  {
+    phone: "+66900000008",
+    label: "ฝ่ายปฏิบัติการ",
+    sublabel: "Operations — ตรวจสอบคลินิก/บุคลากร จัดการเคส",
+    role: "operations",
+    route: "/ops",
+    emoji: "🛡️",
+  },
+  {
+    phone: "+66900000005",
+    label: "ฝ่ายการเงิน",
+    sublabel: "Finance — กระทบยอด ส่งออก CSV คืนเงิน (dual-control)",
+    role: "finance",
+    route: "/finance",
+    emoji: "💳",
+  },
+];
+
+const KEY = "probook.session";
+
+/** Persist the signed-in token + who, so it survives navigation between party pages. */
+export function saveSession(token: string, phone: string): void {
+  try {
+    sessionStorage.setItem(KEY, JSON.stringify({ token, phone }));
+  } catch {
+    /* sessionStorage unavailable — the caller still holds the token in state */
+  }
+}
+
+export function loadSession(): { token: string; phone: string } | null {
+  try {
+    const raw = sessionStorage.getItem(KEY);
+    return raw ? (JSON.parse(raw) as { token: string; phone: string }) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSession(): void {
+  try {
+    sessionStorage.removeItem(KEY);
+  } catch {
+    /* ignore */
+  }
+}
