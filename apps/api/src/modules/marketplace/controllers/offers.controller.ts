@@ -22,7 +22,6 @@ import {
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
-import { validateBody } from "../validate.util.js";
 import { isConflict } from "../errors.util.js";
 import {
   advanceOffer,

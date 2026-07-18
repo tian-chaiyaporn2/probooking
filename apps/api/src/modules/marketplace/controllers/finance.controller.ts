@@ -22,7 +22,8 @@ import {
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
-import { validateBody } from "../validate.util.js";
+import { parseBody } from "../http-validation.js";
+import { z } from "zod";
 import { isConflict } from "../errors.util.js";
 import {
   advanceOffer,
@@ -63,6 +64,12 @@ import {
 import { normalizePhone } from "@probook/db";
 import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
 
+const proposeRefundSchema = z.object({
+  bookingId: z.string().max(64),
+  amount: z.number().int().positive(),
+  reason: z.string().max(500),
+});
+
 /**
  * Finance: dual-control refunds, reconciliation, and the financial export (§6.4, PAY-11, REP-03).
  *
@@ -94,11 +101,7 @@ export class FinanceController {
     @Body() raw: { bookingId: string; amount: number; reason: string },
     @CurrentUser() user?: TokenPayload,
   ) {
-    const dto = validateBody<typeof raw>(raw, {
-      bookingId: { type: "string", maxLen: 64 },
-      amount: { type: "number", int: true, positive: true },
-      reason: { type: "string", maxLen: 500 },
-    });
+    const dto = parseBody(proposeRefundSchema, raw);
     await this.access.requireBooking(dto.bookingId);
     // PAY-08 at proposal time: refuse to record a request that could never be executed.
     // Cap against *remaining* funds (captured − prior refunds − other Pending proposals),

@@ -22,7 +22,8 @@ import {
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
-import { validateBody } from "../validate.util.js";
+import { parseBody } from "../http-validation.js";
+import { z } from "zod";
 import { isConflict } from "../errors.util.js";
 import {
   advanceOffer,
@@ -63,6 +64,13 @@ import {
 import { normalizePhone } from "@probook/db";
 import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
 
+const createReviewSchema = z.object({
+  by: z.enum(["clinic", "professional"]).optional(),
+  score: z.number().int().min(1).max(5),
+  text: z.string().max(2000).optional(),
+  tags: z.array(z.string().max(40)).max(10).optional(),
+});
+
 /**
  * Post-completion reviews and professional ratings (REV-01..05).
  *
@@ -90,15 +98,10 @@ export class ReviewsController {
     },
     @CurrentUser() user?: TokenPayload,
   ) {
-    const dto = validateBody<typeof rawBody>(rawBody, {
-      // Derived from the caller below; only staff may state it. `by` used to be taken at face
-      // value, so a third party could post a 1-star review attributed to the clinic — and
-      // burn the real party's one review right via the unique constraint.
-      by: { type: "string", enum: ["clinic", "professional"], optional: true },
-      score: { type: "number", int: true, min: 1, max: 5 },
-      text: { type: "string", optional: true, maxLen: 2000 },
-      tags: { type: "stringArray", optional: true, maxLen: 10, itemMaxLen: 40 },
-    });
+    // `by` is derived from the caller below; only staff may state it. It used to be taken
+    // at face value, so a third party could post a 1-star review attributed to the clinic —
+    // and burn the real party's one review right via the unique constraint.
+    const dto = parseBody(createReviewSchema, rawBody);
     const booking = await this.access.requireBooking(id);
     const party = await this.access.partyInBooking(user, booking);
     const by: "clinic" | "professional" =

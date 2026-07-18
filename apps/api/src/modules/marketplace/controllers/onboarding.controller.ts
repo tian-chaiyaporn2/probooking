@@ -22,7 +22,8 @@ import {
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
-import { validateBody } from "../validate.util.js";
+import { parseBody } from "../http-validation.js";
+import { z } from "zod";
 import { isConflict } from "../errors.util.js";
 import {
   advanceOffer,
@@ -63,6 +64,28 @@ import {
 import { normalizePhone } from "@probook/db";
 import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
 
+const registerClinicSchema = z.object({
+  branchName: z.string().min(1).max(200),
+  licenceNo: z.string().min(1).max(100),
+  address: z.string().min(1).max(500),
+  ownerPhone: z.string().min(8).max(32),
+});
+
+const registerProfessionalSchema = z.object({
+  displayName: z.string().min(1).max(200),
+  profession: z.enum(["physician", "dentist"]),
+  phone: z.string().min(8).max(32),
+  payoutRef: z.string().min(1).max(100),
+});
+
+const submitInsuranceSchema = z.object({
+  validUntilHours: z
+    .number()
+    .positive()
+    .max(24 * 365 * 10)
+    .optional(),
+});
+
 /**
  * Onboarding, verification, and credential lifecycle (ORG-01, PRO-01, VER-01..06).
  *
@@ -89,12 +112,7 @@ export class OnboardingController {
       ownerPhone: string;
     },
   ) {
-    const dto = validateBody<typeof raw>(raw, {
-      branchName: { type: "string", minLen: 1, maxLen: 200 },
-      licenceNo: { type: "string", minLen: 1, maxLen: 100 },
-      address: { type: "string", minLen: 1, maxLen: 500 },
-      ownerPhone: { type: "string", minLen: 8, maxLen: 32 },
-    });
+    const dto = parseBody(registerClinicSchema, raw);
     try {
       return await this.repo.registerClinic({
         ...dto,
@@ -120,12 +138,7 @@ export class OnboardingController {
       payoutRef: string;
     },
   ) {
-    const dto = validateBody<typeof raw>(raw, {
-      displayName: { type: "string", minLen: 1, maxLen: 200 },
-      profession: { type: "string", enum: ["physician", "dentist"] },
-      phone: { type: "string", minLen: 8, maxLen: 32 },
-      payoutRef: { type: "string", minLen: 1, maxLen: 100 },
-    });
+    const dto = parseBody(registerProfessionalSchema, raw);
     try {
       return await this.repo.registerProfessional({
         ...dto,
@@ -177,14 +190,7 @@ export class OnboardingController {
     // this let anyone downgrade a rival's Verified insurance to Submitted and block every
     // subsequent confirm on an insurance-required shift — a targeted denial of earnings.
     await this.access.requireProfessional(user, professionalId);
-    const dto = validateBody<{ validUntilHours?: number }>(raw ?? {}, {
-      validUntilHours: {
-        type: "number",
-        optional: true,
-        positive: true,
-        max: 24 * 365 * 10,
-      },
-    });
+    const dto = parseBody(submitInsuranceSchema, raw ?? {});
     // PRO-01: optional insurance evidence (VER-05). validUntil relative for convenience.
     const validUntil = Date.now() + (dto.validUntilHours ?? 24 * 365) * HOUR_MS;
     return this.repo.submitInsurance(professionalId, validUntil);

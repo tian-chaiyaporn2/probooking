@@ -22,7 +22,8 @@ import {
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
-import { validateBody } from "../validate.util.js";
+import { parseBody } from "../http-validation.js";
+import { z } from "zod";
 import { isConflict } from "../errors.util.js";
 import {
   advanceOffer,
@@ -63,6 +64,35 @@ import {
 import { normalizePhone } from "@probook/db";
 import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
 
+const postShiftSchema = z.object({
+  clinicWorkspaceId: z.string().max(64),
+  compensation: z.number().int().positive(),
+  category: z.string().max(64).optional(),
+  urgency: z.enum(["standard", "urgent"]).optional(),
+  insuranceRequired: z.boolean().optional(),
+  shiftStartInHours: z
+    .number()
+    .min(0)
+    .max(24 * 365)
+    .optional(),
+});
+
+const addAvailabilitySchema = z.object({
+  startsInHours: z
+    .number()
+    .min(0)
+    .max(24 * 365)
+    .optional(),
+  durationHours: z
+    .number()
+    .positive()
+    .max(24 * 14)
+    .optional(),
+  openToRequests: z.boolean().optional(),
+});
+
+const professionalIdSchema = z.object({ professionalId: z.string().max(64) });
+
 /**
  * Shift posting, discovery, availability, applications, invitations, and offer creation (APP-01, OFF-01/02, AVL, SRC, URG-01).
  *
@@ -86,19 +116,7 @@ export class ShiftsController {
     @Body() raw: PostShiftDto,
     @CurrentUser() user?: TokenPayload,
   ) {
-    const dto = validateBody<PostShiftDto>(raw, {
-      clinicWorkspaceId: { type: "string", maxLen: 64 },
-      compensation: { type: "number", int: true, positive: true },
-      category: { type: "string", optional: true, maxLen: 64 },
-      urgency: { type: "string", optional: true, enum: ["standard", "urgent"] },
-      insuranceRequired: { type: "boolean", optional: true },
-      shiftStartInHours: {
-        type: "number",
-        optional: true,
-        min: 0,
-        max: 24 * 365,
-      },
-    });
+    const dto = parseBody(postShiftSchema, raw);
     // §3: authority comes from the caller's membership in THIS workspace, not from an
     // `actorRole` field in the body that defaulted to "clinic_owner" when omitted.
     await this.access.requireClinicAuthority(
@@ -181,20 +199,7 @@ export class ShiftsController {
     @CurrentUser() user?: TokenPayload,
   ) {
     await this.access.requireProfessional(user, professionalId);
-    const dto = validateBody<{
-      startsInHours?: number;
-      durationHours?: number;
-      openToRequests?: boolean;
-    }>(raw ?? {}, {
-      startsInHours: { type: "number", optional: true, min: 0, max: 24 * 365 },
-      durationHours: {
-        type: "number",
-        optional: true,
-        positive: true,
-        max: 24 * 14,
-      },
-      openToRequests: { type: "boolean", optional: true },
-    });
+    const dto = parseBody(addAvailabilitySchema, raw ?? {});
     // AVL-01: one-off Available blocks. Kept relative (hours from now) for convenience.
     const now = Date.now();
     const startsAt = now + (dto.startsInHours ?? 24) * HOUR_MS;
@@ -235,9 +240,7 @@ export class ShiftsController {
     @Body() raw: { professionalId: string },
     @CurrentUser() user?: TokenPayload,
   ) {
-    const dto = validateBody<typeof raw>(raw, {
-      professionalId: { type: "string", maxLen: 64 },
-    });
+    const dto = parseBody(professionalIdSchema, raw);
     // A professional applies as themselves. Enrolling someone else as a candidate was the
     // precondition that made the offer -> accept -> confirm chain reachable against a
     // professional who never applied.
@@ -261,9 +264,7 @@ export class ShiftsController {
     @Body() raw: { professionalId: string },
     @CurrentUser() user?: TokenPayload,
   ) {
-    const dto = validateBody<typeof raw>(raw, {
-      professionalId: { type: "string", maxLen: 64 },
-    });
+    const dto = parseBody(professionalIdSchema, raw);
     // A professional can only be invited to a shift that is still open (consistency with apply/offer).
     const shift = await this.access.requireOpenShift(shiftId);
     // Inviting is non-binding (APP-01), so clinic_staff may do it — but only for their own
@@ -312,9 +313,7 @@ export class ShiftsController {
     @Body() raw: { professionalId: string },
     @CurrentUser() user?: TokenPayload,
   ) {
-    const dto = validateBody<{ professionalId: string }>(raw, {
-      professionalId: { type: "string", maxLen: 64 },
-    });
+    const dto = parseBody(professionalIdSchema, raw);
     const shift = await this.access.requireOpenShift(shiftId);
     // OFF-01: only a clinic owner/admin of THIS workspace may send a binding offer. The
     // role now comes from the caller's membership; it used to be `dto.actorRole` defaulting

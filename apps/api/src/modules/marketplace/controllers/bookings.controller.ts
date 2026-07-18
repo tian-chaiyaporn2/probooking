@@ -22,7 +22,8 @@ import {
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
-import { validateBody } from "../validate.util.js";
+import { parseBody } from "../http-validation.js";
+import { z } from "zod";
 import { isConflict } from "../errors.util.js";
 import {
   advanceOffer,
@@ -62,6 +63,19 @@ import {
 } from "../marketplace.types.js";
 import { normalizePhone } from "@probook/db";
 import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
+
+const cancelBookingSchema = z.object({
+  actor: z.enum(["clinic", "professional"]).optional(),
+  reason: z.enum([
+    "ordinary",
+    "clinic_unavailable_after_arrival",
+    "force_majeure",
+    "safety",
+    "credential",
+    "platform_or_provider_failure",
+    "partial_work",
+  ]),
+});
 
 /**
  * Booking lifecycle after confirmation: arrival, completion, inactivity, and cancellation (CMP, CAN).
@@ -318,29 +332,11 @@ export class BookingsController {
     @Body() raw: { actor?: CancelActor; reason: CancelReason },
     @CurrentUser() user?: TokenPayload,
   ) {
-    const dto = validateBody<typeof raw>(raw, {
-      // `actor` is accepted only from staff, who cancel on a party's behalf. For the parties
-      // themselves it is derived below — it decides who gets paid, so letting the canceller
-      // name it allowed a clinic to cancel as "clinic ... after arrival" and pay a
-      // professional 100% for a shift nobody worked, or as the professional to pay 0%.
-      actor: {
-        type: "string",
-        enum: ["clinic", "professional"],
-        optional: true,
-      },
-      reason: {
-        type: "string",
-        enum: [
-          "ordinary",
-          "clinic_unavailable_after_arrival",
-          "force_majeure",
-          "safety",
-          "credential",
-          "platform_or_provider_failure",
-          "partial_work",
-        ],
-      },
-    });
+    // `actor` is accepted only from staff, who cancel on a party's behalf. For the parties
+    // themselves it is derived below — it decides who gets paid, so letting the canceller
+    // name it allowed a clinic to cancel as "clinic ... after arrival" and pay a
+    // professional 100% for a shift nobody worked, or as the professional to pay 0%.
+    const dto = parseBody(cancelBookingSchema, raw);
     const booking = await this.access.requireBooking(id);
     // Idempotent: a cancelled booking is terminal for this action.
     if (booking.state === "Cancelled") {

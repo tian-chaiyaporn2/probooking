@@ -22,7 +22,8 @@ import {
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
-import { validateBody } from "../validate.util.js";
+import { parseBody } from "../http-validation.js";
+import { z } from "zod";
 import { isConflict } from "../errors.util.js";
 import {
   advanceOffer,
@@ -63,6 +64,8 @@ import {
 import { normalizePhone } from "@probook/db";
 import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
 
+const postMessageSchema = z.object({ body: z.string().max(2000) });
+
 /**
  * Booking messages and post-confirmation contact reveal (MSG-01/02).
  *
@@ -85,9 +88,7 @@ export class MessagingController {
     @Body() raw: { body: string },
     @CurrentUser() user?: TokenPayload,
   ) {
-    const dto = validateBody<typeof raw>(raw, {
-      body: { type: "string", maxLen: 2000 },
-    });
+    const dto = parseBody(postMessageSchema, raw);
     const booking = await this.access.requireBooking(id);
     // Only the two parties may post, and the sender is the caller — `senderId` used to come
     // from the body, so anyone could forge a message from either party into any booking.
