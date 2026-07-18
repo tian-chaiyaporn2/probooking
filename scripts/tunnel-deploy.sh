@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 #
 # Demo mode: expose the LOCAL api over a public HTTPS tunnel and point the GitHub
-# Pages frontend at it, so a few external people can use the live site against your
-# laptop's API + database. One command; keep the terminal open for the tunnel's life.
+# Pages frontend at it, so external reviewers can use the live site and sign in with
+# one click. One command; keep the terminal open for the tunnel's life.
 #
-# Prereqs (already-running):  local API on :4000  +  Postgres.
-# Every run gets a NEW tunnel URL and redeploys automatically (URLs are ephemeral).
+# Start the API in SEEDED, IN-MEMORY demo mode first — this is what makes reviewer
+# sign-in effortless (OTP codes are auto-filled) while keeping the /auth/dev/token
+# admin route OFF (so the preflight below passes and no visitor gets an admin token):
+#
+#   DATABASE_URL= AUTH_DEV_MODE=true SEED_ON_BOOT=true \
+#     STAFF_PHONES="+66900000008:operations,+66900000005:finance,+66900000006:finance" \
+#     CORS_ORIGINS="https://tian-chaiyaporn2.github.io" \
+#     node apps/api/dist/main.js
+#
+# Do NOT set DEV_TOKEN_ROUTE (that route hands out admin tokens and is for the e2e
+# suite only). Because the store is in-memory and seeded, "sign in as any phone" only
+# ever reaches fake demo data; "reset demo" on /signin restores it.
+#
+# Then, in a second terminal, run this. Every run gets a NEW tunnel URL and redeploys
+# automatically (URLs are ephemeral).
 #
 #   bash scripts/tunnel-deploy.sh
 #

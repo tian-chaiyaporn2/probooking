@@ -4,7 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import helmet from "helmet";
 import { json, urlencoded } from "express";
 import { AppModule } from "./app.module.js";
-import { devAuthEnabled } from "./modules/auth/dev-mode.util.js";
+import { devAuthEnabled, devTokenRouteEnabled } from "./modules/auth/dev-mode.util.js";
 import { assertSigningSecretConfigured } from "./modules/auth/token.util.js";
 import { assertFieldKeyConfigured } from "./modules/marketplace/field-crypto.js";
 
@@ -20,13 +20,20 @@ async function bootstrap() {
   // the first message send or clinic registration throwing (§7.3).
   assertFieldKeyConfigured();
 
-  // The dev-auth bypass (dev/token route + devCode in the OTP response) can never be on in
-  // production — devAuthEnabled() already excludes it — but say so loudly when it IS on, so
-  // an operator can never mistake a bypass-enabled host for a secured one.
+  // The dev-auth bypasses can never be on in production — devAuthEnabled() already excludes
+  // it — but say so loudly when on, so an operator can never mistake a bypass-enabled host
+  // for a secured one. Two levels: demo mode (OTP codes echoed — safe only against seeded,
+  // in-memory data) and, additionally, the /auth/dev/token admin route.
   if (devAuth) {
     console.warn(
-      "AUTH_DEV_MODE=true — /auth/dev/token is exposed and OTP codes are returned in responses. " +
-        "Never point this at real data or a public tunnel.",
+      "AUTH_DEV_MODE=true — OTP codes are returned in responses, so anyone can sign in as any " +
+        "known phone. Point this only at a seeded, in-memory demo dataset, never real data.",
+    );
+  }
+  if (devTokenRouteEnabled()) {
+    console.warn(
+      "DEV_TOKEN_ROUTE=true — /auth/dev/token mints an admin token to any caller. Never expose " +
+        "this over a public tunnel; it is for the local e2e suite only.",
     );
   }
 

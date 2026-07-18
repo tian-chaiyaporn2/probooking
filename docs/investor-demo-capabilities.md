@@ -21,7 +21,7 @@ The gaps this checklist first flagged are addressed — the app is now navigable
 
 Everything below remains the **standing pass/fail bar** — the customer journeys the demo must keep proving as the product evolves.
 
-> **Running the demo:** the deployed GitHub Pages site is static; it needs a reachable API. The team runs the API locally + a public tunnel (`scripts/tunnel-deploy.sh`) and points Pages at it. **Caveat:** the one-click OTP auto-fill requires `AUTH_DEV_MODE`, which the tunnel preflight currently refuses (it also exposes `/auth/dev/token`). Reconcile these before a public tunnel demo — see the repo's demo notes.
+> **Running the demo:** the deployed GitHub Pages site is static; it needs a reachable API. The team runs the API locally in **seeded, in-memory demo mode** + a public tunnel (`scripts/tunnel-deploy.sh`, which redeploys Pages at the tunnel URL). Reviewer sign-in is effortless (OTP codes auto-fill), and because the store is in-memory and seeded, it only ever touches fake demo data. The `/auth/dev/token` admin route stays off in demo mode (it needs `DEV_TOKEN_ROUTE=true`, used only by the e2e suite), so the tunnel is safe to share. See the header of `scripts/tunnel-deploy.sh` for the exact start command.
 
 ---
 

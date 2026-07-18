@@ -5,7 +5,7 @@ import { OtpService } from "./otp.service.js";
 import { AuthGuard } from "./auth.guard.js";
 import { TokenRevocationService } from "./token-revocation.service.js";
 import { StaffDirectory } from "./staff-directory.js";
-import { devAuthEnabled } from "./dev-mode.util.js";
+import { devTokenRouteEnabled } from "./dev-mode.util.js";
 
 // The dev-token route is a full auth bypass, so it is registered as a route only when
 // explicitly enabled outside production — not merely guarded inside the handler.
@@ -14,7 +14,7 @@ import { devAuthEnabled } from "./dev-mode.util.js";
 // guard depends on them and is used from other modules (@UseGuards(AuthGuard)); their
 // providers must be resolvable wherever the guard is instantiated.
 @Module({
-  controllers: devAuthEnabled() ? [AuthController, DevAuthController] : [AuthController],
+  controllers: devTokenRouteEnabled() ? [AuthController, DevAuthController] : [AuthController],
   providers: [OtpService, AuthGuard, TokenRevocationService, StaffDirectory],
   exports: [AuthGuard, TokenRevocationService, StaffDirectory],
 })
