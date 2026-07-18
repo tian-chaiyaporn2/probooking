@@ -303,6 +303,9 @@
   .page-head .actions .btn,
   .page-head > .btn,
   .workspace-head .actions .btn { flex: 1 1 auto; width: 100%; }
+  .workspace-head__identity { width: 100%; }
+  .identity-card { flex-direction: column; align-items: flex-start; }
+  .page--pro::before { inset: -1rem -0.75rem auto; height: 9rem; }
   .rowlist > li {
     align-items: flex-start;
     padding: var(--s4);
