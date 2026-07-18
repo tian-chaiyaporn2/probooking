@@ -1351,14 +1351,18 @@ export class MarketplaceController {
   @UseGuards(AuthGuard)
   @Get("professionals/:id/bookings")
   async professionalBookings(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
-    await this.requireProfessional(user, id);
+    // REP-01: internal roles (ops/finance/admin) read for reconciliation; otherwise the
+    // caller must BE the professional. Finance is a reader here but not a party actor.
+    if (!this.isInternalReader(user)) await this.requireProfessional(user, id);
     return { bookings: await this.repo.listPartyBookings("professional", id) };
   }
 
   @UseGuards(AuthGuard)
   @Get("clinics/:id/bookings")
   async clinicBookings(@Param("id") id: string, @CurrentUser() user?: TokenPayload) {
-    await this.requireClinicMember(user, id);
+    // REP-01: internal roles (ops/finance/admin) read for reconciliation; otherwise the
+    // caller must be a member of this clinic. Finance is a reader here but not a party actor.
+    if (!this.isInternalReader(user)) await this.requireClinicMember(user, id);
     return { bookings: await this.repo.listPartyBookings("clinic", id) };
   }
 
@@ -1471,6 +1475,18 @@ export class MarketplaceController {
   /** Operations / administrator cross-tenant support (ADM-01). Finance is excluded. */
   private isOpsCrossTenant(user?: TokenPayload): boolean {
     return user?.role === "operations" || user?.role === "administrator";
+  }
+
+  /**
+   * Internal roles that may READ any party's booking history for reporting (REP-01):
+   * operations, finance, and administrator — the same set the receipt endpoint allows.
+   * This is a read-only reconciliation path and grants no ability to act as the party;
+   * mutations still go through requireProfessional / requireClinicMember, which exclude
+   * finance (isOpsCrossTenant). So finance can reconcile the books but cannot impersonate.
+   */
+  private isInternalReader(user?: TokenPayload): boolean {
+    const r = user?.role;
+    return r === "operations" || r === "finance" || r === "administrator";
   }
 
   private async identityOf(user?: TokenPayload): Promise<CallerIdentity> {
