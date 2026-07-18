@@ -329,7 +329,6 @@
   .perspective-toggle .btn { width: 100%; }
   .home-surfaces { grid-template-columns: 1fr; }
   .signin-grid { grid-template-columns: 1fr; }
-  .signin-card__go { align-self: center; }
 }
 
 /* Tablet band: roomier drawer, full-width primary actions still available. */
@@ -337,6 +336,13 @@
   .app-nav--drawer { width: min(70vw, 22rem); }
   .hero__actions { flex-direction: row; flex-wrap: wrap; }
   .hero__actions .btn { width: auto; min-width: 11rem; }
+  /* 3×2 for Ops (6) / tidy wrap for Finance (5) — avoids 5+1 orphan after #35's tighter min. */
+  .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 599px) {
+  /* Phone: 2-up keeps Ops metrics even (3×2 rows) without a lonely sixth tile. */
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {
