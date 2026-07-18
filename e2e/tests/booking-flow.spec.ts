@@ -707,7 +707,8 @@ test("interactive multi-role flow: clinic and professional drive a booking by ha
   const bk2 = page.getByTestId("clinic-bookings").locator("li", { hasText: total }).first();
   await expect(bk2.getByTestId("accept-completion")).toBeVisible();
   await bk2.getByTestId("accept-completion").click();
-  await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: "ServiceCompleted" }).first()).toBeVisible();
+  // The booking-state badge is localized (statusLabel); ServiceCompleted → "เสร็จงานแล้ว".
+  await expect(page.getByTestId("clinic-bookings").locator("li", { hasText: "เสร็จงานแล้ว" }).first()).toBeVisible();
 });
 
 test("operations walkthrough: verify pending parties and resolve a credential hold by hand", async ({ page }) => {

@@ -61,8 +61,13 @@ export default function FinancePage() {
   const loadSeq = useRef(0);
 
   useEffect(() => {
+    // Only hydrate a session that belongs to this surface — a shared canonical session may
+    // hold another role's token (e.g. after signing in on /ops), and hydrating it here would
+    // show a broken permission-error dashboard instead of the finance login.
     const sess = loadSession();
-    if (sess) setToken(sess.token);
+    if (sess && (!sess.role || sess.role === "finance" || sess.role === "administrator")) {
+      setToken(sess.token);
+    }
     setBooting(false);
   }, []);
 

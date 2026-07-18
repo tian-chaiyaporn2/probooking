@@ -78,9 +78,13 @@ export default function OpsPage() {
   const loadSeq = useRef(0);
 
   useEffect(() => {
-    // Canonical session (RolePicker inject / OTP / e2e all write `probook.session`).
+    // Canonical session (RolePicker inject / OTP / e2e all write `probook.session`). Only
+    // hydrate a session that belongs to this surface — a shared session may hold another
+    // role's token (e.g. after signing in on /finance), which would 403 here.
     const sess = loadSession();
-    if (sess) setToken(sess.token);
+    if (sess && (!sess.role || sess.role === "operations" || sess.role === "administrator")) {
+      setToken(sess.token);
+    }
     setBooting(false);
   }, []);
 
