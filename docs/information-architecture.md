@@ -13,6 +13,8 @@ Companion docs:
 | [`architecture.md`](architecture.md) | System shape and vertical slice |
 | [`investor-demo-capabilities.md`](investor-demo-capabilities.md) | Hands-on demo checklist |
 | [`content-ia-review.md`](content-ia-review.md) | Content & IA review — page/flow improvement recommendations |
+| [`UX_States_Review.md`](UX_States_Review.md) | Initial / empty / loading / error / success states across flows |
+| [`UX_Secondary_Surfaces_Review.md`](UX_Secondary_Surfaces_Review.md) | Journey, flow, sign-in, thread, shell, landing secondary chrome |
 | [`ops-tools.md`](ops-tools.md) | Internal Ops/Finance tools note |
 | [`../features/README.md`](../features/README.md) | Executable acceptance catalog |
 

@@ -20,7 +20,7 @@ import { Button } from "../../components/Button";
 import { PageHeader } from "../../components/PageHeader";
 import { SectionBlock } from "../../components/SectionBlock";
 import { EmptyState } from "../../components/EmptyState";
-import { StatSkeletonGrid } from "../../components/Skeleton";
+import { Skeleton, StatSkeletonGrid } from "../../components/Skeleton";
 import { KeyValueTable } from "../../components/KeyValueTable";
 import { Field, Input } from "../../components/Field";
 import { Dialog } from "../../components/Dialog";
@@ -57,6 +57,9 @@ export default function FinancePage() {
   } | null>(null);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
+  const [refundAmountError, setRefundAmountError] = useState<string | null>(
+    null,
+  );
   const toast = useToast();
   const loadSeq = useRef(0);
 
@@ -65,7 +68,10 @@ export default function FinancePage() {
     // hold another role's token (e.g. after signing in on /ops), and hydrating it here would
     // show a broken permission-error dashboard instead of the finance login.
     const sess = loadSession();
-    if (sess && (!sess.role || sess.role === "finance" || sess.role === "administrator")) {
+    if (
+      sess &&
+      (!sess.role || sess.role === "finance" || sess.role === "administrator")
+    ) {
       setToken(sess.token);
     }
     setBooting(false);
@@ -164,7 +170,11 @@ export default function FinancePage() {
 
   async function submitRefund() {
     if (!token || !refundFor) return;
-    if (!refundAmount || Number(refundAmount) <= 0) return;
+    if (!refundAmount || Number(refundAmount) <= 0) {
+      setRefundAmountError(th.finance.refundAmountInvalid);
+      return;
+    }
+    setRefundAmountError(null);
     const auth = token;
     const satang = Math.round(Number(refundAmount) * 100);
     setBusy(true);
@@ -178,6 +188,7 @@ export default function FinancePage() {
       setRefundFor(null);
       setRefundAmount("");
       setRefundReason("");
+      setRefundAmountError(null);
       await load();
       toast.success(th.finance.refundProposed);
     } catch (e) {
@@ -364,11 +375,15 @@ export default function FinancePage() {
               </thead>
               <tbody data-testid="reconciliation-rows">
                 {loading && shown.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <EmptyState title={th.common.loading} />
-                    </td>
-                  </tr>
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i} aria-hidden>
+                      {Array.from({ length: 7 }).map((__, j) => (
+                        <td key={j}>
+                          <Skeleton variant="line" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
                 ) : shown.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
@@ -398,6 +413,7 @@ export default function FinancePage() {
                         });
                         setRefundAmount("");
                         setRefundReason("");
+                        setRefundAmountError(null);
                       }}
                     />
                   ))
@@ -460,6 +476,9 @@ export default function FinancePage() {
         cancelLabel={th.finance.cancel}
         confirmTestId="refund-submit"
         busy={busy}
+        confirmDisabled={
+          !refundAmount || Number(refundAmount) <= 0 || !!refundAmountError
+        }
         onCancel={() => {
           if (!busy) setRefundFor(null);
         }}
@@ -472,12 +491,17 @@ export default function FinancePage() {
               <code>{refundFor.bookingId.slice(0, 8)}</code> ·{" "}
               {th.finance.captured} {formatThb(refundFor.captured)}
             </p>
-            <Field label={th.finance.refundAmount} htmlFor="refund-amount">
+            <Field
+              label={th.finance.refundAmount}
+              htmlFor="refund-amount"
+              error={refundAmountError}
+            >
               <Input
                 id="refund-amount"
                 data-testid="refund-amount"
                 inputMode="decimal"
                 value={refundAmount}
+                aria-invalid={refundAmountError ? true : undefined}
                 onChange={(e) => {
                   // Allow baht with up to two decimal places (satang); keep only the first dot.
                   let v = e.target.value.replace(/[^0-9.]/g, "");
@@ -490,6 +514,7 @@ export default function FinancePage() {
                         .replace(/\./g, "")
                         .slice(0, 2);
                   setRefundAmount(v);
+                  if (refundAmountError) setRefundAmountError(null);
                 }}
               />
             </Field>

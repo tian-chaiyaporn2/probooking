@@ -19,7 +19,12 @@ export function StatusTimeline({
   return (
     <ol className="timeline" aria-label={caption}>
       {steps.map((s) => (
-        <li key={s.id} className={`timeline__item timeline__item--${s.status}`} data-status={s.status}>
+        <li
+          key={s.id}
+          className={`timeline__item timeline__item--${s.status}`}
+          data-status={s.status}
+          aria-current={s.status === "current" ? "step" : undefined}
+        >
           <span className="timeline__dot" aria-hidden />
           <span className="timeline__content">
             <span className="timeline__label">{s.label}</span>
