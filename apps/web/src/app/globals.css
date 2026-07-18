@@ -12,7 +12,8 @@
 .signin-grid {
   display: grid;
   gap: var(--s3);
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  /* min() keeps a single column on narrow phones (<300px content width). */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16.5rem), 1fr));
 }
 .signin-card {
   display: flex;
@@ -26,15 +27,21 @@
   border-radius: var(--radius);
   cursor: pointer;
   color: inherit;
+  touch-action: manipulation;
   transition:
     border-color 0.12s,
     box-shadow 0.12s,
     transform 0.12s;
 }
-.signin-card:hover:not(:disabled) {
+@media (hover: hover) and (pointer: fine) {
+  .signin-card:hover:not(:disabled) {
+    border-color: var(--primary);
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+  }
+}
+.signin-card:active:not(:disabled) {
   border-color: var(--primary);
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
 }
 .signin-card:disabled {
   opacity: 0.6;
@@ -93,7 +100,8 @@
   z-index: 50;
   display: grid;
   place-items: center;
-  padding: var(--s4);
+  padding: max(var(--s4), var(--safe-top)) max(var(--s4), var(--safe-right))
+    max(var(--s4), var(--safe-bottom)) max(var(--s4), var(--safe-left));
   background: color-mix(in srgb, #000 45%, transparent);
 }
 .modal {
@@ -158,7 +166,7 @@
 .home-surfaces {
   display: grid;
   gap: var(--s3);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
   margin-top: var(--s4);
 }
 .home-surface {
@@ -169,9 +177,12 @@
   border-top: 1px solid var(--line);
   text-decoration: none;
   color: inherit;
+  touch-action: manipulation;
 }
-.home-surface:hover .home-surface__cta {
-  color: var(--primary);
+@media (hover: hover) and (pointer: fine) {
+  .home-surface:hover .home-surface__cta {
+    color: var(--primary);
+  }
 }
 .home-surface__title {
   font-weight: 700;
@@ -188,26 +199,4 @@
   margin-top: 4px;
 }
 
-/* Shift filter bar */
-.filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3);
-  align-items: flex-end;
-  margin-bottom: var(--s4);
-}
-.filter-bar label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.82rem;
-}
-.filter-bar input,
-.filter-bar select {
-  padding: 0.45rem 0.65rem;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--text);
-  min-width: 120px;
-}
+/* filter-bar base lives in components.css (touch targets + fluid fields). */
