@@ -61,9 +61,11 @@ function publicLinks(signedIn: boolean): NavLink[] {
 export function AppHeader({ current }: { current?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [session, setSession] = useState<AppSession | null>(() =>
-    typeof window === "undefined" ? null : loadSession(),
-  );
+  // Start null so the first client render matches the signed-out HTML prerendered at build
+  // time (static export); the effect below hydrates the real session post-mount. Reading
+  // sessionStorage in the initializer would render a signed-in tree over signed-out HTML and
+  // trip a hydration mismatch on a hard reload while signed in.
+  const [session, setSession] = useState<AppSession | null>(null);
   const drawerId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
