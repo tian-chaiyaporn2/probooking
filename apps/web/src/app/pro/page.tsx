@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppHeader } from "../../components/AppHeader";
 import { Button } from "../../components/Button";
@@ -9,14 +9,26 @@ import { BookingThread } from "../../components/BookingThread";
 import { CheckoutSummary } from "../../components/CheckoutSummary";
 import { EmptyState } from "../../components/EmptyState";
 import { ProfilePanel } from "../../components/ProfilePanel";
+import { SectionBlock } from "../../components/SectionBlock";
 import { Skeleton } from "../../components/Skeleton";
+import { Stat } from "../../components/Stat";
 import { useToast } from "../../components/Toast";
+import {
+  CalendarIcon,
+  CheckIcon,
+  InboxIcon,
+  ShieldCheckIcon,
+  StethoscopeIcon,
+  WalletIcon,
+} from "../../components/icons";
 import {
   getMe,
   browseShifts,
   getProfessionalOffers,
   getProfessionalBookings,
   getProfessionalProfile,
+  listAvailability,
+  addAvailability,
   applyToShift,
   acceptOffer,
   declineOffer,
@@ -29,13 +41,35 @@ import {
   type ProfessionalOfferRow,
   type PartyBooking,
   type VerifiedProfile,
+  type AvailabilityBlock,
   type ShiftBrowseFilters,
 } from "../../lib/api";
 import { checkoutFromCompensation } from "../../lib/checkout";
+import {
+  formatWhen,
+  formatWhenRange,
+  greetingForHour,
+} from "../../lib/datetime";
 import { getThaiErrorMessage, th } from "../../lib/strings";
 import { statusLabel, nextActionHint, categoryLabel } from "../../lib/status";
-import { loadSession, clearSession } from "../../lib/session";
+import { loadSession } from "../../lib/session";
 import { verificationBadgeTone } from "../../lib/tones";
+
+function nameInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "บ";
+  if (parts.length === 1) return parts[0]!.slice(0, 2);
+  return parts[0]![0]! + parts[parts.length - 1]![0]!;
+}
+
+function pickMarketPulse(shifts: OpenShift[]): OpenShift[] {
+  return [...shifts]
+    .sort((a, b) => {
+      if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
+      return b.compensation - a.compensation;
+    })
+    .slice(0, 3);
+}
 
 function RowSkeleton({ count = 3 }: { count?: number }) {
   return (
@@ -62,6 +96,7 @@ export default function ProPage() {
   const [shifts, setShifts] = useState<OpenShift[]>([]);
   const [offers, setOffers] = useState<ProfessionalOfferRow[]>([]);
   const [bookings, setBookings] = useState<PartyBooking[]>([]);
+  const [availability, setAvailability] = useState<AvailabilityBlock[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [category, setCategory] = useState("");
@@ -80,6 +115,15 @@ export default function ProPage() {
     [],
   );
 
+  const loadAvailability = useCallback(async (id: string, tok: string) => {
+    try {
+      const av = await listAvailability(id, tok);
+      setAvailability(av.availability);
+    } catch {
+      setAvailability([]);
+    }
+  }, []);
+
   const load = useCallback(
     async (id: string, tok: string, filters: ShiftBrowseFilters = {}) => {
       setListLoading(true);
@@ -90,12 +134,15 @@ export default function ProPage() {
         ]);
         setOffers(of.offers);
         setBookings(bk.bookings);
-        await loadShifts(tok, filters);
+        await Promise.all([
+          loadShifts(tok, filters),
+          loadAvailability(id, tok),
+        ]);
       } finally {
         setListLoading(false);
       }
     },
-    [loadShifts],
+    [loadShifts, loadAvailability],
   );
 
   useEffect(() => {
@@ -147,10 +194,46 @@ export default function ProPage() {
     }
   }
 
-  function signOut() {
-    clearSession();
-    setToken(null);
-  }
+  const pendingOffers = useMemo(
+    () => offers.filter((o) => o.state === "PendingResponse"),
+    [offers],
+  );
+  const activeJobs = useMemo(
+    () =>
+      bookings.filter(
+        (b) =>
+          b.state === "Confirmed" ||
+          b.state === "InProgress" ||
+          b.state === "AwaitingCompletion",
+      ),
+    [bookings],
+  );
+  const earnedSatang = useMemo(
+    () =>
+      bookings
+        .filter((b) => b.payoutState === "Paid")
+        .reduce((sum, b) => sum + b.compensation, 0),
+    [bookings],
+  );
+  const pendingPayoutSatang = useMemo(
+    () =>
+      bookings
+        .filter(
+          (b) => b.payoutState === "Pending" || b.payoutState === "Processing",
+        )
+        .reduce((sum, b) => sum + b.compensation, 0),
+    [bookings],
+  );
+  const completedCount = useMemo(
+    () => bookings.filter((b) => b.state === "ServiceCompleted").length,
+    [bookings],
+  );
+  const upcomingAvailability = useMemo(
+    () => availability.filter((a) => a.endsAt > Date.now()).slice(0, 4),
+    [availability],
+  );
+  const marketPulse = useMemo(() => pickMarketPulse(shifts), [shifts]);
+  const nextJob = activeJobs[0] ?? null;
 
   if (!token) {
     return (
@@ -172,236 +255,317 @@ export default function ProPage() {
     );
   }
 
-  const pendingOffers = offers.filter((o) => o.state === "PendingResponse");
+  const displayName = me?.professionalName ?? th.party.rolePro;
+  const bookable =
+    me?.professionalVerification === "Verified" ||
+    profile?.verified.identityVerified === true;
+  const greeting = greetingForHour();
+  const countOrEllipsis = (n: number, empty: boolean) =>
+    listLoading && empty ? "…" : n;
 
   return (
     <>
       <AppHeader current="/pro" />
-      <main id="main" className="page page--party">
-        <div className="workspace-head">
-          <div>
-            <h1>
-              {meLoading && !me?.professionalName ? (
-                <Skeleton variant="line" />
-              ) : (
-                (me?.professionalName ?? "บุคลากร")
-              )}
-            </h1>
-            <span className="workspace-head__meta">
-              บุคลากร ·{" "}
-              {me?.professionalVerification && (
-                <Badge
-                  tone={verificationBadgeTone(me.professionalVerification)}
-                >
-                  {statusLabel(me.professionalVerification)}
-                </Badge>
-              )}
+      <main id="main" className="page page--party page--pro">
+        <header className="pro-home">
+          <div className="pro-home__top">
+            <div className="pro-home__intro">
+              <p className="pro-home__greeting">{greeting}</p>
+              <div className="workspace-head__identity">
+                <span className="workspace-head__avatar" aria-hidden>
+                  {meLoading && !me?.professionalName
+                    ? "…"
+                    : nameInitials(displayName)}
+                </span>
+                <div>
+                  <h1>
+                    {meLoading && !me?.professionalName ? (
+                      <Skeleton variant="line" />
+                    ) : (
+                      displayName
+                    )}
+                  </h1>
+                  <span className="workspace-head__meta">
+                    <span
+                      className={`pro-home__ready${bookable ? " pro-home__ready--on" : ""}`}
+                    >
+                      {bookable ? (
+                        <>
+                          <ShieldCheckIcon /> {th.party.bookableReady}
+                        </>
+                      ) : (
+                        th.party.bookablePending
+                      )}
+                    </span>
+                    {me?.professionalVerification ? (
+                      <>
+                        {" · "}
+                        <Badge
+                          tone={verificationBadgeTone(
+                            me.professionalVerification,
+                          )}
+                        >
+                          {statusLabel(me.professionalVerification)}
+                        </Badge>
+                      </>
+                    ) : null}
+                    {profile?.verified.rating ? (
+                      <>
+                        {" · "}
+                        <span className="pro-home__rating">
+                          ★ {profile.verified.rating.average.toFixed(1)}
+                        </span>
+                      </>
+                    ) : null}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="actions">
+              <Link href="/signin" className="btn btn--subtle">
+                {th.party.switchRole}
+              </Link>
+            </div>
+          </div>
+
+          <div className="stat-grid pro-overview" data-testid="pro-overview">
+            {listLoading && bookings.length === 0 ? (
+              <>
+                <Skeleton variant="stat" />
+                <Skeleton variant="stat" />
+                <Skeleton variant="stat" />
+              </>
+            ) : (
+              <>
+                <Stat
+                  label={th.party.earnedLabel}
+                  value={formatThb(earnedSatang)}
+                  hint={th.party.paymentProtectedHint}
+                  icon={<WalletIcon />}
+                  tone={earnedSatang > 0 ? "success" : "default"}
+                />
+                <Stat
+                  label={th.party.pendingPayoutLabel}
+                  value={formatThb(pendingPayoutSatang)}
+                  hint={
+                    pendingOffers.length > 0
+                      ? th.party.overviewOffersHint
+                      : th.party.overviewJobsHint
+                  }
+                  icon={<InboxIcon />}
+                  tone={pendingPayoutSatang > 0 ? "success" : "default"}
+                />
+                <Stat
+                  label={
+                    profile?.verified.rating
+                      ? th.party.ratingLabel
+                      : th.party.completedJobsLabel
+                  }
+                  value={
+                    profile?.verified.rating
+                      ? profile.verified.rating.average.toFixed(1)
+                      : String(completedCount)
+                  }
+                  hint={
+                    profile?.verified.rating
+                      ? `${profile.verified.rating.count} รีวิว`
+                      : th.party.overviewJobsHint
+                  }
+                  icon={<CheckIcon />}
+                  tone={
+                    profile?.verified.rating || completedCount > 0
+                      ? "success"
+                      : "default"
+                  }
+                />
+              </>
+            )}
+          </div>
+        </header>
+
+        {pendingOffers.length > 0 ? (
+          <a
+            href="#pro-offers"
+            className="pro-attention"
+            data-testid="pro-attention"
+          >
+            <span className="pro-attention__icon" aria-hidden>
+              <InboxIcon />
             </span>
+            <span className="pro-attention__body">
+              <strong>{th.party.attentionOffers(pendingOffers.length)}</strong>
+              <span className="muted">{th.party.attentionOffersCta}</span>
+            </span>
+            <span className="pro-attention__arrow" aria-hidden>
+              →
+            </span>
+          </a>
+        ) : null}
+
+        {nextJob ? (
+          <div className="pro-next" data-testid="pro-next-job">
+            <div className="pro-next__label">{th.party.nextJobTitle}</div>
+            <div className="pro-next__row">
+              <span className="row__money">
+                {formatThb(nextJob.compensation)}
+              </span>
+              <Badge tone="info">{statusLabel(nextJob.state)}</Badge>
+              <span className="muted">
+                {th.party.payoutLabel}: {statusLabel(nextJob.payoutState)}
+              </span>
+            </div>
+            {nextActionHint(nextJob.state) ? (
+              <p className="pro-next__hint muted">
+                {nextActionHint(nextJob.state)}
+              </p>
+            ) : null}
           </div>
-          <div className="actions">
-            <Link href="/signin" className="btn btn--subtle">
-              {th.party.switchRole}
-            </Link>
-            <Button variant="subtle" onClick={signOut}>
-              {th.staffLogin.signOut}
-            </Button>
-          </div>
-        </div>
+        ) : null}
 
         {profile ? (
-          <ProfilePanel profile={profile} />
+          <ProfilePanel profile={profile} bookable={bookable} />
         ) : profileError ? (
           <p role="status" className="form-error form-error--info">
             {th.party.profileLoadFailed}
           </p>
         ) : null}
 
-        <h2>
-          {th.party.offersToMe} (
-          {listLoading && offers.length === 0 ? "…" : pendingOffers.length})
-        </h2>
-        <div className="card" style={{ marginBottom: "var(--s5)" }}>
-          <ul
-            className="rowlist"
-            data-testid="pro-offers"
-            aria-busy={listLoading || undefined}
+        <SectionBlock
+          title={th.party.availabilityTitle}
+          count={countOrEllipsis(
+            upcomingAvailability.length,
+            availability.length === 0,
+          )}
+        >
+          <div
+            className="card card--pad availability-panel"
+            data-testid="pro-availability"
           >
-            {listLoading && offers.length === 0 && <RowSkeleton />}
-            {!listLoading && pendingOffers.length === 0 && (
-              <EmptyState as="li" title={th.party.noOffers} />
-            )}
-            {pendingOffers.map((o) => (
-              <li
-                key={o.offerId}
-                data-testid={`offer-${o.offerId}`}
-                style={{ alignItems: "flex-start" }}
-              >
-                <span className="row__main">
-                  <span className="row__name">
-                    {formatThb(o.compensation)}{" "}
-                    {o.urgency === "urgent" && <Badge tone="warn">ด่วน</Badge>}
-                  </span>
-                  <span className="row__sub">
-                    <Badge tone="info">{statusLabel(o.state)}</Badge>
-                  </span>
-                  {nextActionHint(o.state) ? (
-                    <span className="row__hint muted">
-                      {nextActionHint(o.state)}
+            {upcomingAvailability.length === 0 ? (
+              <EmptyState
+                title={th.party.availabilityEmpty}
+                description={th.party.availabilityEmptyDesc}
+                icon={<CalendarIcon />}
+              />
+            ) : (
+              <ul className="availability-list">
+                {upcomingAvailability.map((a) => (
+                  <li key={a.id}>
+                    <span className="availability-list__when">
+                      {formatWhenRange(a.startsAt, a.endsAt)}
                     </span>
-                  ) : null}
-                  <div style={{ marginTop: "var(--s3)", maxWidth: 320 }}>
-                    <CheckoutSummary
-                      checkout={checkoutFromCompensation(o.compensation)}
-                      protectedStamp={false}
-                    />
-                  </div>
-                </span>
-                <span className="row__actions actions">
-                  <Button
-                    data-testid="accept-offer"
-                    variant="primary"
-                    busy={busyId === `accept-${o.offerId}`}
-                    disabled={
-                      busyId !== null && busyId !== `accept-${o.offerId}`
-                    }
-                    onClick={() =>
-                      void run(
-                        `accept-${o.offerId}`,
-                        () => acceptOffer(o.offerId, token),
-                        "ยอมรับข้อเสนอแล้ว (รอคลินิกยืนยัน)",
-                      )
-                    }
-                  >
-                    {th.party.acceptOffer}
-                  </Button>
-                  <Button
-                    data-testid="decline-offer"
-                    variant="subtle"
-                    busy={busyId === `decline-${o.offerId}`}
-                    disabled={
-                      busyId !== null && busyId !== `decline-${o.offerId}`
-                    }
-                    onClick={() =>
-                      void run(
-                        `decline-${o.offerId}`,
-                        () => declineOffer(o.offerId, token),
-                        "ปฏิเสธข้อเสนอแล้ว",
-                      )
-                    }
-                  >
-                    {th.party.declineOffer}
-                  </Button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <h2>
-          {th.party.openShifts} (
-          {listLoading && shifts.length === 0 ? "…" : shifts.length})
-        </h2>
-        <div className="filter-bar" data-testid="shift-filters">
-          <label>
-            {th.party.filterCategory}
-            <input
-              data-testid="filter-category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="general"
-            />
-          </label>
-          <label>
-            {th.party.filterUrgency}
-            <select
-              data-testid="filter-urgency"
-              value={urgency}
-              onChange={(e) =>
-                setUrgency(e.target.value as "" | "standard" | "urgent")
-              }
-            >
-              <option value="">{th.party.urgencyAll}</option>
-              <option value="urgent">{th.party.urgencyUrgent}</option>
-              <option value="standard">{th.party.urgencyStandard}</option>
-            </select>
-          </label>
-          <label>
-            {th.party.filterMinBaht}
-            <input
-              data-testid="filter-min"
-              inputMode="numeric"
-              value={minBaht}
-              onChange={(e) =>
-                setMinBaht(e.target.value.replace(/[^0-9]/g, ""))
-              }
-            />
-          </label>
-          <Button
-            data-testid="filter-apply"
-            busy={busyId === "filter"}
-            disabled={busyId !== null && busyId !== "filter"}
-            onClick={() => {
-              if (!token) return;
-              setBusyId("filter");
-              void loadShifts(token, currentFilters())
-                .catch((e) => toast.error(getThaiErrorMessage(e)))
-                .finally(() => setBusyId(null));
-            }}
-          >
-            {th.party.filterApply}
-          </Button>
-          <Button
-            variant="subtle"
-            data-testid="filter-clear"
-            disabled={busyId !== null}
-            onClick={() => {
-              setCategory("");
-              setUrgency("");
-              setMinBaht("");
-              if (token)
-                void loadShifts(token).catch((e) =>
-                  toast.error(getThaiErrorMessage(e)),
-                );
-            }}
-          >
-            {th.party.filterClear}
-          </Button>
-        </div>
-        {filterHint ? (
-          <p className="muted" style={{ fontSize: "0.85rem", marginTop: 0 }}>
-            {filterHint}
-          </p>
-        ) : null}
-        <div className="card" style={{ marginBottom: "var(--s5)" }}>
-          <ul
-            className="rowlist"
-            data-testid="open-shifts"
-            aria-busy={listLoading || undefined}
-          >
-            {listLoading && shifts.length === 0 && <RowSkeleton />}
-            {!listLoading && shifts.length === 0 && (
-              <EmptyState as="li" title={th.party.noOpenShifts} />
+                    {a.openToRequests ? (
+                      <Badge tone="accent">
+                        {th.party.availabilityOpenToRequests}
+                      </Badge>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
             )}
-            {shifts.slice(0, 25).map((s) => (
-              <li key={s.shiftId} data-testid={`open-${s.shiftId}`}>
-                <span className="row__main">
-                  <span className="row__name">
-                    {formatThb(s.compensation)}{" "}
-                    {s.urgent && <Badge tone="warn">ด่วน</Badge>}
-                  </span>
-                  <span className="row__sub muted">{categoryLabel(s.category)}</span>
-                </span>
-                <span className="row__actions">
+            <div className="availability-actions actions">
+              <Button
+                data-testid="avail-tomorrow"
+                variant="primary"
+                busy={busyId === "avail-tomorrow"}
+                disabled={busyId !== null && busyId !== "avail-tomorrow"}
+                onClick={() => {
+                  if (!proId || !token) return;
+                  void run(
+                    "avail-tomorrow",
+                    () =>
+                      addAvailability(
+                        proId,
+                        {
+                          startsInHours: 24,
+                          durationHours: 8,
+                          openToRequests: true,
+                        },
+                        token,
+                      ),
+                    th.party.availabilityAdded,
+                  );
+                }}
+              >
+                {th.party.availabilityAddTomorrow}
+              </Button>
+              <Button
+                data-testid="avail-today"
+                busy={busyId === "avail-today"}
+                disabled={busyId !== null && busyId !== "avail-today"}
+                onClick={() => {
+                  if (!proId || !token) return;
+                  void run(
+                    "avail-today",
+                    () =>
+                      addAvailability(
+                        proId,
+                        {
+                          startsInHours: 4,
+                          durationHours: 4,
+                          openToRequests: true,
+                        },
+                        token,
+                      ),
+                    th.party.availabilityAdded,
+                  );
+                }}
+              >
+                {th.party.availabilityAddToday}
+              </Button>
+            </div>
+          </div>
+        </SectionBlock>
+
+        <section
+          className="market-pulse"
+          aria-labelledby="market-pulse-heading"
+        >
+          <div className="section-block__head">
+            <h2 id="market-pulse-heading">{th.party.marketPulseTitle}</h2>
+            <span className="section-block__count">
+              {countOrEllipsis(marketPulse.length, shifts.length === 0)}
+            </span>
+          </div>
+          <p className="market-pulse__sub muted">{th.party.marketPulseSub}</p>
+          {listLoading && shifts.length === 0 ? (
+            <div className="market-pulse__grid" aria-busy>
+              <Skeleton variant="block" />
+              <Skeleton variant="block" />
+              <Skeleton variant="block" />
+            </div>
+          ) : marketPulse.length === 0 ? (
+            <p className="muted">{th.party.marketPulseEmpty}</p>
+          ) : (
+            <div className="market-pulse__grid" data-testid="market-pulse">
+              {marketPulse.map((s) => (
+                <article
+                  key={s.shiftId}
+                  className={`market-card${s.urgent ? " market-card--urgent" : ""}`}
+                >
+                  <div className="market-card__top">
+                    <span className="row__money">
+                      {formatThb(s.compensation)}
+                    </span>
+                    {s.urgent ? (
+                      <Badge tone="warn">{th.party.urgencyUrgent}</Badge>
+                    ) : null}
+                  </div>
+                  <h3 className="market-card__title">
+                    {categoryLabel(s.category)}
+                  </h3>
+                  <p className="market-card__when muted">
+                    {th.party.shiftStarts} {formatWhen(s.startsAt)}
+                  </p>
                   <Button
-                    data-testid="apply-shift"
-                    busy={busyId === `apply-${s.shiftId}`}
+                    busy={busyId === `pulse-apply-${s.shiftId}`}
                     disabled={
                       !proId ||
-                      (busyId !== null && busyId !== `apply-${s.shiftId}`)
+                      (busyId !== null && busyId !== `pulse-apply-${s.shiftId}`)
                     }
                     onClick={() =>
                       void run(
-                        `apply-${s.shiftId}`,
+                        `pulse-apply-${s.shiftId}`,
                         () => applyToShift(s.shiftId, proId!, token),
                         "สมัครแล้ว",
                       )
@@ -409,127 +573,396 @@ export default function ProPage() {
                   >
                     {th.party.apply}
                   </Button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+                </article>
+              ))}
+            </div>
+          )}
+          <a href="#open-shifts-section" className="market-pulse__more">
+            {th.party.browseAllShifts} →
+          </a>
+        </section>
 
-        <h2>
-          {th.party.myJobs} (
-          {listLoading && bookings.length === 0 ? "…" : bookings.length})
-        </h2>
-        <div className="card">
-          <ul
-            className="rowlist"
-            data-testid="pro-bookings"
-            aria-busy={listLoading || undefined}
-          >
-            {listLoading && bookings.length === 0 && <RowSkeleton />}
-            {!listLoading && bookings.length === 0 && (
-              <EmptyState as="li" title={th.party.noJobs} />
-            )}
-            {bookings.map((b) => (
-              <li
-                key={b.bookingId}
-                data-testid={`pro-booking-${b.bookingId}`}
-                style={{ alignItems: "flex-start" }}
-              >
-                <span className="row__main">
-                  <span className="row__name">{formatThb(b.compensation)}</span>
-                  <span className="row__sub">
-                    <Badge tone="info">{statusLabel(b.state)}</Badge>{" "}
-                    <span className="muted">
-                      {th.party.payoutLabel}: {statusLabel(b.payoutState)}
-                    </span>
+        <SectionBlock
+          id="pro-offers"
+          title={th.party.offersToMe}
+          count={countOrEllipsis(pendingOffers.length, offers.length === 0)}
+        >
+          <div className="card">
+            <ul
+              className="rowlist"
+              data-testid="pro-offers"
+              aria-busy={listLoading || undefined}
+            >
+              {listLoading && offers.length === 0 && <RowSkeleton />}
+              {!listLoading && pendingOffers.length === 0 && (
+                <EmptyState
+                  as="li"
+                  title={th.party.noOffers}
+                  description={th.party.noOffersDesc}
+                  icon={<InboxIcon />}
+                />
+              )}
+              {pendingOffers.map((o) => (
+                <li
+                  key={o.offerId}
+                  data-testid={`offer-${o.offerId}`}
+                  className={o.urgency === "urgent" ? "row--urgent" : undefined}
+                  style={{ alignItems: "flex-start" }}
+                >
+                  <span
+                    className={`row__avatar${o.urgency === "urgent" ? " row__avatar--urgent" : ""}`}
+                    aria-hidden
+                  >
+                    <InboxIcon />
                   </span>
-                  {nextActionHint(b.state) ? (
-                    <span className="row__hint muted">
-                      {nextActionHint(b.state)}
+                  <span className="row__main">
+                    <span className="row__money">
+                      {formatThb(o.compensation)}
+                      {o.urgency === "urgent" && (
+                        <Badge tone="warn">{th.party.urgencyUrgent}</Badge>
+                      )}
                     </span>
-                  ) : null}
-                  {(b.state === "Confirmed" || b.state === "InProgress") && (
+                    <span className="row__name">
+                      {categoryLabel(o.category)}
+                    </span>
+                    <span className="row__sub">
+                      <Badge tone="info">{statusLabel(o.state)}</Badge>
+                      <span className="muted">
+                        {th.party.shiftStarts} {formatWhen(o.shiftStart)}
+                      </span>
+                      {o.expiresAt ? (
+                        <span className="muted">
+                          · {th.party.offerExpires} {formatWhen(o.expiresAt)}
+                        </span>
+                      ) : null}
+                    </span>
+                    {nextActionHint(o.state) ? (
+                      <span className="row__hint muted">
+                        {nextActionHint(o.state)}
+                      </span>
+                    ) : null}
                     <div style={{ marginTop: "var(--s3)", maxWidth: 320 }}>
                       <CheckoutSummary
-                        checkout={{
-                          compensation: b.compensation,
-                          serviceFee: b.serviceFee,
-                          tax: b.tax,
-                          total: b.total,
-                        }}
+                        checkout={checkoutFromCompensation(o.compensation)}
+                        protectedStamp={false}
                       />
                     </div>
-                  )}
-                  <div style={{ marginTop: "var(--s3)" }}>
-                    <BookingThread
-                      bookingId={b.bookingId}
-                      token={token}
-                      selfId={proId}
-                    />
-                  </div>
-                </span>
-                <span className="row__actions actions">
-                  {(b.state === "Confirmed" || b.state === "InProgress") && (
-                    <>
-                      <Button
-                        data-testid="arrive"
-                        busy={busyId === `arrive-${b.bookingId}`}
-                        disabled={
-                          busyId !== null && busyId !== `arrive-${b.bookingId}`
-                        }
-                        onClick={() =>
-                          void run(
-                            `arrive-${b.bookingId}`,
-                            () => arriveBooking(b.bookingId, token),
-                            "บันทึกการมาถึงแล้ว",
-                          )
-                        }
-                      >
-                        {th.party.arrive}
-                      </Button>
-                      <Button
-                        data-testid="complete"
-                        variant="primary"
-                        busy={busyId === `complete-${b.bookingId}`}
-                        disabled={
-                          busyId !== null &&
-                          busyId !== `complete-${b.bookingId}`
-                        }
-                        onClick={() =>
-                          void run(
-                            `complete-${b.bookingId}`,
-                            () => completeBooking(b.bookingId, token),
-                            "ส่งงานเสร็จแล้ว",
-                          )
-                        }
-                      >
-                        {th.party.complete}
-                      </Button>
-                    </>
-                  )}
-                  {b.state === "ServiceCompleted" && (
+                  </span>
+                  <span className="row__actions actions">
                     <Button
-                      data-testid="review"
-                      busy={busyId === `review-${b.bookingId}`}
+                      data-testid="accept-offer"
+                      variant="primary"
+                      busy={busyId === `accept-${o.offerId}`}
                       disabled={
-                        busyId !== null && busyId !== `review-${b.bookingId}`
+                        busyId !== null && busyId !== `accept-${o.offerId}`
                       }
                       onClick={() =>
                         void run(
-                          `review-${b.bookingId}`,
-                          () => createReview(b.bookingId, { score: 5 }, token),
-                          "รีวิวแล้ว",
+                          `accept-${o.offerId}`,
+                          () => acceptOffer(o.offerId, token),
+                          "ยอมรับข้อเสนอแล้ว (รอคลินิกยืนยัน)",
                         )
                       }
                     >
-                      {th.party.review}
+                      {th.party.acceptOffer}
                     </Button>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+                    <Button
+                      data-testid="decline-offer"
+                      variant="subtle"
+                      busy={busyId === `decline-${o.offerId}`}
+                      disabled={
+                        busyId !== null && busyId !== `decline-${o.offerId}`
+                      }
+                      onClick={() =>
+                        void run(
+                          `decline-${o.offerId}`,
+                          () => declineOffer(o.offerId, token),
+                          "ปฏิเสธข้อเสนอแล้ว",
+                        )
+                      }
+                    >
+                      {th.party.declineOffer}
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock
+          title={th.party.myJobs}
+          count={countOrEllipsis(bookings.length, bookings.length === 0)}
+        >
+          <div className="card">
+            <ul
+              className="rowlist"
+              data-testid="pro-bookings"
+              aria-busy={listLoading || undefined}
+            >
+              {listLoading && bookings.length === 0 && <RowSkeleton />}
+              {!listLoading && bookings.length === 0 && (
+                <EmptyState
+                  as="li"
+                  title={th.party.noJobs}
+                  description={th.party.noJobsDesc}
+                  icon={<CheckIcon />}
+                />
+              )}
+              {bookings.map((b) => (
+                <li
+                  key={b.bookingId}
+                  data-testid={`pro-booking-${b.bookingId}`}
+                  style={{ alignItems: "flex-start" }}
+                >
+                  <span className="row__avatar row__avatar--job" aria-hidden>
+                    <CheckIcon />
+                  </span>
+                  <span className="row__main">
+                    <span className="row__money">
+                      {formatThb(b.compensation)}
+                    </span>
+                    <span className="row__sub">
+                      <Badge tone="info">{statusLabel(b.state)}</Badge>{" "}
+                      <span className="muted">
+                        {th.party.payoutLabel}: {statusLabel(b.payoutState)}
+                      </span>
+                    </span>
+                    {nextActionHint(b.state) ? (
+                      <span className="row__hint muted">
+                        {nextActionHint(b.state)}
+                      </span>
+                    ) : null}
+                    {(b.state === "Confirmed" || b.state === "InProgress") && (
+                      <div style={{ marginTop: "var(--s3)", maxWidth: 320 }}>
+                        <CheckoutSummary
+                          checkout={{
+                            compensation: b.compensation,
+                            serviceFee: b.serviceFee,
+                            tax: b.tax,
+                            total: b.total,
+                          }}
+                        />
+                      </div>
+                    )}
+                    <div style={{ marginTop: "var(--s3)" }}>
+                      <BookingThread
+                        bookingId={b.bookingId}
+                        token={token}
+                        selfId={proId}
+                      />
+                    </div>
+                  </span>
+                  <span className="row__actions actions">
+                    {(b.state === "Confirmed" || b.state === "InProgress") && (
+                      <>
+                        <Button
+                          data-testid="arrive"
+                          busy={busyId === `arrive-${b.bookingId}`}
+                          disabled={
+                            busyId !== null &&
+                            busyId !== `arrive-${b.bookingId}`
+                          }
+                          onClick={() =>
+                            void run(
+                              `arrive-${b.bookingId}`,
+                              () => arriveBooking(b.bookingId, token),
+                              "บันทึกการมาถึงแล้ว",
+                            )
+                          }
+                        >
+                          {th.party.arrive}
+                        </Button>
+                        <Button
+                          data-testid="complete"
+                          variant="primary"
+                          busy={busyId === `complete-${b.bookingId}`}
+                          disabled={
+                            busyId !== null &&
+                            busyId !== `complete-${b.bookingId}`
+                          }
+                          onClick={() =>
+                            void run(
+                              `complete-${b.bookingId}`,
+                              () => completeBooking(b.bookingId, token),
+                              "ส่งงานเสร็จแล้ว",
+                            )
+                          }
+                        >
+                          {th.party.complete}
+                        </Button>
+                      </>
+                    )}
+                    {b.state === "ServiceCompleted" && (
+                      <Button
+                        data-testid="review"
+                        busy={busyId === `review-${b.bookingId}`}
+                        disabled={
+                          busyId !== null && busyId !== `review-${b.bookingId}`
+                        }
+                        onClick={() =>
+                          void run(
+                            `review-${b.bookingId}`,
+                            () =>
+                              createReview(b.bookingId, { score: 5 }, token),
+                            "รีวิวแล้ว",
+                          )
+                        }
+                      >
+                        {th.party.review}
+                      </Button>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock
+          id="open-shifts-section"
+          title={th.party.openShifts}
+          count={countOrEllipsis(shifts.length, shifts.length === 0)}
+        >
+          <div
+            className="filter-bar filter-bar--panel"
+            data-testid="shift-filters"
+          >
+            <label>
+              {th.party.filterCategory}
+              <input
+                data-testid="filter-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="general"
+              />
+            </label>
+            <label>
+              {th.party.filterUrgency}
+              <select
+                data-testid="filter-urgency"
+                value={urgency}
+                onChange={(e) =>
+                  setUrgency(e.target.value as "" | "standard" | "urgent")
+                }
+              >
+                <option value="">{th.party.urgencyAll}</option>
+                <option value="urgent">{th.party.urgencyUrgent}</option>
+                <option value="standard">{th.party.urgencyStandard}</option>
+              </select>
+            </label>
+            <label>
+              {th.party.filterMinBaht}
+              <input
+                data-testid="filter-min"
+                inputMode="numeric"
+                value={minBaht}
+                onChange={(e) =>
+                  setMinBaht(e.target.value.replace(/[^0-9]/g, ""))
+                }
+              />
+            </label>
+            <Button
+              data-testid="filter-apply"
+              busy={busyId === "filter"}
+              disabled={busyId !== null && busyId !== "filter"}
+              onClick={() => {
+                if (!token) return;
+                setBusyId("filter");
+                void loadShifts(token, currentFilters())
+                  .catch((e) => toast.error(getThaiErrorMessage(e)))
+                  .finally(() => setBusyId(null));
+              }}
+            >
+              {th.party.filterApply}
+            </Button>
+            <Button
+              variant="subtle"
+              data-testid="filter-clear"
+              disabled={busyId !== null}
+              onClick={() => {
+                setCategory("");
+                setUrgency("");
+                setMinBaht("");
+                if (token)
+                  void loadShifts(token).catch((e) =>
+                    toast.error(getThaiErrorMessage(e)),
+                  );
+              }}
+            >
+              {th.party.filterClear}
+            </Button>
+          </div>
+          {filterHint ? (
+            <p className="muted" style={{ fontSize: "0.85rem", marginTop: 0 }}>
+              {filterHint}
+            </p>
+          ) : null}
+          <div className="card">
+            <ul
+              className="rowlist"
+              data-testid="open-shifts"
+              aria-busy={listLoading || undefined}
+            >
+              {listLoading && shifts.length === 0 && <RowSkeleton />}
+              {!listLoading && shifts.length === 0 && (
+                <EmptyState
+                  as="li"
+                  title={th.party.noOpenShifts}
+                  description={th.party.noOpenShiftsDesc}
+                  icon={<CalendarIcon />}
+                />
+              )}
+              {shifts.slice(0, 25).map((s) => (
+                <li
+                  key={s.shiftId}
+                  data-testid={`open-${s.shiftId}`}
+                  className={s.urgent ? "row--urgent" : undefined}
+                >
+                  <span
+                    className={`row__avatar${s.urgent ? " row__avatar--urgent" : ""}`}
+                    aria-hidden
+                  >
+                    <StethoscopeIcon />
+                  </span>
+                  <span className="row__main">
+                    <span className="row__money">
+                      {formatThb(s.compensation)}
+                      {s.urgent && (
+                        <Badge tone="warn">{th.party.urgencyUrgent}</Badge>
+                      )}
+                    </span>
+                    <span className="row__name">
+                      {categoryLabel(s.category)}
+                    </span>
+                    <span className="row__sub muted">
+                      {th.party.shiftStarts} {formatWhen(s.startsAt)}
+                    </span>
+                  </span>
+                  <span className="row__actions">
+                    <Button
+                      data-testid="apply-shift"
+                      busy={busyId === `apply-${s.shiftId}`}
+                      disabled={
+                        !proId ||
+                        (busyId !== null && busyId !== `apply-${s.shiftId}`)
+                      }
+                      onClick={() =>
+                        void run(
+                          `apply-${s.shiftId}`,
+                          () => applyToShift(s.shiftId, proId!, token),
+                          "สมัครแล้ว",
+                        )
+                      }
+                    >
+                      {th.party.apply}
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </SectionBlock>
       </main>
     </>
   );
