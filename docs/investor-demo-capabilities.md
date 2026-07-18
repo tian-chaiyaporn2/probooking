@@ -9,13 +9,19 @@ This is not a feature backlog. It is the checklist of **hands-on actions** I mus
 
 ---
 
-## What is wrong with the demo today
+## What is now built (state of the demo)
 
-- The home page and primary nav push **Ops**, **Finance**, and a one-click **Flow** more than clinic/professional work.
-- Customer surfaces (`/clinic`, `/pro`) exist behind **Sign in**, but the product does not read as “pick a role → do my job.”
-- A scripted vertical slice proves the API; it does **not** prove a customer can navigate, decide, and recover from empty or blocked states.
+The gaps this checklist first flagged are addressed — the app is now navigable by hand from every role:
 
-I want role entry points that are obvious, and actions that match how each side actually staffs or picks up shifts.
+- The **home page leads with a role picker** ("pick a role to start the demo"). Each card shows its mock phone and auto-fills the OTP, so one click signs you in and lands you on that role's workspace. The one-click `/flow` automation is demoted to a dev-team smoke test in the footer.
+- **Clinic** (`/clinic`) and **Professional** (`/pro`) are full interactive workspaces: post/curate shifts, send offers, pay, confirm, complete, review — and pick up work, accept offers, arrive/complete, get paid.
+- **Operations** (`/ops`) verifies clinics/professionals, reviews insurance, resolves credential holds, and enforces holds/suspensions on live bookings.
+- **Finance** (`/finance`) reconciles, exports CSV, and runs a **dual-control refund** (a second finance person must approve).
+- A **"reset demo"** control (on `/signin`) restores the seeded dataset for a clean run.
+
+Everything below remains the **standing pass/fail bar** — the customer journeys the demo must keep proving as the product evolves.
+
+> **Running the demo:** the deployed GitHub Pages site is static; it needs a reachable API. The team runs the API locally + a public tunnel (`scripts/tunnel-deploy.sh`) and points Pages at it. **Caveat:** the one-click OTP auto-fill requires `AUTH_DEV_MODE`, which the tunnel preflight currently refuses (it also exposes `/auth/dev/token`). Reconcile these before a public tunnel demo — see the repo's demo notes.
 
 ---
 
@@ -136,11 +142,12 @@ I want to:
 1. **Sign in as clinic** → post shift → see candidates/applicants → send offer.  
 2. **Switch to professional** → apply or accept offer → see Payment Protected after clinic pays.  
 3. **Switch back to clinic** → confirm payment/confirmation state → complete → review.  
-4. **Ops** → verify a pending party or resolve a hold.  
-5. **Finance** → payout/refund dual-control or reconciliation export.  
+4. **Ops** → verify a pending party, review submitted insurance, or hold/suspend a live booking.  
+5. **Finance** → dual-control refund (propose, then approve as a *second* finance account) or reconciliation export.  
 6. Optional: show one failure path (offer expiry, cancel under 24h, credential hold).
+7. **Reset demo** (on `/signin`) between runs to restore a clean seeded dataset.
 
-Map these to live routes today: `/signin` → `/clinic` | `/pro` | `/ops` | `/finance`. Treat `/flow` as an eng smoke test, not the investor demo.
+Start from the **home page role picker** (or `/signin`) → `/clinic` | `/pro` | `/ops` | `/finance`. Every role has a ready-made account whose mock phone is shown on the card and whose OTP auto-fills. Treat `/flow` as an eng smoke test, not the investor demo.
 
 ---
 
