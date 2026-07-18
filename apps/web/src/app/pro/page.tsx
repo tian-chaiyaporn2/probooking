@@ -7,7 +7,9 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { BookingThread } from "../../components/BookingThread";
 import { CheckoutSummary } from "../../components/CheckoutSummary";
+import { EmptyState } from "../../components/EmptyState";
 import { ProfilePanel } from "../../components/ProfilePanel";
+import { Skeleton } from "../../components/Skeleton";
 import { useToast } from "../../components/Toast";
 import {
   getMe,
@@ -33,16 +35,35 @@ import { checkoutFromCompensation } from "../../lib/checkout";
 import { getThaiErrorMessage, th } from "../../lib/strings";
 import { statusLabel, nextActionHint } from "../../lib/status";
 import { loadSession, clearSession } from "../../lib/session";
+import { verificationBadgeTone } from "../../lib/tones";
+
+function RowSkeleton({ count = 3 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <li key={i} className="rowlist__skeleton" aria-hidden>
+          <span className="row__main">
+            <Skeleton variant="line" />
+            <Skeleton variant="line-short" />
+          </span>
+        </li>
+      ))}
+    </>
+  );
+}
 
 export default function ProPage() {
   const toast = useToast();
   const [token, setToken] = useState<string | null>(null);
   const [me, setMe] = useState<MeIdentity | null>(null);
+  const [meLoading, setMeLoading] = useState(false);
   const [profile, setProfile] = useState<VerifiedProfile | null>(null);
+  const [profileError, setProfileError] = useState(false);
   const [shifts, setShifts] = useState<OpenShift[]>([]);
   const [offers, setOffers] = useState<ProfessionalOfferRow[]>([]);
   const [bookings, setBookings] = useState<PartyBooking[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [urgency, setUrgency] = useState<"" | "standard" | "urgent">("");
   const [minBaht, setMinBaht] = useState("");
@@ -61,13 +82,18 @@ export default function ProPage() {
 
   const load = useCallback(
     async (id: string, tok: string, filters: ShiftBrowseFilters = {}) => {
-      const [of, bk] = await Promise.all([
-        getProfessionalOffers(id, tok),
-        getProfessionalBookings(id, tok),
-      ]);
-      setOffers(of.offers);
-      setBookings(bk.bookings);
-      await loadShifts(tok, filters);
+      setListLoading(true);
+      try {
+        const [of, bk] = await Promise.all([
+          getProfessionalOffers(id, tok),
+          getProfessionalBookings(id, tok),
+        ]);
+        setOffers(of.offers);
+        setBookings(bk.bookings);
+        await loadShifts(tok, filters);
+      } finally {
+        setListLoading(false);
+      }
     },
     [loadShifts],
   );
@@ -76,18 +102,22 @@ export default function ProPage() {
     const sess = loadSession();
     if (!sess) return;
     setToken(sess.token);
+    setMeLoading(true);
     getMe(sess.token)
       .then(async (identity) => {
         setMe(identity);
         if (identity.professionalId) {
           try {
             setProfile(await getProfessionalProfile(identity.professionalId));
+            setProfileError(false);
           } catch {
             setProfile(null);
+            setProfileError(true);
           }
         }
       })
-      .catch((e) => toast.error(getThaiErrorMessage(e)));
+      .catch((e) => toast.error(getThaiErrorMessage(e)))
+      .finally(() => setMeLoading(false));
   }, [toast]);
 
   useEffect(() => {
@@ -104,8 +134,8 @@ export default function ProPage() {
     return filters;
   }
 
-  async function run(fn: () => Promise<unknown>, ok: string) {
-    setBusy(true);
+  async function run(id: string, fn: () => Promise<unknown>, ok: string) {
+    setBusyId(id);
     try {
       await fn();
       if (proId && token) await load(proId, token, currentFilters());
@@ -113,7 +143,7 @@ export default function ProPage() {
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
-      setBusy(false);
+      setBusyId(null);
     }
   }
 
@@ -150,11 +180,19 @@ export default function ProPage() {
       <main id="main" className="page page--party">
         <div className="workspace-head">
           <div>
-            <h1>{me?.professionalName ?? "บุคลากร"}</h1>
+            <h1>
+              {meLoading && !me?.professionalName ? (
+                <Skeleton variant="line" />
+              ) : (
+                (me?.professionalName ?? "บุคลากร")
+              )}
+            </h1>
             <span className="workspace-head__meta">
               บุคลากร ·{" "}
               {me?.professionalVerification && (
-                <Badge tone="success">
+                <Badge
+                  tone={verificationBadgeTone(me.professionalVerification)}
+                >
                   {statusLabel(me.professionalVerification)}
                 </Badge>
               )}
@@ -170,17 +208,29 @@ export default function ProPage() {
           </div>
         </div>
 
-        {profile ? <ProfilePanel profile={profile} /> : null}
+        {profile ? (
+          <ProfilePanel profile={profile} />
+        ) : profileError ? (
+          <p role="status" className="form-error form-error--info">
+            {th.party.profileLoadFailed}
+          </p>
+        ) : null}
 
         <h2>
-          {th.party.offersToMe} ({pendingOffers.length})
+          {th.party.offersToMe} (
+          {listLoading && offers.length === 0 ? "…" : pendingOffers.length})
         </h2>
         <div className="card" style={{ marginBottom: "var(--s5)" }}>
-          <ul className="rowlist" data-testid="pro-offers">
-            {offers.length === 0 && (
-              <li className="empty">{th.party.noOffers}</li>
+          <ul
+            className="rowlist"
+            data-testid="pro-offers"
+            aria-busy={listLoading || undefined}
+          >
+            {listLoading && offers.length === 0 && <RowSkeleton />}
+            {!listLoading && pendingOffers.length === 0 && (
+              <EmptyState as="li" title={th.party.noOffers} />
             )}
-            {offers.map((o) => (
+            {pendingOffers.map((o) => (
               <li
                 key={o.offerId}
                 data-testid={`offer-${o.offerId}`}
@@ -199,52 +249,57 @@ export default function ProPage() {
                       {nextActionHint(o.state)}
                     </span>
                   ) : null}
-                  {o.state === "PendingResponse" ? (
-                    <div style={{ marginTop: "var(--s3)", maxWidth: 320 }}>
-                      <CheckoutSummary
-                        checkout={checkoutFromCompensation(o.compensation)}
-                        protectedStamp={false}
-                      />
-                    </div>
-                  ) : null}
+                  <div style={{ marginTop: "var(--s3)", maxWidth: 320 }}>
+                    <CheckoutSummary
+                      checkout={checkoutFromCompensation(o.compensation)}
+                      protectedStamp={false}
+                    />
+                  </div>
                 </span>
-                {o.state === "PendingResponse" && (
-                  <span className="row__actions actions">
-                    <Button
-                      data-testid="accept-offer"
-                      variant="primary"
-                      busy={busy}
-                      onClick={() =>
-                        void run(
-                          () => acceptOffer(o.offerId, token),
-                          "ยอมรับข้อเสนอแล้ว (รอคลินิกยืนยัน)",
-                        )
-                      }
-                    >
-                      {th.party.acceptOffer}
-                    </Button>
-                    <Button
-                      data-testid="decline-offer"
-                      variant="subtle"
-                      busy={busy}
-                      onClick={() =>
-                        void run(
-                          () => declineOffer(o.offerId, token),
-                          "ปฏิเสธข้อเสนอแล้ว",
-                        )
-                      }
-                    >
-                      {th.party.declineOffer}
-                    </Button>
-                  </span>
-                )}
+                <span className="row__actions actions">
+                  <Button
+                    data-testid="accept-offer"
+                    variant="primary"
+                    busy={busyId === `accept-${o.offerId}`}
+                    disabled={
+                      busyId !== null && busyId !== `accept-${o.offerId}`
+                    }
+                    onClick={() =>
+                      void run(
+                        `accept-${o.offerId}`,
+                        () => acceptOffer(o.offerId, token),
+                        "ยอมรับข้อเสนอแล้ว (รอคลินิกยืนยัน)",
+                      )
+                    }
+                  >
+                    {th.party.acceptOffer}
+                  </Button>
+                  <Button
+                    data-testid="decline-offer"
+                    variant="subtle"
+                    busy={busyId === `decline-${o.offerId}`}
+                    disabled={
+                      busyId !== null && busyId !== `decline-${o.offerId}`
+                    }
+                    onClick={() =>
+                      void run(
+                        `decline-${o.offerId}`,
+                        () => declineOffer(o.offerId, token),
+                        "ปฏิเสธข้อเสนอแล้ว",
+                      )
+                    }
+                  >
+                    {th.party.declineOffer}
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>
         </div>
 
         <h2>
-          {th.party.openShifts} ({shifts.length})
+          {th.party.openShifts} (
+          {listLoading && shifts.length === 0 ? "…" : shifts.length})
         </h2>
         <div className="filter-bar" data-testid="shift-filters">
           <label>
@@ -283,12 +338,14 @@ export default function ProPage() {
           </label>
           <Button
             data-testid="filter-apply"
-            busy={busy}
+            busy={busyId === "filter"}
+            disabled={busyId !== null && busyId !== "filter"}
             onClick={() => {
               if (!token) return;
-              void loadShifts(token, currentFilters()).catch((e) =>
-                toast.error(getThaiErrorMessage(e)),
-              );
+              setBusyId("filter");
+              void loadShifts(token, currentFilters())
+                .catch((e) => toast.error(getThaiErrorMessage(e)))
+                .finally(() => setBusyId(null));
             }}
           >
             {th.party.filterApply}
@@ -296,6 +353,7 @@ export default function ProPage() {
           <Button
             variant="subtle"
             data-testid="filter-clear"
+            disabled={busyId !== null}
             onClick={() => {
               setCategory("");
               setUrgency("");
@@ -315,9 +373,14 @@ export default function ProPage() {
           </p>
         ) : null}
         <div className="card" style={{ marginBottom: "var(--s5)" }}>
-          <ul className="rowlist" data-testid="open-shifts">
-            {shifts.length === 0 && (
-              <li className="empty">{th.party.noOpenShifts}</li>
+          <ul
+            className="rowlist"
+            data-testid="open-shifts"
+            aria-busy={listLoading || undefined}
+          >
+            {listLoading && shifts.length === 0 && <RowSkeleton />}
+            {!listLoading && shifts.length === 0 && (
+              <EmptyState as="li" title={th.party.noOpenShifts} />
             )}
             {shifts.slice(0, 25).map((s) => (
               <li key={s.shiftId} data-testid={`open-${s.shiftId}`}>
@@ -331,9 +394,14 @@ export default function ProPage() {
                 <span className="row__actions">
                   <Button
                     data-testid="apply-shift"
-                    busy={busy}
+                    busy={busyId === `apply-${s.shiftId}`}
+                    disabled={
+                      !proId ||
+                      (busyId !== null && busyId !== `apply-${s.shiftId}`)
+                    }
                     onClick={() =>
                       void run(
+                        `apply-${s.shiftId}`,
                         () => applyToShift(s.shiftId, proId!, token),
                         "สมัครแล้ว",
                       )
@@ -348,12 +416,18 @@ export default function ProPage() {
         </div>
 
         <h2>
-          {th.party.myJobs} ({bookings.length})
+          {th.party.myJobs} (
+          {listLoading && bookings.length === 0 ? "…" : bookings.length})
         </h2>
         <div className="card">
-          <ul className="rowlist" data-testid="pro-bookings">
-            {bookings.length === 0 && (
-              <li className="empty">{th.party.noJobs}</li>
+          <ul
+            className="rowlist"
+            data-testid="pro-bookings"
+            aria-busy={listLoading || undefined}
+          >
+            {listLoading && bookings.length === 0 && <RowSkeleton />}
+            {!listLoading && bookings.length === 0 && (
+              <EmptyState as="li" title={th.party.noJobs} />
             )}
             {bookings.map((b) => (
               <li
@@ -399,9 +473,13 @@ export default function ProPage() {
                     <>
                       <Button
                         data-testid="arrive"
-                        busy={busy}
+                        busy={busyId === `arrive-${b.bookingId}`}
+                        disabled={
+                          busyId !== null && busyId !== `arrive-${b.bookingId}`
+                        }
                         onClick={() =>
                           void run(
+                            `arrive-${b.bookingId}`,
                             () => arriveBooking(b.bookingId, token),
                             "บันทึกการมาถึงแล้ว",
                           )
@@ -412,9 +490,14 @@ export default function ProPage() {
                       <Button
                         data-testid="complete"
                         variant="primary"
-                        busy={busy}
+                        busy={busyId === `complete-${b.bookingId}`}
+                        disabled={
+                          busyId !== null &&
+                          busyId !== `complete-${b.bookingId}`
+                        }
                         onClick={() =>
                           void run(
+                            `complete-${b.bookingId}`,
                             () => completeBooking(b.bookingId, token),
                             "ส่งงานเสร็จแล้ว",
                           )
@@ -427,9 +510,13 @@ export default function ProPage() {
                   {b.state === "ServiceCompleted" && (
                     <Button
                       data-testid="review"
-                      busy={busy}
+                      busy={busyId === `review-${b.bookingId}`}
+                      disabled={
+                        busyId !== null && busyId !== `review-${b.bookingId}`
+                      }
                       onClick={() =>
                         void run(
+                          `review-${b.bookingId}`,
                           () => createReview(b.bookingId, { score: 5 }, token),
                           "รีวิวแล้ว",
                         )

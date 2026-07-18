@@ -42,6 +42,7 @@ import {
 import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
+import { statusLabel } from "../../lib/status";
 import { badgeToneForKind } from "../../lib/tones";
 import { loadSession, clearSession, saveSession } from "../../lib/session";
 
@@ -82,7 +83,12 @@ export default function OpsPage() {
     // hydrate a session that belongs to this surface — a shared session may hold another
     // role's token (e.g. after signing in on /finance), which would 403 here.
     const sess = loadSession();
-    if (sess && (!sess.role || sess.role === "operations" || sess.role === "administrator")) {
+    if (
+      sess &&
+      (!sess.role ||
+        sess.role === "operations" ||
+        sess.role === "administrator")
+    ) {
       setToken(sess.token);
     }
     setBooting(false);
@@ -508,6 +514,17 @@ export default function OpsPage() {
               className="rowlist"
               aria-busy={loading || undefined}
             >
+              {loading &&
+                bookings.length === 0 &&
+                Array.from({ length: 3 }).map((_, i) => (
+                  <li key={i} className="rowlist__skeleton" aria-hidden>
+                    <Skeleton variant="avatar" />
+                    <span className="row__main">
+                      <Skeleton variant="line" />
+                      <Skeleton variant="line-short" />
+                    </span>
+                  </li>
+                ))}
               {!loading && bookings.length === 0 && (
                 <EmptyState
                   as="li"
@@ -526,7 +543,7 @@ export default function OpsPage() {
                   <span className="row__main">
                     <span className="row__name">{b.professionalName}</span>
                     <span className="row__sub">
-                      <Badge tone="info">{b.state}</Badge>
+                      <Badge tone="info">{statusLabel(b.state)}</Badge>
                       <span className="muted">{b.clinicName}</span>
                       {b.held && (
                         <Badge tone="warning">{th.ops.heldBadge}</Badge>

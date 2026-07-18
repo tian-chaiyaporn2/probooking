@@ -4,6 +4,7 @@ import { Badge } from "./Badge";
 import type { VerifiedProfile } from "../lib/api";
 import { statusLabel } from "../lib/status";
 import { th } from "../lib/strings";
+import { verificationBadgeTone } from "../lib/tones";
 
 /** Compact VER-03 profile panel: self-declared vs verified facts. */
 export function ProfilePanel({ profile }: { profile: VerifiedProfile }) {
@@ -30,12 +31,12 @@ export function ProfilePanel({ profile }: { profile: VerifiedProfile }) {
             : th.party.identityPending}
         </Badge>
         {verified.licence ? (
-          <Badge tone="info">
+          <Badge tone={verificationBadgeTone(verified.licence.state)}>
             {th.party.licence}: {statusLabel(verified.licence.state)}
           </Badge>
         ) : null}
         {verified.insurance ? (
-          <Badge tone="info">
+          <Badge tone={verificationBadgeTone(verified.insurance.state)}>
             {th.party.insurance}: {statusLabel(verified.insurance.state)}
           </Badge>
         ) : null}

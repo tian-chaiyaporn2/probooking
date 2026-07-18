@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
+import { EmptyState } from "./EmptyState";
 import { useToast } from "./Toast";
 
 /**
@@ -106,7 +107,7 @@ export function BookingThread({
           ) : (
             <ul className="thread__list" data-testid="thread-messages">
               {messages.length === 0 && (
-                <li className="empty muted">{th.party.noMessages}</li>
+                <EmptyState as="li" title={th.party.noMessages} />
               )}
               {messages.map((m) => {
                 const mine = selfId && m.senderId === selfId;
@@ -143,7 +144,7 @@ export function BookingThread({
           {softWarn ? (
             <p
               role="status"
-              className="form-error"
+              className="form-warn"
               data-testid="thread-soft-warn"
               style={{ marginTop: 6 }}
             >

@@ -7,7 +7,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { KeyValueTable } from "../../components/KeyValueTable";
 import { useToast } from "../../components/Toast";
 import { CheckIcon } from "../../components/icons";
-import { th } from "../../lib/strings";
+import { th, getThaiErrorMessage } from "../../lib/strings";
 import {
   registerClinic,
   registerProfessional,
@@ -116,7 +116,7 @@ export default function FlowPage() {
       setCheckout(confirmed.checkout);
       setBookingId(confirmed.booking.id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Flow failed");
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setRunning(false);
     }
@@ -130,7 +130,7 @@ export default function FlowPage() {
       const result = await acceptCompletion(bookingId, tokens.clinic); // the clinic accepts + pays
       setPayout(result);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Payout failed");
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setPayingOut(false);
     }
@@ -147,7 +147,7 @@ export default function FlowPage() {
       setReviewsPublished(r.published);
       setRating(await getRating(professionalId)); // hasRating false until 3 reviews (REV-04)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Reviews failed");
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setReviewing(false);
     }

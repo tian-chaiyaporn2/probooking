@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
+import { Button } from "../../components/Button";
 import { RolePicker } from "../../components/RolePicker";
 import { useToast } from "../../components/Toast";
 import { resetDemo } from "../../lib/api";
@@ -54,15 +55,15 @@ export default function SignInPage() {
             บัญชีทดลองสำหรับเดโมเท่านั้น (โหมด AUTH_DEV_MODE) — รหัส OTP
             จะกรอกให้อัตโนมัติ
           </p>
-          <button
+          <Button
             type="button"
-            className="btn btn--subtle"
+            variant="subtle"
             data-testid="reset-demo"
-            disabled={resetting}
+            busy={resetting}
             onClick={() => void onReset()}
           >
-            {resetting ? "กำลังรีเซ็ต…" : "รีเซ็ตข้อมูลเดโม"}
-          </button>
+            รีเซ็ตข้อมูลเดโม
+          </Button>
         </div>
       </main>
     </>

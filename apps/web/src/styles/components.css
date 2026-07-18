@@ -703,3 +703,10 @@
   background: var(--info-050); color: var(--info);
   border: 1px solid color-mix(in srgb, var(--info) 22%, transparent);
 }
+
+.form-warn {
+  margin: 0; padding: 0.55rem 0.75rem; border-radius: var(--radius-sm);
+  background: var(--warning-050); color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 22%, transparent);
+  font-size: var(--text-sm); line-height: var(--leading-snug);
+}

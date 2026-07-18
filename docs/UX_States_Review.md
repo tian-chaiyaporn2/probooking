@@ -6,6 +6,8 @@
 **Method:** Code review of App Router pages, state UI components, Thai copy, domain state machines, and CSS  
 **Complements:** [`UX_Review.md`](./UX_Review.md), [`UX_Review_Followup.md`](./UX_Review_Followup.md), [`Mobile_Tablet_UI_Review.md`](./Mobile_Tablet_UI_Review.md)
 
+> **Remediation (same PR):** Findings **S1–S14** below are implemented in-code — Clinic/Pro loading skeletons + per-action `busyId`, search idle copy, verification badge tones + VER Thai labels, Ops `statusLabel` + active skeletons, Finance table skeletons + refund field error, Pro offers list aligned to pending, soft-warn styling, Journey/Flow Thai errors, sign-in reset `Button`, profile-load notice, party `EmptyState` adoption.
+
 ---
 
 ## Verdict

@@ -55,6 +55,12 @@ Money clarity at commitment (CheckoutSummary on clinic confirm / pro accept) and
 
 ---
 
+## Related
+
+- [`UX_States_Review.md`](./UX_States_Review.md) — full states inventory; S1–S14 findings addressed in follow-up implementation on the same PR branch.
+
+---
+
 ## Session note
 
 Next `output: "export"` + Bearer-only API → client `sessionStorage` is the realistic Phase 0 store. Canonical key: `probook.session` `{ token, phone, role? }`. Compatible with e2e `injectSession`.

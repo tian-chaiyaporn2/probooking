@@ -8,7 +8,7 @@ import { CheckoutSummary } from "../../components/CheckoutSummary";
 import { StatusTimeline, timelineStatus } from "../../components/StatusTimeline";
 import { useToast } from "../../components/Toast";
 import { CheckIcon } from "../../components/icons";
-import { th } from "../../lib/strings";
+import { th, getThaiErrorMessage } from "../../lib/strings";
 import {
   registerClinic,
   registerProfessional,
@@ -151,7 +151,7 @@ export default function JourneyPage() {
         setStepIndex(6);
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : th.errors.generic);
+      toast.error(getThaiErrorMessage(e));
     } finally {
       setBusy(false);
     }
