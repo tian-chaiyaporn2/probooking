@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { LIST_LIMITS } from "./list-limits.js";
 import type {
   MarketplaceRepository,
   OfferRecord,
@@ -434,6 +435,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return this.availabilityBlocks
       .filter((b) => b.professionalId === professionalId)
       .sort((a, b) => a.startsAt - b.startsAt)
+      .slice(0, LIST_LIMITS.availability)
       .map((b) => ({ id: b.id, startsAt: b.startsAt, endsAt: b.endsAt, openToRequests: b.openToRequests }));
   }
 
@@ -822,6 +824,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return this.messages
       .filter((m) => m.bookingId === bookingId)
       .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, LIST_LIMITS.messages)
       .map((m) => ({ id: m.id, senderId: m.senderId, body: m.body, createdAt: m.createdAt }));
   }
 
@@ -931,7 +934,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       });
     }
     // Most-recent first, matching the Prisma store's `orderBy: confirmedAt desc`.
-    return rows.reverse();
+    return rows.reverse().slice(0, LIST_LIMITS.partyBookings);
   }
 
   async exportFinancials(): Promise<FinanceExportRow[]> {
@@ -954,7 +957,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         events,
       });
     }
-    return rows;
+    return rows.slice(0, LIST_LIMITS.financeExport);
   }
 
   private readonly audit: AuditRow[] = [];
