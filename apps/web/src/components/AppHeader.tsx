@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { logout } from "../lib/api";
@@ -36,8 +37,7 @@ function accountLabel(session: AppSession): string | null {
 }
 
 function workspaceLink(role: SessionRole): NavLink | null {
-  if (role === "clinic")
-    return { href: "/clinic", label: th.party.navClinic };
+  if (role === "clinic") return { href: "/clinic", label: th.party.navClinic };
   if (role === "professional") return { href: "/pro", label: th.party.navPro };
   if (role === "operations") return { href: "/ops", label: th.nav.ops };
   if (role === "finance") return { href: "/finance", label: th.nav.finance };
@@ -66,10 +66,16 @@ export function AppHeader({ current }: { current?: string }) {
   // sessionStorage in the initializer would render a signed-in tree over signed-out HTML and
   // trip a hydration mismatch on a hard reload while signed in.
   const [session, setSession] = useState<AppSession | null>(null);
+  // Portal target is body — only available after mount (static export / SSR).
+  const [mounted, setMounted] = useState(false);
   const drawerId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const refresh = () => setSession(loadSession());
@@ -171,113 +177,120 @@ export function AppHeader({ current }: { current?: string }) {
     ));
   }
 
-  return (
-    <header className="app-header">
-      <div className="app-header__inner">
-        <Link className="brand" href="/" onClick={() => setOpen(false)}>
-          <span className="brand__mark" aria-hidden>
-            P
-          </span>
-          {th.brand}
-        </Link>
-
-        <nav
-          className="app-nav app-nav--desktop"
-          aria-label={th.a11y.primaryNav}
-          aria-hidden={open ? true : undefined}
-        >
-          {renderLinks(links)}
-          {showWorkspace && label ? (
-            <span className="account-chip" data-testid="account-chip">
-              {label}
-            </span>
-          ) : null}
-          {signedIn ? (
-            <button
-              type="button"
-              className="nav-signout"
-              data-testid="nav-signout"
-              onClick={() => void signOut()}
-            >
-              {th.nav.signOut}
-            </button>
-          ) : null}
-        </nav>
-
-        <div className="app-header__right">
-          {showWorkspace && label ? (
-            <span
-              className="account-chip account-chip--compact"
-              data-testid="account-chip-mobile"
-            >
-              {label}
-            </span>
-          ) : null}
-          <ThemeToggle />
+  // Backdrop + drawer must NOT live inside `.app-header`: that element uses
+  // `backdrop-filter`, which creates a containing block for `position: fixed`
+  // descendants — the scrim collapses to the header strip and the drawer is
+  // no longer viewport-anchored on mobile Safari/Chrome.
+  const menuOverlay = open ? (
+    <>
+      <button
+        type="button"
+        className="nav-backdrop"
+        data-testid="nav-backdrop"
+        aria-label={th.a11y.closeMenu}
+        onClick={() => setOpen(false)}
+      />
+      <nav
+        ref={drawerRef}
+        id={drawerId}
+        className="app-nav--drawer"
+        aria-label={th.a11y.primaryNav}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="app-nav--drawer__top">
+          <span className="app-nav--drawer__title">{th.a11y.primaryNav}</span>
           <button
-            ref={toggleRef}
+            ref={closeRef}
             type="button"
-            className="nav-toggle"
-            aria-label={open ? th.a11y.closeMenu : th.a11y.openMenu}
-            aria-expanded={open}
-            aria-controls={drawerId}
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? <CloseIcon /> : <MenuIcon />}
-          </button>
-        </div>
-      </div>
-
-      {open && (
-        <>
-          <button
-            className="nav-backdrop"
+            className="nav-drawer-close"
             aria-label={th.a11y.closeMenu}
             onClick={() => setOpen(false)}
-          />
-          <nav
-            ref={drawerRef}
-            id={drawerId}
-            className="app-nav--drawer"
-            aria-label={th.a11y.primaryNav}
-            role="dialog"
-            aria-modal="true"
           >
-            <div className="app-nav--drawer__top">
-              <span className="app-nav--drawer__title">
-                {th.a11y.primaryNav}
-              </span>
-              <button
-                ref={closeRef}
-                type="button"
-                className="nav-drawer-close"
-                aria-label={th.a11y.closeMenu}
-                onClick={() => setOpen(false)}
-              >
-                <CloseIcon />
-              </button>
-            </div>
+            <CloseIcon />
+          </button>
+        </div>
+        {showWorkspace && label ? (
+          <p className="app-nav--drawer__account" data-testid="drawer-account">
+            {th.nav.accountLabel(label)}
+          </p>
+        ) : null}
+        <p className="app-nav--drawer__group">{th.nav.publicGroup}</p>
+        {renderLinks(links, () => setOpen(false))}
+        {signedIn ? (
+          <button
+            type="button"
+            className="nav-drawer-signout"
+            data-testid="drawer-signout"
+            onClick={() => void signOut()}
+          >
+            {th.nav.signOut}
+          </button>
+        ) : null}
+        <p className="app-nav--drawer__foot">{th.home.marketSignal}</p>
+      </nav>
+    </>
+  ) : null;
+
+  return (
+    <>
+      <header className={`app-header${open ? " app-header--menu-open" : ""}`}>
+        <div className="app-header__inner">
+          <Link className="brand" href="/" onClick={() => setOpen(false)}>
+            <span className="brand__mark" aria-hidden>
+              P
+            </span>
+            {th.brand}
+          </Link>
+
+          <nav
+            className="app-nav app-nav--desktop"
+            aria-label={th.a11y.primaryNav}
+            aria-hidden={open ? true : undefined}
+          >
+            {renderLinks(links)}
             {showWorkspace && label ? (
-              <p className="app-nav--drawer__account" data-testid="drawer-account">
-                {th.nav.accountLabel(label)}
-              </p>
+              <span className="account-chip" data-testid="account-chip">
+                {label}
+              </span>
             ) : null}
-            <p className="app-nav--drawer__group">{th.nav.publicGroup}</p>
-            {renderLinks(links, () => setOpen(false))}
             {signedIn ? (
               <button
                 type="button"
-                className="nav-drawer-signout"
-                data-testid="drawer-signout"
+                className="nav-signout"
+                data-testid="nav-signout"
                 onClick={() => void signOut()}
               >
                 {th.nav.signOut}
               </button>
             ) : null}
-            <p className="app-nav--drawer__foot">{th.home.marketSignal}</p>
           </nav>
-        </>
-      )}
-    </header>
+
+          <div className="app-header__right">
+            {showWorkspace && label ? (
+              <span
+                className="account-chip account-chip--compact"
+                data-testid="account-chip-mobile"
+              >
+                {label}
+              </span>
+            ) : null}
+            <ThemeToggle />
+            <button
+              ref={toggleRef}
+              type="button"
+              className="nav-toggle"
+              aria-label={open ? th.a11y.closeMenu : th.a11y.openMenu}
+              aria-expanded={open}
+              aria-controls={drawerId}
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? <CloseIcon /> : <MenuIcon />}
+            </button>
+          </div>
+        </div>
+      </header>
+      {mounted && menuOverlay ? createPortal(menuOverlay, document.body) : null}
+    </>
   );
 }
