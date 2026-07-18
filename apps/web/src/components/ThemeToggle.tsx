@@ -21,6 +21,10 @@ function systemTheme(): Theme {
 
 function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute("content", theme === "dark" ? "#0b1220" : "#f4faf8");
+  }
 }
 
 /** Reads the resolved theme (set pre-paint by the layout script) and toggles/persists it. */

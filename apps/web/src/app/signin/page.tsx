@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { Button } from "../../components/Button";
+import { PageHeader } from "../../components/PageHeader";
 import { RolePicker } from "../../components/RolePicker";
 import { useToast } from "../../components/Toast";
 import { resetDemo } from "../../lib/api";
-import { getThaiErrorMessage } from "../../lib/strings";
+import { getThaiErrorMessage, th } from "../../lib/strings";
 import { clearSession } from "../../lib/session";
 
 /**
@@ -23,7 +24,7 @@ export default function SignInPage() {
     try {
       await resetDemo();
       clearSession();
-      toast.success("รีเซ็ตข้อมูลเดโมแล้ว");
+      toast.success(th.signin.resetDone);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
@@ -34,13 +35,8 @@ export default function SignInPage() {
   return (
     <>
       <AppHeader current="/signin" />
-      <main className="page" style={{ maxWidth: 720 }}>
-        <header style={{ marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: "0 0 var(--s2)" }}>เข้าใช้งานในบทบาทต่าง ๆ</h1>
-          <p className="muted" style={{ margin: 0 }}>
-            เลือกบัญชีทดลองเพื่อเข้าใช้งานในมุมมองของแต่ละบทบาท
-          </p>
-        </header>
+      <main id="main" className="page" style={{ maxWidth: 720 }}>
+        <PageHeader title={th.signin.title} subtitle={th.signin.subtitle} />
         <RolePicker />
         <div
           className="actions"
@@ -52,8 +48,7 @@ export default function SignInPage() {
           }}
         >
           <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
-            บัญชีทดลองสำหรับเดโมเท่านั้น (โหมด AUTH_DEV_MODE) — รหัส OTP
-            จะกรอกให้อัตโนมัติ
+            {th.signin.demoHint}
           </p>
           <Button
             type="button"
@@ -62,7 +57,7 @@ export default function SignInPage() {
             busy={resetting}
             onClick={() => void onReset()}
           >
-            รีเซ็ตข้อมูลเดโม
+            {th.signin.reset}
           </Button>
         </div>
       </main>

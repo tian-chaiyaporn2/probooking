@@ -10,7 +10,7 @@ import {
   WalletIcon,
 } from "./icons";
 import { loginAs } from "../lib/api";
-import { getThaiErrorMessage } from "../lib/strings";
+import { getThaiErrorMessage, th } from "../lib/strings";
 import {
   DEMO_ACCOUNTS,
   saveSession,
@@ -49,9 +49,13 @@ export function RolePicker() {
   }
 
   return (
-    <div className="signin-grid">
+    <div
+      className="signin-grid"
+      aria-busy={busy !== null || undefined}
+    >
       {DEMO_ACCOUNTS.map((acc) => {
         const Icon = ICONS[acc.icon];
+        const isBusy = busy === acc.phone;
         return (
           <button
             key={acc.phone}
@@ -59,6 +63,7 @@ export function RolePicker() {
             className="signin-card"
             data-testid={`signin-${acc.id}`}
             disabled={busy !== null}
+            aria-busy={isBusy || undefined}
             onClick={() => void signInAs(acc)}
           >
             <span className="signin-card__top">
@@ -74,7 +79,14 @@ export function RolePicker() {
               </span>
             </span>
             <span className="signin-card__go">
-              {busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}
+              {isBusy ? (
+                <>
+                  <span className="btn__spinner" aria-hidden />
+                  {th.common.loading}
+                </>
+              ) : (
+                "เข้าสู่ระบบ →"
+              )}
             </span>
           </button>
         );

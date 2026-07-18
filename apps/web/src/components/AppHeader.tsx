@@ -19,7 +19,6 @@ const LINKS: NavLink[] = [
   { href: "/signin", label: th.nav.signin, group: "public" },
   { href: "/ops", label: th.nav.ops, group: "staff" },
   { href: "/finance", label: th.nav.finance, group: "staff" },
-  { href: "/flow", label: th.nav.flow, group: "public" },
 ];
 
 const DRAWER_MQ = "(min-width: 960px)";
@@ -45,8 +44,17 @@ export function AppHeader({ current }: { current?: string }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const s = loadSession();
-    setRole(s?.role);
+    const sync = () => {
+      const s = loadSession();
+      setRole(s?.role);
+    };
+    sync();
+    window.addEventListener("focus", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("storage", sync);
+    };
   }, [current]);
 
   useEffect(() => {
@@ -191,7 +199,6 @@ export function AppHeader({ current }: { current?: string }) {
             {renderLinks(publicLinks, () => setOpen(false))}
             <p className="app-nav--drawer__group">{th.nav.staffGroup}</p>
             {renderLinks(staffLinks, () => setOpen(false))}
-            <p className="app-nav--drawer__foot">{th.home.phase}</p>
           </nav>
         </>
       )}

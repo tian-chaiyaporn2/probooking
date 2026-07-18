@@ -476,6 +476,9 @@ export default function FinancePage() {
         cancelLabel={th.finance.cancel}
         confirmTestId="refund-submit"
         busy={busy}
+        confirmDisabled={
+          !refundAmount || Number(refundAmount) <= 0 || !!refundAmountError
+        }
         onCancel={() => {
           if (!busy) setRefundFor(null);
         }}

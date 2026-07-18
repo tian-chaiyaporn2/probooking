@@ -52,6 +52,7 @@ export default function FlowPage() {
   const [running, setRunning] = useState(false);
   const [payingOut, setPayingOut] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [runFailed, setRunFailed] = useState(false);
 
   const FLOW_TOTAL = 7;
   const progressPct = Math.min(100, Math.round((steps.length / FLOW_TOTAL) * 100));
@@ -66,6 +67,7 @@ export default function FlowPage() {
     setReviewsPublished(false);
     setRating(null);
     setTokens(null);
+    setRunFailed(false);
     const log = (label: string, detail: string) =>
       setSteps((s) => [...s, { label, detail }]);
     try {
@@ -116,6 +118,7 @@ export default function FlowPage() {
       setCheckout(confirmed.checkout);
       setBookingId(confirmed.booking.id);
     } catch (e) {
+      setRunFailed(true);
       toast.error(getThaiErrorMessage(e));
     } finally {
       setRunning(false);
@@ -186,6 +189,12 @@ export default function FlowPage() {
               />
             </div>
           </div>
+        )}
+
+        {runFailed && !bookingId && (
+          <p role="alert" className="form-error" data-testid="flow-failed">
+            {th.flow.runFailed}
+          </p>
         )}
 
         {/* Preview the flow before it runs, so the page is not an empty button in a void. */}

@@ -83,22 +83,37 @@ export default function Home() {
               <p className="home-surface__desc">{th.home.journeyDesc}</p>
               <span className="home-surface__cta">{th.home.open} →</span>
             </Link>
-            <div className="home-surface">
+            <Link
+              href="/signin"
+              className="home-surface"
+              data-testid="home-audience-clinic"
+            >
               <span className="home-surface__title">
                 {th.home.audienceClinic}
               </span>
               <p className="home-surface__desc">{th.home.audienceClinicDesc}</p>
-            </div>
-            <div className="home-surface">
+              <span className="home-surface__cta">{th.party.pickAccount} →</span>
+            </Link>
+            <Link
+              href="/signin"
+              className="home-surface"
+              data-testid="home-audience-pro"
+            >
               <span className="home-surface__title">{th.home.audiencePro}</span>
               <p className="home-surface__desc">{th.home.audienceProDesc}</p>
-            </div>
-            <div className="home-surface">
+              <span className="home-surface__cta">{th.party.pickAccount} →</span>
+            </Link>
+            <Link
+              href="/signin"
+              className="home-surface"
+              data-testid="home-audience-staff"
+            >
               <span className="home-surface__title">
                 {th.home.audienceStaff}
               </span>
               <p className="home-surface__desc">{th.home.audienceStaffDesc}</p>
-            </div>
+              <span className="home-surface__cta">{th.party.pickAccount} →</span>
+            </Link>
           </div>
         </section>
 
@@ -136,10 +151,10 @@ export default function Home() {
             <span className="brand__mark" aria-hidden>
               P
             </span>
-            ProBooking
+            {th.brand}
           </span>
           <span className="footer__meta">
-            <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+            <span>{th.home.phase}</span>
             <Link
               href="/journey"
               className="footer__link"

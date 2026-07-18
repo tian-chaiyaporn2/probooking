@@ -433,12 +433,12 @@
   overscroll-behavior-x: contain;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
   box-shadow: var(--shadow-sm);
-  /* Edge fades: local gradients move with content; scroll shadows stay pinned — hint more columns. */
+  /* Edge fades use ink-tinted tokens so they work in light and dark. */
   background:
     linear-gradient(90deg, var(--surface) 70%, transparent) 0 0 / 2.5rem 100% local,
     linear-gradient(270deg, var(--surface) 70%, transparent) 100% 0 / 2.5rem 100% local,
-    linear-gradient(90deg, rgba(15, 23, 42, 0.08), transparent) 0 0 / 0.85rem 100% scroll,
-    linear-gradient(270deg, rgba(15, 23, 42, 0.08), transparent) 100% 0 / 0.85rem 100% scroll,
+    linear-gradient(90deg, color-mix(in srgb, var(--ink) 12%, transparent), transparent) 0 0 / 0.85rem 100% scroll,
+    linear-gradient(270deg, color-mix(in srgb, var(--ink) 12%, transparent), transparent) 100% 0 / 0.85rem 100% scroll,
     var(--surface);
   background-repeat: no-repeat;
   scrollbar-width: thin;
@@ -615,9 +615,17 @@
   font: inherit; font-size: max(16px, var(--text-base)); resize: vertical;
   min-height: 4.5rem;
 }
+.thread__compose textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
 .thread__compose textarea.thread__draft--warn {
   border-color: var(--warning);
 }
+.thread__contact { font-size: var(--text-sm); margin: 0 0 var(--s3); }
+.thread__hint { font-size: var(--text-sm); }
+.thread__send { margin-top: var(--s2); }
 
 /* ---- Timeline ---- */
 .timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }

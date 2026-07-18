@@ -6,6 +6,8 @@
 **Method:** Code review of pages, components, and CSS  
 **Complements:** [`UX_States_Review.md`](./UX_States_Review.md), [`UX_Review.md`](./UX_Review.md), [`Mobile_Tablet_UI_Review.md`](./Mobile_Tablet_UI_Review.md)
 
+> **Remediation (same PR family):** Findings **R1–R45** addressed in-code where actionable — skip-link/`#main`, error chrome, journey actor sync, audience links, thread labels + soft-warn a11y, `/flow` demoted from nav, RolePicker busy a11y, Dialog `confirmDisabled` + `aria-describedby`, StaffLogin OTP phone echo, StatusTimeline `aria-current`, toast timer cleanup, dark table-scroll fades, dead modal/emoji CSS removed. R10/R31 largely landed earlier via i18n #40.
+
 ---
 
 ## Verdict

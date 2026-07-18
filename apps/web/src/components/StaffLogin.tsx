@@ -141,7 +141,6 @@ export function StaffLogin({
                 aria-describedby={error ? errorId : undefined}
                 inputMode="tel"
                 autoComplete="tel"
-                autoFocus
                 required
                 placeholder="+66…"
                 value={phone}
@@ -159,6 +158,9 @@ export function StaffLogin({
               if (code.length >= 6) void submitCode();
             }}
           >
+            <p className="muted" style={{ marginTop: 0, fontSize: "0.9rem" }}>
+              {th.staffLogin.codeSentTo(phone)}
+            </p>
             <Field label={th.staffLogin.codeLabel} htmlFor="staff-otp">
               <Input
                 id="staff-otp"
