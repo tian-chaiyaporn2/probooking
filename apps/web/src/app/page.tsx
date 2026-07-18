@@ -1,14 +1,8 @@
 import Link from "next/link";
 import { AppHeader } from "../components/AppHeader";
-import { ButtonLink, ButtonAnchor } from "../components/Button";
-import { ShieldCheckIcon, CalendarIcon, WalletIcon, ArrowRightIcon } from "../components/icons";
+import { RolePicker } from "../components/RolePicker";
+import { ShieldCheckIcon, WalletIcon } from "../components/icons";
 import { th } from "../lib/strings";
-
-const SURFACES = [
-  { href: "/flow", icon: <CalendarIcon />, title: th.home.flowLink, desc: th.home.flowDesc, testid: "flow-link" },
-  { href: "/ops", icon: <ShieldCheckIcon />, title: th.home.opsLink, desc: th.home.opsDesc, testid: "ops-link" },
-  { href: "/finance", icon: <WalletIcon />, title: th.home.financeLink, desc: th.home.financeDesc, testid: "finance-link" },
-];
 
 export default function Home() {
   return (
@@ -23,14 +17,6 @@ export default function Home() {
             </span>
             <h1>{th.home.tagline}</h1>
             <p className="lead muted">{th.home.description}</p>
-            <div className="hero__actions">
-              <ButtonLink href="/flow" variant="primary" size="lg" data-testid="hero-flow-link">
-                {th.home.ctaPrimary} <ArrowRightIcon />
-              </ButtonLink>
-              <ButtonAnchor href="#how" variant="ghost" size="lg">
-                {th.home.ctaSecondary}
-              </ButtonAnchor>
-            </div>
           </div>
 
           {/* Product moment: the protected booking checkout the marketplace actually settles. */}
@@ -55,6 +41,15 @@ export default function Home() {
               <span className="mockcard__stamp"><WalletIcon /> คุ้มครองการชำระเงิน</span>
             </div>
           </div>
+        </section>
+
+        {/* Primary entry point: pick a role and drive the marketplace by hand. */}
+        <section id="start">
+          <div className="section-head">
+            <h2>{th.home.pickTitle}</h2>
+            <p>{th.home.pickSubtitle}</p>
+          </div>
+          <RolePicker />
         </section>
 
         <section id="how">
@@ -82,25 +77,6 @@ export default function Home() {
           ))}
         </p>
 
-        <section>
-          <div className="section-head">
-            <h2>{th.home.surfacesTitle}</h2>
-            <p>{th.home.surfacesSubtitle}</p>
-          </div>
-          <div className="cta-grid">
-            {SURFACES.map((c) => (
-              <Link key={c.href} href={c.href} className="cta-card" data-testid={c.testid}>
-                <span className="cta-card__icon">{c.icon}</span>
-                <span className="cta-card__title">{c.title}</span>
-                <span className="cta-card__desc">{c.desc}</span>
-                <span className="cta-card__arrow">
-                  {th.home.open} <ArrowRightIcon />
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
         <footer className="footer">
           <span className="footer__brand">
             <span className="brand__mark" aria-hidden>
@@ -108,7 +84,12 @@ export default function Home() {
             </span>
             ProBooking
           </span>
-          <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+          <span className="footer__meta">
+            <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+            <Link href="/flow" className="footer__link" data-testid="flow-link">
+              {th.home.flowSmokeNote}
+            </Link>
+          </span>
         </footer>
       </main>
     </>
