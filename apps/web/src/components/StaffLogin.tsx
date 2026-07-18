@@ -6,6 +6,7 @@ import { getThaiErrorMessage, th } from "../lib/strings";
 import { Button } from "./Button";
 import { Field, Input } from "./Field";
 import { ShieldCheckIcon, WalletIcon } from "./icons";
+import { DEMO_ACCOUNTS } from "../lib/demo-accounts";
 
 const OPS_ROLES = new Set(["operations", "administrator"]);
 const FINANCE_ROLES = new Set(["finance", "administrator"]);
@@ -63,11 +64,15 @@ export function StaffLogin({
     onToken(token);
   }
 
-  async function sendCode() {
+  // The ready-made demo account for this surface (one-click sign-in; OTP auto-fills).
+  const demoPhone = DEMO_ACCOUNTS.find((a) => a.role === surface)?.phone;
+
+  async function sendCode(withPhone?: string) {
     setBusy(true);
     setError(null);
     try {
-      const normalized = normalizePhone(phone);
+      const normalized = normalizePhone(withPhone ?? phone);
+      if (withPhone) setPhone(withPhone);
       const { devCode } = await requestOtp(normalized);
       if (devCode) {
         await completeLogin(normalized, devCode);
@@ -106,6 +111,20 @@ export function StaffLogin({
             {sessionNotice}
           </p>
         ) : null}
+        {demoPhone && stage === "phone" && (
+          <div className="staff-demo">
+            <p className="staff-demo__hint muted">{th.staffLogin.demoHint}</p>
+            <Button
+              type="button"
+              variant="subtle"
+              data-testid="staff-use-demo"
+              busy={busy}
+              onClick={() => void sendCode(demoPhone)}
+            >
+              {th.staffLogin.useDemo} · <code>{demoPhone}</code>
+            </Button>
+          </div>
+        )}
         {stage === "phone" ? (
           <form
             onSubmit={(e) => {

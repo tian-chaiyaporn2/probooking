@@ -22,8 +22,15 @@
 .signin-card__body { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .signin-card__label { font-weight: 700; color: var(--ink); }
 .signin-card__sub { font-size: 0.82rem; color: var(--muted); }
+.signin-card__phone { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+.signin-card__phone code { font-size: 0.75rem; background: var(--primary-050); padding: 1px 5px; border-radius: 5px; color: var(--primary); }
 .signin-card__go { color: var(--primary); font-weight: 700; font-size: 0.85rem; flex: none; }
 
 /* Modal dialog (finance refund proposal) */
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: var(--s4); background: color-mix(in srgb, #000 45%, transparent); }
 .modal { width: 100%; max-width: 420px; }
+
+/* Staff-login demo shortcut */
+.staff-demo { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s4); padding: var(--s3); border: 1px dashed var(--line); border-radius: 10px; background: var(--surface-2); }
+.staff-demo__hint { font-size: 0.8rem; margin: 0; }
+.staff-demo code { background: var(--primary-050); color: var(--primary); padding: 1px 5px; border-radius: 5px; font-size: 0.8rem; }

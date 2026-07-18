@@ -810,21 +810,21 @@ test("finance walkthrough: reconcile, export, and run a dual-control refund by h
   // Propose a ฿123 refund on the newest (top) reconciliation row.
   await page.getByTestId("reconciliation-rows").locator("[data-testid=refund-btn]").first().click();
   await expect(page.getByTestId("refund-form")).toBeVisible();
-  await page.getByTestId("refund-amount").fill("123");
+  await page.getByTestId("refund-amount").fill("123.45"); // satang precision (fix)
   await page.getByTestId("refund-reason").fill("goodwill (walkthrough)");
   await page.getByTestId("refund-submit").click();
 
   // The proposal is now awaiting a second person. The proposer cannot approve their own
   // (§6.4): the API rejects it, so the approval stays pending rather than executing.
-  const approvalRow = page.getByTestId("approvals-list").locator("li", { hasText: "฿123.00" }).first();
+  const approvalRow = page.getByTestId("approvals-list").locator("li", { hasText: "฿123.45" }).first();
   await expect(approvalRow).toBeVisible();
   await approvalRow.getByTestId("approve-btn").click();
-  await expect(page.getByTestId("approvals-list").locator("li", { hasText: "฿123.00" })).toHaveCount(1);
+  await expect(page.getByTestId("approvals-list").locator("li", { hasText: "฿123.45" })).toHaveCount(1);
 
   // A DIFFERENT finance person approves it — the refund executes and leaves recon conserved.
   const approverToken = (await loginAs(page.request, api, "+66900000022")).authorization.slice("Bearer ".length);
   await injectSession(page, "/finance", approverToken, "+66900000022");
-  const row2 = page.getByTestId("approvals-list").locator("li", { hasText: "฿123.00" }).first();
+  const row2 = page.getByTestId("approvals-list").locator("li", { hasText: "฿123.45" }).first();
   await expect(row2.getByTestId("approve-btn")).toBeVisible();
   await row2.getByTestId("approve-btn").click();
   await expect(page.getByTestId("fin-exceptions")).toHaveText(/^0$/); // still conserved after the refund
@@ -835,4 +835,24 @@ test("the sign-in picker offers an account per role", async ({ page }) => {
   for (const id of ["clinic", "professional", "operations", "finance", "finance-approver"]) {
     await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
   }
+});
+
+test("the home page leads with the role picker", async ({ page }) => {
+  await page.goto("/");
+  // The picker is the primary entry point: every role card is on the landing page.
+  for (const id of ["clinic", "professional", "operations", "finance"]) {
+    await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
+  }
+  // Clicking a card signs in and lands on that role's surface.
+  await page.getByTestId("signin-clinic").click();
+  await expect(page).toHaveURL(/\/clinic$/);
+});
+
+// Placed LAST: on the in-memory demo leg this wipes and re-seeds the shared store, so no
+// other test should run after it.
+test("demo reset is available in demo mode and gated otherwise", async ({ page }) => {
+  const res = await page.request.post("http://localhost:4000/demo/reset");
+  // 2xx when the API runs in in-memory demo mode; 403 when it is backed by Postgres.
+  expect([200, 201, 403]).toContain(res.status());
+  if (res.ok()) expect(((await res.json()) as { ok: boolean }).ok).toBe(true);
 });

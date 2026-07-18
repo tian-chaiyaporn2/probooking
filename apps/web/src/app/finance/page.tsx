@@ -401,9 +401,15 @@ export default function FinancePage() {
               <Input
                 id="refund-amount"
                 data-testid="refund-amount"
-                inputMode="numeric"
+                inputMode="decimal"
                 value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value.replace(/[^0-9]/g, ""))}
+                onChange={(e) => {
+                  // Allow baht with up to two decimal places (satang); keep only the first dot.
+                  let v = e.target.value.replace(/[^0-9.]/g, "");
+                  const dot = v.indexOf(".");
+                  if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+                  setRefundAmount(v);
+                }}
               />
             </Field>
             <Field label={th.finance.refundReason} htmlFor="refund-reason">

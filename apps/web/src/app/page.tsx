@@ -1,72 +1,15 @@
 import Link from "next/link";
 import { AppHeader } from "../components/AppHeader";
-import { ButtonLink, ButtonAnchor } from "../components/Button";
-import {
-  ShieldCheckIcon,
-  CalendarIcon,
-  WalletIcon,
-  ArrowRightIcon,
-  ClinicIcon,
-  StethoscopeIcon,
-  UsersIcon,
-} from "../components/icons";
+import { RolePicker } from "../components/RolePicker";
+import { ShieldCheckIcon, WalletIcon } from "../components/icons";
 import { th } from "../lib/strings";
 
-const AUDIENCES = [
-  {
-    href: "/journey",
-    icon: <ClinicIcon />,
-    title: th.home.audienceClinic,
-    desc: th.home.audienceClinicDesc,
-    testid: "audience-clinic",
-  },
-  {
-    href: "/journey",
-    icon: <StethoscopeIcon />,
-    title: th.home.audiencePro,
-    desc: th.home.audienceProDesc,
-    testid: "audience-pro",
-  },
-  {
-    href: "/ops",
-    icon: <UsersIcon />,
-    title: th.home.audienceStaff,
-    desc: th.home.audienceStaffDesc,
-    testid: "audience-staff",
-  },
-];
-
-const SURFACES = [
-  {
-    href: "/journey",
-    icon: <CalendarIcon />,
-    title: th.home.journeyLink,
-    desc: th.home.journeyDesc,
-    testid: "journey-link",
-  },
-  {
-    href: "/ops",
-    icon: <ShieldCheckIcon />,
-    title: th.home.opsLink,
-    desc: th.home.opsDesc,
-    testid: "ops-link",
-  },
-  {
-    href: "/finance",
-    icon: <WalletIcon />,
-    title: th.home.financeLink,
-    desc: th.home.financeDesc,
-    testid: "finance-link",
-  },
-  {
-    href: "/flow",
-    icon: <CalendarIcon />,
-    title: th.home.flowLink,
-    desc: th.home.flowDesc,
-    testid: "flow-link",
-  },
-];
-
+/**
+ * Landing: master leads with the interactive RolePicker (investor/demo entry).
+ * Phase 0 honesty copy remains in `th.home.description`. Journey/surfaces cards from
+ * the UX branch were dropped here — they conflicted with #26's "lead with role picker"
+ * intent; `/journey` stays reachable via nav.
+ */
 export default function Home() {
   return (
     <>
@@ -80,14 +23,6 @@ export default function Home() {
             </span>
             <h1>{th.home.tagline}</h1>
             <p className="lead muted">{th.home.description}</p>
-            <div className="hero__actions">
-              <ButtonLink href="/journey" variant="primary" size="lg" data-testid="hero-journey-link">
-                {th.home.ctaPrimary} <ArrowRightIcon />
-              </ButtonLink>
-              <ButtonAnchor href="#how" variant="ghost" size="lg">
-                {th.home.ctaSecondary}
-              </ButtonAnchor>
-            </div>
           </div>
 
           {/* Product moment: the protected booking checkout the marketplace actually settles. */}
@@ -128,6 +63,15 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Primary entry point: pick a role and drive the marketplace by hand. */}
+        <section id="start">
+          <div className="section-head">
+            <h2>{th.home.pickTitle}</h2>
+            <p>{th.home.pickSubtitle}</p>
+          </div>
+          <RolePicker />
+        </section>
+
         <section id="how">
           <div className="section-head">
             <h2>{th.home.howTitle}</h2>
@@ -147,52 +91,15 @@ export default function Home() {
         <p className="trust-line" aria-label={th.home.trust.join(" · ")}>
           {th.home.trust.map((t, i) => (
             <span key={t}>
-              {i > 0 && <span className="trust-line__dot" aria-hidden>
-                ·
-              </span>}
+              {i > 0 && (
+                <span className="trust-line__dot" aria-hidden>
+                  ·
+                </span>
+              )}
               {t}
             </span>
           ))}
         </p>
-
-        <section>
-          <div className="section-head">
-            <h2>{th.home.audiencesTitle}</h2>
-            <p>{th.home.audiencesSubtitle}</p>
-          </div>
-          <div className="cta-grid cta-grid--3">
-            {AUDIENCES.map((c) => (
-              <Link key={c.testid} href={c.href} className="cta-card" data-testid={c.testid}>
-                <span className="cta-card__icon">{c.icon}</span>
-                <span className="cta-card__title">{c.title}</span>
-                <span className="cta-card__desc">{c.desc}</span>
-                <span className="cta-card__arrow">
-                  {th.home.open} <ArrowRightIcon />
-                </span>
-              </Link>
-            ))}
-          </div>
-          <p className="contact-note muted">{th.home.contactNote}</p>
-        </section>
-
-        <section>
-          <div className="section-head">
-            <h2>{th.home.surfacesTitle}</h2>
-            <p>{th.home.surfacesSubtitle}</p>
-          </div>
-          <div className="cta-grid">
-            {SURFACES.map((c) => (
-              <Link key={c.href + c.testid} href={c.href} className="cta-card" data-testid={c.testid}>
-                <span className="cta-card__icon">{c.icon}</span>
-                <span className="cta-card__title">{c.title}</span>
-                <span className="cta-card__desc">{c.desc}</span>
-                <span className="cta-card__arrow">
-                  {th.home.open} <ArrowRightIcon />
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
 
         <footer className="footer">
           <span className="footer__brand">
@@ -201,7 +108,15 @@ export default function Home() {
             </span>
             ProBooking
           </span>
-          <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+          <span className="footer__meta">
+            <span>เฟส 0 · กรุงเทพฯ และปริมณฑล</span>
+            <Link href="/journey" className="footer__link" data-testid="journey-link">
+              {th.home.journeyLink}
+            </Link>
+            <Link href="/flow" className="footer__link" data-testid="flow-link">
+              {th.home.flowSmokeNote}
+            </Link>
+          </span>
         </footer>
       </main>
     </>

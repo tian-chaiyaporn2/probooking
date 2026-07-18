@@ -44,6 +44,8 @@ import { BookingsService } from "../bookings/bookings.service.js";
 import { PaymentsService } from "../payments/payments.service.js";
 import { MockPaymentProvider } from "../payments/payment.provider.js";
 import { NotificationsService } from "./notifications.service.js";
+import { InMemoryMarketplaceStore } from "./marketplace.memory-store.js";
+import { seedDemoFixtures } from "../../fixtures/demo-fixtures.js";
 import {
   MARKETPLACE_REPOSITORY,
   type MarketplaceRepository,
@@ -95,6 +97,23 @@ export class MarketplaceController {
     private readonly notifications: NotificationsService,
     @Inject(MARKETPLACE_REPOSITORY) private readonly repo: MarketplaceRepository,
   ) {}
+
+  // Demo only: wipe and re-seed the in-memory store so a tester can start clean. Gated to
+  // demo mode (in-memory store + AUTH_DEV_MODE) — never touches a real Postgres deployment.
+  @Public()
+  @Post("demo/reset")
+  async resetDemo() {
+    if (process.env.DATABASE_URL || process.env.AUTH_DEV_MODE !== "true") {
+      throw new ForbiddenException("demo reset is only available in demo mode");
+    }
+    if (!(this.repo instanceof InMemoryMarketplaceStore)) {
+      throw new ForbiddenException("demo reset requires the in-memory store");
+    }
+    this.repo.reset();
+    await seedDemoFixtures(this.repo);
+    this.repo.markSeeded();
+    return { ok: true };
+  }
 
   @Public()
   @Post("clinics")
