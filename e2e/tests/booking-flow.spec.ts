@@ -86,23 +86,33 @@ test("pages are responsive — no horizontal page overflow on phone and tablet",
     { width: 768, height: 1024 }, // tablet portrait
     { width: 834, height: 1194 }, // large tablet portrait
   ];
-  const paths = ["/", "/signin", "/journey", "/flow", "/ops", "/finance"];
-  for (const viewport of viewports) {
-    await page.setViewportSize(viewport);
-    for (const path of paths) {
-      // Fresh session each path so Ops/Finance OTP forms stay reachable across viewports.
+  // Public paths: check every viewport without auth.
+  for (const path of ["/", "/signin", "/journey", "/flow"]) {
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
       await page.goto(path);
-      await page.evaluate(() => sessionStorage.clear());
-      await page.reload();
-      if (path === "/ops") {
-        await staffUiLogin(page, "+66900000009");
-        await expect(page.getByTestId("refresh")).toBeVisible();
-      }
-      if (path === "/finance") {
-        await staffUiLogin(page, "+66900000004");
-        await expect(page.getByTestId("fin-summary")).toBeVisible();
-      }
-      // The page itself must not scroll horizontally (wide tables scroll inside their box).
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(
+        overflow,
+        `horizontal overflow on ${path} at ${viewport.width}x${viewport.height}`,
+      ).toBeLessThanOrEqual(1);
+    }
+  }
+  // Staff dashboards: sign in once per surface, then resize (avoids OTP interval collisions).
+  for (const { path, phone, ready } of [
+    { path: "/ops", phone: "+66900000009", ready: "refresh" },
+    { path: "/finance", phone: "+66900000004", ready: "fin-summary" },
+  ]) {
+    await page.setViewportSize(viewports[0]!);
+    await page.goto("/");
+    await page.evaluate(() => sessionStorage.clear());
+    await page.goto(path);
+    await staffUiLogin(page, phone);
+    await expect(page.getByTestId(ready)).toBeVisible();
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
