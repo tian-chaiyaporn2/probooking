@@ -11,9 +11,9 @@
   -webkit-backdrop-filter: blur(12px) saturate(1.2);
   padding-top: var(--safe-top);
 }
-/* Keep the sticky chrome (brand + menu toggle) above the portaled scrim so the
-   hamburger/close control stays tappable while the drawer is open. Drawer itself
-   sits above the header so its panel is not clipped by the blur layer. */
+/* While the menu is open, keep the sticky brand chrome above the portaled
+   scrim (z-index 20). The drawer sits above the header so its panel is not
+   painted under the blur layer; dismiss via drawer close, scrim, or Escape. */
 .app-header--menu-open { z-index: 22; }
 @media (prefers-reduced-transparency: reduce) {
   .app-header {
