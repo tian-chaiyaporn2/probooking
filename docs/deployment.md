@@ -79,7 +79,11 @@ For semi-private testing (a few people) without hosting the backend, expose the 
 API over a public HTTPS tunnel and point the Pages frontend at it. **One command:**
 
 ```bash
-# with the local API (:4000) + Postgres already running:
+# Start the API in seeded, in-memory demo mode (effortless reviewer sign-in; no admin route):
+DATABASE_URL= AUTH_DEV_MODE=true SEED_ON_BOOT=true \
+  STAFF_PHONES="+66900000008:operations,+66900000005:finance,+66900000006:finance" \
+  CORS_ORIGINS="https://tian-chaiyaporn2.github.io" node apps/api/dist/main.js
+# then, in a second terminal:
 bash scripts/tunnel-deploy.sh
 ```
 
@@ -107,10 +111,15 @@ unless `AUTH_DEV_MODE=true`. Restart the API after changing it.
 > like a broken app rather than a CORS rejection.
 
 **CORS is not a security control here.** It is enforced by browsers and means nothing to
-`curl`. The tunnel must therefore be pointed at an API that is *itself* safe to expose:
-`AUTH_DEV_MODE` off (so `/auth/dev/token` 404s and OTP codes are not returned) and a strong
-`JWT_SECRET`. `scripts/tunnel-deploy.sh` probes the running API and refuses to publish it
-otherwise, rather than trusting that it was configured correctly.
+`curl`. The tunnel must therefore be pointed at an API that is *itself* safe to expose. For
+the reviewer demo that means the **seeded, in-memory** API above: `AUTH_DEV_MODE=true` makes
+sign-in effortless (OTP codes auto-fill), but since the store is in-memory and seeded, "sign
+in as any phone" only ever reaches **fake demo data**. Crucially, `DEV_TOKEN_ROUTE` is left
+unset, so `/auth/dev/token` (which mints an admin token to any caller) 404s.
+`scripts/tunnel-deploy.sh` probes the running API and refuses to publish it if that admin
+route is reachable — rather than trusting that it was configured correctly. (Do **not** point
+the tunnel at a real Postgres API with `AUTH_DEV_MODE` on — the OTP echo would then expose
+real accounts.)
 
 ### Operational caveats
 - The tunnel URL is **ephemeral** — every tunnel restart is a new URL. Re-run
@@ -120,11 +129,12 @@ otherwise, rather than trusting that it was configured correctly.
   (i.e. just re-run `scripts/tunnel-deploy.sh`), which mints a new URL + redeploys.
 - The laptop, Postgres, API, and tunnel must all stay up; if any drops, the dashboards
   stop (the landing page still works).
-- It **exposes the demo API publicly** — against your real local Postgres. Anyone with the
-  URL can call it directly; CORS does not stop non-browser clients. The script's preflight
-  now blocks the worst case (a dev-mode API with an open token endpoint, which would hand
-  any caller an administrator session), but every endpoint's own authz is what protects the
-  data. Share the Pages link privately, and prefer a hosted API for anything real.
+- It **exposes the demo API publicly**. Anyone with the URL can call it directly; CORS does
+  not stop non-browser clients. With the seeded in-memory demo above there is no real data to
+  protect and "reset demo" (on `/signin`) restores it, so this is acceptable — but the
+  script's preflight still blocks the worst case (an open `/auth/dev/token` handing any caller
+  an administrator session). For anything with real data, prefer a hosted API (below), never a
+  dev-mode tunnel.
 
 ## Hosting the backend properly (durable, no laptop)
 

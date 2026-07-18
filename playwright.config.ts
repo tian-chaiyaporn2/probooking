@@ -30,6 +30,9 @@ export default defineConfig({
         API_PORT: "4000",
         NODE_ENV: "test",
         AUTH_DEV_MODE: "true",
+        // The suite provisions ops tokens via /auth/dev/token; that route is now decoupled
+        // from demo mode and needs its own opt-in (a tunneled demo runs without it).
+        DEV_TOKEN_ROUTE: "true",
         CORS_ORIGINS: "http://localhost:3000",
         // Two distinct finance identities: §6.4 dual control needs a real second person,
         // and /auth/dev/token mints only one identity per role (sub = "dev:finance").
