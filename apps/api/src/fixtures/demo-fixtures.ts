@@ -140,6 +140,9 @@ export async function seedDemoFixtures(
   // Insurance evidence for dentistry shifts (VER-05).
   await store.submitInsurance(wanida.id, now + 365 * DAY);
   await store.verifyInsurance(wanida.id);
+  // A second professional's insurance is submitted but NOT yet verified — populates the
+  // operations insurance-review queue so that gate is walkable in the demo.
+  await store.submitInsurance(prasert.id, now + 365 * DAY);
 
   // --- Availability blocks (AVL-01) ---
   await store.addAvailability(somchai.id, now + 2 * DAY, now + 2 * DAY + 8 * HOUR, true);
@@ -552,6 +555,19 @@ export async function seedDemoFixtures(
       tags: ["well_equipped"],
     });
   }
+
+  // A refund proposal awaiting a second approver (§6.4) — populates the finance approvals
+  // queue so a tester can either execute it (as the approver account) or be blocked by dual
+  // control (as the proposer account +66900000005).
+  await store.createApproval({
+    capability: "finance.execute_refund",
+    refType: "Booking",
+    refId: completed.booking.id,
+    amount: 50_000,
+    reason: "ลูกค้าขอคืนเงินบางส่วน (เดโม)",
+    initiatorId: "+66900000005",
+    initiatorRole: "finance",
+  });
 
   return {
     clinics: { sukhumvit: clinicA.id, rama: clinicB.id, pending: pendingClinic.id },

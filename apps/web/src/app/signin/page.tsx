@@ -1,32 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { AppHeader } from "../../components/AppHeader";
+import { RolePicker } from "../../components/RolePicker";
 import { useToast } from "../../components/Toast";
-import { loginAs } from "../../lib/api";
+import { resetDemo } from "../../lib/api";
 import { getThaiErrorMessage } from "../../lib/strings";
-import { DEMO_ACCOUNTS, saveSession, type DemoAccount } from "../../lib/demo-accounts";
+import { clearSession } from "../../lib/demo-accounts";
 
 /**
- * "Sign in as" demo picker. Each card logs in as a ready-made account for a role and lands
- * on that role's surface, so you can drive the marketplace by hand from each side rather
- * than one-click everything.
+ * "Sign in as" demo page. Pick a ready-made account for any role and land on that role's
+ * surface, so the marketplace can be driven by hand from each side rather than one-click
+ * everything. A "reset demo" control restores the seeded data for a clean run.
  */
 export default function SignInPage() {
-  const router = useRouter();
   const toast = useToast();
-  const [busy, setBusy] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
-  async function signInAs(acc: DemoAccount) {
-    setBusy(acc.phone);
+  async function onReset() {
+    setResetting(true);
     try {
-      const token = await loginAs(acc.phone);
-      saveSession(token, acc.phone);
-      router.push(acc.route);
+      await resetDemo();
+      clearSession();
+      toast.success("รีเซ็ตข้อมูลเดโมแล้ว");
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
-      setBusy(null);
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -38,30 +38,21 @@ export default function SignInPage() {
           <h1 style={{ margin: "0 0 var(--s2)" }}>เข้าใช้งานในบทบาทต่าง ๆ</h1>
           <p className="muted" style={{ margin: 0 }}>เลือกบัญชีทดลองเพื่อเข้าใช้งานในมุมมองของแต่ละบทบาท</p>
         </header>
-        <div className="signin-grid">
-          {DEMO_ACCOUNTS.map((acc) => (
-            <button
-              key={acc.phone}
-              type="button"
-              className="signin-card"
-              data-testid={`signin-${acc.id}`}
-              disabled={busy !== null}
-              onClick={() => void signInAs(acc)}
-            >
-              <span className="signin-card__emoji" aria-hidden>
-                {acc.emoji}
-              </span>
-              <span className="signin-card__body">
-                <span className="signin-card__label">{acc.label}</span>
-                <span className="signin-card__sub">{acc.sublabel}</span>
-              </span>
-              <span className="signin-card__go">{busy === acc.phone ? "…" : "เข้าสู่ระบบ →"}</span>
-            </button>
-          ))}
+        <RolePicker />
+        <div className="actions" style={{ justifyContent: "space-between", marginTop: "var(--s5)", flexWrap: "wrap", gap: "var(--s3)" }}>
+          <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+            บัญชีทดลองสำหรับเดโมเท่านั้น (โหมด AUTH_DEV_MODE) — รหัส OTP จะกรอกให้อัตโนมัติ
+          </p>
+          <button
+            type="button"
+            className="btn btn--subtle"
+            data-testid="reset-demo"
+            disabled={resetting}
+            onClick={() => void onReset()}
+          >
+            {resetting ? "กำลังรีเซ็ต…" : "รีเซ็ตข้อมูลเดโม"}
+          </button>
         </div>
-        <p className="muted" style={{ fontSize: "0.85rem", marginTop: "var(--s5)" }}>
-          บัญชีทดลองสำหรับเดโมเท่านั้น (โหมด AUTH_DEV_MODE) — รหัส OTP จะกรอกให้อัตโนมัติ
-        </p>
       </main>
     </>
   );

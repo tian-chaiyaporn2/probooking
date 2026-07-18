@@ -128,6 +128,20 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     this.seeded = true;
   }
 
+  /**
+   * Wipe all in-memory state so the demo can be re-seeded from scratch. Clears every
+   * Map/Set/array field generically (so a newly-added collection is never forgotten) and
+   * resets the boot-seed guard and counters. Demo-only — see DemoController.
+   */
+  reset(): void {
+    for (const value of Object.values(this)) {
+      if (value instanceof Map || value instanceof Set) value.clear();
+      else if (Array.isArray(value)) value.length = 0;
+    }
+    this.seeded = false;
+    this.auditSeq = 0;
+  }
+
   async registerClinic(input: RegisterClinicInput): Promise<EntityRef & { ownerUserId: string }> {
     if (this.usedPhones.has(input.ownerPhone)) throw new ConflictError("owner phone already registered");
     this.usedPhones.add(input.ownerPhone);

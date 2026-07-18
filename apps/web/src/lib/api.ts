@@ -64,6 +64,9 @@ async function get<T>(path: string, token?: string): Promise<T> {
 export const getDevToken = (role: "operations" | "finance" | "administrator") =>
   post<{ token: string; role: string }>("/auth/dev/token", { role });
 
+/** Demo-only: wipe and re-seed the backend so a tester can start from a clean slate. */
+export const resetDemo = () => post<{ ok: boolean }>("/demo/reset");
+
 /**
  * Request an OTP for a phone. Returns the code ONLY under AUTH_DEV_MODE (so the demo can
  * complete a login without an SMS partner); in production it returns undefined and the code

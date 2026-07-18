@@ -835,3 +835,23 @@ test("the sign-in picker offers an account per role", async ({ page }) => {
     await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
   }
 });
+
+test("the home page leads with the role picker", async ({ page }) => {
+  await page.goto("/");
+  // The picker is the primary entry point: every role card is on the landing page.
+  for (const id of ["clinic", "professional", "operations", "finance"]) {
+    await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
+  }
+  // Clicking a card signs in and lands on that role's surface.
+  await page.getByTestId("signin-clinic").click();
+  await expect(page).toHaveURL(/\/clinic$/);
+});
+
+// Placed LAST: on the in-memory demo leg this wipes and re-seeds the shared store, so no
+// other test should run after it.
+test("demo reset is available in demo mode and gated otherwise", async ({ page }) => {
+  const res = await page.request.post("http://localhost:4000/demo/reset");
+  // 2xx when the API runs in in-memory demo mode; 403 when it is backed by Postgres.
+  expect([200, 201, 403]).toContain(res.status());
+  if (res.ok()) expect(((await res.json()) as { ok: boolean }).ok).toBe(true);
+});
