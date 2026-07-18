@@ -4,12 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getOpsPending,
   getOpsCases,
+  getOpsBookings,
   getMetrics,
   verifyClinic,
   verifyProfessional,
+  verifyInsurance,
+  suspendCredential,
+  holdCredential,
   resolveHold,
   type CaseSummary,
   type PendingVerification,
+  type ActiveBooking,
   type MarketplaceMetrics,
 } from "../../lib/api";
 import { AppHeader } from "../../components/AppHeader";
@@ -45,6 +50,7 @@ import { loadSession, clearSession } from "../../lib/demo-accounts";
 export default function OpsPage() {
   const [pending, setPending] = useState<PendingVerification[]>([]);
   const [cases, setCases] = useState<CaseSummary[]>([]);
+  const [bookings, setBookings] = useState<ActiveBooking[]>([]);
   const [metrics, setMetrics] = useState<MarketplaceMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -60,6 +66,7 @@ export default function OpsPage() {
     setMetrics(null);
     setPending([]);
     setCases([]);
+    setBookings([]);
     setLoadError(null);
     setLoading(false);
     setBusy(false);
@@ -79,14 +86,16 @@ export default function OpsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [p, c, m] = await Promise.all([
+      const [p, c, b, m] = await Promise.all([
         getOpsPending(token),
         getOpsCases(token),
+        getOpsBookings(token),
         getMetrics(token),
       ]);
       if (seq !== loadSeq.current) return;
       setPending(p.pending);
       setCases(c.cases);
+      setBookings(b.bookings);
       setMetrics(m);
     } catch (e) {
       if (seq !== loadSeq.current) return;
@@ -115,15 +124,36 @@ export default function OpsPage() {
     );
   }
 
-  async function verify(kind: "clinic" | "professional", id: string) {
+  async function verify(kind: "clinic" | "professional" | "insurance", id: string) {
     if (!token) return;
     const auth = token;
     setBusy(true);
     try {
       if (kind === "clinic") await verifyClinic(id, auth);
+      else if (kind === "insurance") await verifyInsurance(id, auth);
       else await verifyProfessional(id, auth);
       await load();
-      toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
+      toast.success(
+        kind === "clinic"
+          ? "คลินิกผ่านการตรวจสอบแล้ว"
+          : kind === "insurance"
+            ? th.ops.insuranceVerified
+            : "บุคลากรผ่านการตรวจสอบแล้ว",
+      );
+    } catch (e) {
+      toast.error(getThaiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function enforce(fn: () => Promise<unknown>, ok: string) {
+    if (!token) return;
+    setBusy(true);
+    try {
+      await fn();
+      await load();
+      toast.success(ok);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
@@ -281,6 +311,54 @@ export default function OpsPage() {
                   </li>
                 );
               })}
+            </ul>
+          </div>
+        </SectionBlock>
+
+        {/* Active bookings — VER-06 credential hold / VER-04 suspend enforcement. */}
+        <SectionBlock title={th.ops.activeBookings} count={bookings.length}>
+          <div className="card">
+            <ul data-testid="active-bookings" className="rowlist" aria-busy={loading || undefined}>
+              {!loading && bookings.length === 0 && (
+                <EmptyState as="li" title={th.ops.emptyActive} icon={<CheckIcon />} />
+              )}
+              {bookings.map((b) => (
+                <li key={b.bookingId} data-testid={`active-${b.bookingId}`}>
+                  <span className="row__avatar row__avatar--professional" aria-hidden>
+                    <StethoscopeIcon />
+                  </span>
+                  <span className="row__main">
+                    <span className="row__name">{b.professionalName}</span>
+                    <span className="row__sub">
+                      <Badge tone="info">{b.state}</Badge>
+                      <span className="muted">{b.clinicName}</span>
+                      {b.held && <Badge tone="warning">{th.ops.heldBadge}</Badge>}
+                      {b.credential === "Suspended" && <Badge tone="danger">{th.ops.suspendedBadge}</Badge>}
+                    </span>
+                  </span>
+                  <span className="row__actions actions">
+                    {!b.held && (
+                      <Button
+                        data-testid="hold-btn"
+                        busy={busy}
+                        onClick={() => void enforce(() => holdCredential(b.bookingId, token), th.ops.credentialHeld)}
+                      >
+                        {th.ops.holdCredential}
+                      </Button>
+                    )}
+                    {b.credential !== "Suspended" && (
+                      <Button
+                        data-testid="suspend-btn"
+                        variant="subtle"
+                        busy={busy}
+                        onClick={() => void enforce(() => suspendCredential(b.professionalId, token), th.ops.credentialSuspended)}
+                      >
+                        {th.ops.suspend}
+                      </Button>
+                    )}
+                  </span>
+                </li>
+              ))}
             </ul>
           </div>
         </SectionBlock>

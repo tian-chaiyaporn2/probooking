@@ -82,6 +82,7 @@ import type {
   OpenShift,
   CaseSummary,
   PendingVerification,
+  ActiveBookingRow,
   AvailabilityBlock,
   ShiftFilters,
   ProfessionalFilters,
@@ -1422,10 +1423,41 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       orderBy: { createdAt: "desc" },
       take: 50,
     });
+    // VER-05: submitted insurance evidence awaiting an operator's review.
+    const insurance = await prisma.insuranceEvidence.findMany({
+      where: { state: "Submitted" },
+      select: { professionalId: true, professional: { select: { displayName: true } } },
+      orderBy: { professionalId: "desc" },
+      take: 50,
+    });
     return [
       ...clinics.map((c) => ({ kind: "clinic" as const, id: c.id, name: c.branchName })),
       ...pros.map((p) => ({ kind: "professional" as const, id: p.id, name: p.displayName })),
+      ...insurance.map((i) => ({ kind: "insurance" as const, id: i.professionalId, name: i.professional.displayName })),
     ];
+  }
+
+  async listActiveBookings(): Promise<ActiveBookingRow[]> {
+    const bookings = await prisma.booking.findMany({
+      where: { state: { in: ["Confirmed", "InProgress", "AwaitingCompletion"] } },
+      include: {
+        professional: {
+          select: { displayName: true, credentials: { where: { kind: "licence" }, select: { state: true } } },
+        },
+        shift: { include: { workspace: { select: { branchName: true } } } },
+      },
+      orderBy: { confirmedAt: "desc" },
+      take: 50,
+    });
+    return bookings.map((b) => ({
+      bookingId: b.id,
+      professionalId: b.professionalId,
+      professionalName: b.professional.displayName,
+      clinicName: b.shift.workspace.branchName,
+      state: b.state,
+      held: b.heldAt !== null,
+      credential: b.professional.credentials[0]?.state ?? "Submitted",
+    }));
   }
 
   async postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord> {

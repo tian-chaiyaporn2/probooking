@@ -25,6 +25,7 @@ import type {
   OpenShift,
   CaseSummary,
   PendingVerification,
+  ActiveBookingRow,
   AvailabilityBlock,
   ShiftFilters,
   ProfessionalFilters,
@@ -990,6 +991,35 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
           name: this.professionalProfiles.get(id)?.displayName ?? "",
         });
       }
+    }
+    // VER-05: submitted insurance evidence awaiting an operator's review. Skip any orphan
+    // record with no live professional (staff may submit for an arbitrary id; Prisma's FK
+    // prevents this, so this only guards the in-memory store).
+    for (const [id, ins] of this.insurance) {
+      const profile = this.professionalProfiles.get(id);
+      if (ins.state === "Submitted" && profile) {
+        out.push({ kind: "insurance", id, name: profile.displayName });
+      }
+    }
+    return out;
+  }
+
+  async listActiveBookings(): Promise<ActiveBookingRow[]> {
+    const active = new Set(["Confirmed", "InProgress", "AwaitingCompletion"]);
+    const out: ActiveBookingRow[] = [];
+    for (const b of this.bookings.values()) {
+      if (!active.has(b.state)) continue;
+      const suspended = this.suspendedCredentials.has(b.professionalId);
+      const verified = this.professionals.get(b.professionalId) === "Verified";
+      out.push({
+        bookingId: b.id,
+        professionalId: b.professionalId,
+        professionalName: this.professionalProfiles.get(b.professionalId)?.displayName ?? "",
+        clinicName: this.clinicProfiles.get(b.clinicWorkspaceId)?.branchName ?? "",
+        state: b.state,
+        held: b.heldAt !== null,
+        credential: suspended ? "Suspended" : verified ? "Verified" : "Submitted",
+      });
     }
     return out;
   }
