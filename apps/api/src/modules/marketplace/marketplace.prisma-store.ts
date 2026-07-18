@@ -1427,7 +1427,9 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     const insurance = await prisma.insuranceEvidence.findMany({
       where: { state: "Submitted" },
       select: { professionalId: true, professional: { select: { displayName: true } } },
-      orderBy: { professionalId: "desc" },
+      // No createdAt on this model; cuid ids sort ~chronologically, so id desc ≈ newest first
+      // and keeps the take cap deterministic.
+      orderBy: { id: "desc" },
       take: 50,
     });
     return [

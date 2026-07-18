@@ -42,9 +42,17 @@ export default function ClinicPage() {
     const [s, b] = await Promise.all([getClinicShifts(workspaceId, tok), getClinicBookings(workspaceId, tok)]);
     setShifts(s.shifts);
     setBookings(b.bookings);
-    // Fetch candidates for shifts that have applicants but no active offer yet.
+    // Fetch candidates for shifts that have applicants but no active offer yet. A member
+    // without clinic.search_invite can't read the applicant list — let that shift's fetch
+    // fail to an empty list rather than failing the whole dashboard load.
     const withCands = s.shifts.filter((x) => x.candidateCount > 0 && !x.offer && !x.booked);
-    const cs = await Promise.all(withCands.map((x) => getShiftCandidates(x.shiftId, tok).then((r) => [x.shiftId, r.candidates] as const)));
+    const cs = await Promise.all(
+      withCands.map((x) =>
+        getShiftCandidates(x.shiftId, tok)
+          .then((r) => [x.shiftId, r.candidates] as const)
+          .catch(() => [x.shiftId, [] as Candidate[]] as const),
+      ),
+    );
     setCandidates(Object.fromEntries(cs));
   }, []);
 
