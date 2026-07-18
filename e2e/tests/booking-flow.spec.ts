@@ -142,14 +142,61 @@ test("mobile and tablet nav collapses into a drawer that opens and closes", asyn
     // The desktop nav is hidden; a menu button stands in for it.
     await expect(page.getByRole("navigation", { name: "เมนูหลัก" })).toBeHidden();
     await page.getByLabel("เปิดเมนู").click();
-    // Drawer opens as a labelled dialog; its links are visible and Escape dismisses it.
+    // Drawer opens as a labelled dialog; signed-out users see public links only (no staff/flow).
     const drawer = page.getByRole("dialog", { name: "เมนูหลัก" });
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByRole("link", { name: "Demo" })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "เข้าใช้งาน" })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "ทดสอบระบบ" })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
     await expect(page.getByLabel("เปิดเมนู")).toBeVisible();
   }
+});
+
+test("landing hero exposes demo and how-it-works CTAs with trust line", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByTestId("hero-cta-primary")).toHaveText("เริ่มเดโม");
+  await expect(page.getByTestId("hero-cta-secondary")).toHaveText("ดูวิธีทำงาน");
+  await expect(page.getByTestId("trust-line")).toBeVisible();
+  await expect(page.getByText("กรุงเทพฯ และปริมณฑล · แพทย์และทันตแพทย์")).toBeVisible();
+  await page.getByTestId("hero-cta-primary").click();
+  await expect(page).toHaveURL(/#start$/);
+});
+
+test("landing contact block captures real-interest clinics", async ({ page }) => {
+  await page.goto("/");
+  const contact = page.getByTestId("contact-block");
+  await expect(contact).toBeVisible();
+  await expect(page.getByTestId("contact-cta")).toHaveText("ติดต่อทีมคอนเซียร์จ");
+  await expect(page.getByTestId("contact-cta")).toHaveAttribute(
+    "href",
+    "mailto:concierge@probooking.app",
+  );
+});
+
+test("how-it-works toggles clinic and professional perspectives", async ({ page }) => {
+  await page.goto("/#how");
+  await expect(page.getByTestId("how-steps")).toContainText("ประกาศเวร");
+  await page.getByTestId("how-pro").click();
+  await expect(page.getByTestId("how-steps")).toContainText("ยืนยันตัวตน");
+  await page.getByTestId("how-clinic").click();
+  await expect(page.getByTestId("how-steps")).toContainText("ประกาศเวร");
+});
+
+test("signed-in clinic nav hides staff links and supports sign out", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.evaluate(() => sessionStorage.clear());
+  await page.locator("#start").scrollIntoViewIfNeeded();
+  await page.getByTestId("signin-clinic").click();
+  await expect(page).toHaveURL(/\/clinic$/);
+  await expect(page.getByRole("link", { name: "ปฏิบัติการ" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "การเงิน" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "คลินิกของฉัน" })).toBeVisible();
+  await page.getByTestId("nav-signout").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("link", { name: "เข้าใช้งาน" })).toBeVisible();
 });
 
 test("landing keeps brand before product visual on phone", async ({ page }) => {
@@ -934,6 +981,9 @@ test("a professional can decline a pending offer", async ({ page }) => {
 
 test("the sign-in picker offers an account per role", async ({ page }) => {
   await page.goto("/signin");
+  await expect(page.getByTestId("signin-party-group")).toBeVisible();
+  await expect(page.getByTestId("signin-staff-group")).toBeVisible();
+  await expect(page.getByTestId("guided-demo")).toBeVisible();
   for (const id of ["clinic", "professional", "operations", "finance", "finance-approver"]) {
     await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
   }
@@ -941,7 +991,10 @@ test("the sign-in picker offers an account per role", async ({ page }) => {
 
 test("the home page leads with the role picker", async ({ page }) => {
   await page.goto("/");
-  // The picker is the primary entry point: every role card is on the landing page.
+  await expect(page.getByTestId("guided-demo")).toBeVisible();
+  await expect(page.getByTestId("contact-block")).toBeVisible();
+  // The picker lives in #start — scroll there for below-the-fold phones.
+  await page.locator("#start").scrollIntoViewIfNeeded();
   for (const id of ["clinic", "professional", "operations", "finance"]) {
     await expect(page.getByTestId(`signin-${id}`)).toBeVisible();
   }

@@ -14,6 +14,8 @@ export { saveSession, loadSession, clearSession } from "./session";
 
 export type DemoIcon = "clinic" | "professional" | "operations" | "finance";
 
+export type DemoGroup = "party" | "staff";
+
 export interface DemoAccount {
   /** Stable, unique key for this card (used for the sign-in testid). */
   id: string;
@@ -21,6 +23,8 @@ export interface DemoAccount {
   label: string;
   sublabel: string;
   role: SessionRole;
+  /** Party (clinic/pro) vs internal staff surfaces. */
+  group: DemoGroup;
   /** Where to land after signing in. */
   route: string;
   /** Icon key mapped in RolePicker (no emoji). */
@@ -34,6 +38,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "คลินิกสุขุมวิทสไมล์",
     sublabel: "เจ้าของคลินิก ประกาศเวร ส่งข้อเสนอ ยืนยันการจอง",
     role: "clinic",
+    group: "party",
     route: "/clinic",
     icon: "clinic",
   },
@@ -43,6 +48,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "นพ. สมชาย ใจดี",
     sublabel: "บุคลากร หาเวร ยอมรับข้อเสนอ ทำงาน รับเงิน",
     role: "professional",
+    group: "party",
     route: "/pro",
     icon: "professional",
   },
@@ -52,6 +58,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "ฝ่ายปฏิบัติการ",
     sublabel: "ตรวจสอบคลินิก/บุคลากร จัดการเคส",
     role: "operations",
+    group: "staff",
     route: "/ops",
     icon: "operations",
   },
@@ -61,6 +68,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "ฝ่ายการเงิน (ผู้เสนอ)",
     sublabel: "กระทบยอด ส่งออก CSV เสนอคืนเงิน",
     role: "finance",
+    group: "staff",
     route: "/finance",
     icon: "finance",
   },
@@ -68,9 +76,13 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     id: "finance-approver",
     phone: "+66900000006",
     label: "ฝ่ายการเงิน (ผู้อนุมัติ)",
-    sublabel: "ผู้อนุมัติคนที่สองสำหรับการคืนเงิน (ต้องมีผู้อนุมัติสองคน)",
+    sublabel: "ผู้อนุมัติคนที่สองสำหรับการคืนเงิน — ต้องมีผู้อนุมัติสองคน",
     role: "finance",
+    group: "staff",
     route: "/finance",
     icon: "finance",
   },
 ];
+
+export const DEMO_PARTY_ACCOUNTS = DEMO_ACCOUNTS.filter((a) => a.group === "party");
+export const DEMO_STAFF_ACCOUNTS = DEMO_ACCOUNTS.filter((a) => a.group === "staff");

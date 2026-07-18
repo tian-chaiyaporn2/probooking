@@ -16,6 +16,7 @@ export interface AppSession {
 }
 
 const KEY = "probook.session";
+const SESSION_EVENT = "probook-session-change";
 const LEGACY_STAFF = [
   "pb.staff.session.operations",
   "pb.staff.session.finance",
@@ -32,6 +33,17 @@ function purgeLegacy(): void {
   }
 }
 
+export function notifySessionChange(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(SESSION_EVENT));
+}
+
+export function onSessionChange(listener: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(SESSION_EVENT, listener);
+  return () => window.removeEventListener(SESSION_EVENT, listener);
+}
+
 export function saveSession(
   token: string,
   phone: string,
@@ -41,6 +53,7 @@ export function saveSession(
   purgeLegacy();
   const session: AppSession = { token, phone, ...(role ? { role } : {}) };
   sessionStorage.setItem(KEY, JSON.stringify(session));
+  notifySessionChange();
 }
 
 export function loadSession(): AppSession | null {
@@ -83,6 +96,7 @@ export function clearSession(): void {
     /* ignore */
   }
   purgeLegacy();
+  notifySessionChange();
 }
 
 /** @deprecated Use clearSession — kept for call-sites during the unification. */
