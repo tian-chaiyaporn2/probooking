@@ -87,7 +87,10 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   private readonly bookingByOffer = new Map<string, string>();
   private readonly supportCases = new Map<string, ReviewCase>(); // keyed by `${bookingId}:${kind}`
   private readonly clinics = new Map<string, VerificationState>();
-  private readonly clinicProfiles = new Map<string, { branchName: string }>();
+  private readonly clinicProfiles = new Map<
+    string,
+    { branchName: string; licenceNo: string; address: string }
+  >();
   private readonly professionals = new Map<string, VerificationState>();
   private readonly professionalProfiles = new Map<string, { displayName: string; profession: string }>();
   private readonly usedPhones = new Set<string>(); // mirrors the Prisma User.phone unique constraint
@@ -130,7 +133,11 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const id = randomUUID();
     const ownerUserId = randomUUID();
     this.clinics.set(id, "Submitted");
-    this.clinicProfiles.set(id, { branchName: input.branchName });
+    this.clinicProfiles.set(id, {
+      branchName: input.branchName,
+      licenceNo: input.licenceNo,
+      address: input.address,
+    });
     // Parity with Prisma's User + Membership graph: the owner's phone is how the caller is
     // later recognised as this workspace's owner. Previously the phone was only added to a
     // uniqueness Set and discarded, so identity could not be resolved in this store at all.
@@ -908,16 +915,27 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const out: PendingVerification[] = [];
     for (const [id, v] of this.clinics) {
       if (v === "Submitted") {
-        out.push({ kind: "clinic", id, name: this.clinicProfiles.get(id)?.branchName ?? "" });
+        const profile = this.clinicProfiles.get(id);
+        const row: PendingVerification = {
+          kind: "clinic",
+          id,
+          name: profile?.branchName ?? "",
+        };
+        if (profile?.licenceNo) row.licenceNo = profile.licenceNo;
+        if (profile?.address) row.address = profile.address;
+        out.push(row);
       }
     }
     for (const [id, v] of this.professionals) {
       if (v === "Submitted") {
-        out.push({
+        const profile = this.professionalProfiles.get(id);
+        const row: PendingVerification = {
           kind: "professional",
           id,
-          name: this.professionalProfiles.get(id)?.displayName ?? "",
-        });
+          name: profile?.displayName ?? "",
+        };
+        if (profile?.profession) row.profession = profile.profession;
+        out.push(row);
       }
     }
     return out;

@@ -6,12 +6,15 @@ import { th } from "../lib/strings";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "./icons";
 
-const LINKS = [
-  { href: "/", label: th.nav.home },
-  { href: "/ops", label: th.nav.ops },
-  { href: "/finance", label: th.nav.finance },
-  { href: "/flow", label: th.nav.flow },
-] as const;
+type NavLink = { href: string; label: string; group?: "public" | "staff" };
+
+const LINKS: NavLink[] = [
+  { href: "/", label: th.nav.home, group: "public" },
+  { href: "/journey", label: th.nav.journey, group: "public" },
+  { href: "/ops", label: th.nav.ops, group: "staff" },
+  { href: "/finance", label: th.nav.finance, group: "staff" },
+  { href: "/flow", label: th.nav.flow, group: "public" },
+];
 
 /** Keep in sync with max-width: 959px drawer breakpoint in pages.css. */
 const DRAWER_MQ = "(min-width: 960px)";
@@ -19,9 +22,8 @@ const DRAWER_MQ = "(min-width: 960px)";
 /**
  * Shared app shell header: brand + section nav + theme toggle.
  *
- * On phone and tablet the nav collapses into a drawer behind a menu button. The drawer
- * closes on Escape, backdrop tap, resize into the desktop band, and navigation; scroll
- * is locked on <html> while open; Tab cycles inside the panel.
+ * Nav separates public journey surfaces from staff tools (UX F7) while keeping
+ * the developer demo link for e2e. On phone/tablet the nav collapses into a drawer.
  */
 export function AppHeader({ current }: { current?: string }) {
   const [open, setOpen] = useState(false);
@@ -58,8 +60,6 @@ export function AppHeader({ current }: { current?: string }) {
       }
     };
     document.addEventListener("keydown", onKey);
-    // Lock scroll on <html> — locking body alone can shrink the fixed containing
-    // block in WebKit/Blink and collapse the drawer to content height.
     const root = document.documentElement;
     const prevOverflow = root.style.overflow;
     root.style.overflow = "hidden";
@@ -72,8 +72,6 @@ export function AppHeader({ current }: { current?: string }) {
     };
   }, [open]);
 
-  // If the viewport grows into the desktop nav band, dismiss the drawer so it
-  // cannot linger as an invisible overlay after orientation change.
   useEffect(() => {
     const mq = window.matchMedia(DRAWER_MQ);
     const onChange = () => {
@@ -84,10 +82,25 @@ export function AppHeader({ current }: { current?: string }) {
       mq.addEventListener("change", onChange);
       return () => mq.removeEventListener("change", onChange);
     }
-    // Safari < 14
     mq.addListener(onChange);
     return () => mq.removeListener(onChange);
   }, []);
+
+  const publicLinks = LINKS.filter((l) => l.group === "public");
+  const staffLinks = LINKS.filter((l) => l.group === "staff");
+
+  function renderLinks(links: NavLink[], onNavigate?: () => void) {
+    return links.map((l) => (
+      <Link
+        key={l.href}
+        href={l.href}
+        aria-current={current === l.href ? "page" : undefined}
+        {...(onNavigate ? { onClick: onNavigate } : {})}
+      >
+        {l.label}
+      </Link>
+    ));
+  }
 
   return (
     <header className="app-header">
@@ -99,13 +112,11 @@ export function AppHeader({ current }: { current?: string }) {
           {th.brand}
         </Link>
 
-        {/* Desktop nav */}
         <nav className="app-nav app-nav--desktop" aria-label={th.a11y.primaryNav}>
-          {LINKS.map((l) => (
-            <Link key={l.href} href={l.href} aria-current={current === l.href ? "page" : undefined}>
-              {l.label}
-            </Link>
-          ))}
+          {renderLinks(publicLinks)}
+          <span className="app-nav__divider" aria-hidden />
+          <span className="app-nav__group-label">{th.nav.staffGroup}</span>
+          {renderLinks(staffLinks)}
         </nav>
 
         <div className="app-header__right">
@@ -124,7 +135,6 @@ export function AppHeader({ current }: { current?: string }) {
         </div>
       </div>
 
-      {/* Mobile / tablet drawer */}
       {open && (
         <>
           <button className="nav-backdrop" aria-label={th.a11y.closeMenu} onClick={() => setOpen(false)} />
@@ -148,16 +158,10 @@ export function AppHeader({ current }: { current?: string }) {
                 <CloseIcon />
               </button>
             </div>
-            {LINKS.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                aria-current={current === l.href ? "page" : undefined}
-                onClick={() => setOpen(false)}
-              >
-                {l.label}
-              </Link>
-            ))}
+            <p className="app-nav--drawer__group">{th.nav.publicGroup}</p>
+            {renderLinks(publicLinks, () => setOpen(false))}
+            <p className="app-nav--drawer__group">{th.nav.staffGroup}</p>
+            {renderLinks(staffLinks, () => setOpen(false))}
             <p className="app-nav--drawer__foot">{th.home.phase}</p>
           </nav>
         </>

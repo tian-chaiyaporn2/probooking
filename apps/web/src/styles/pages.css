@@ -406,3 +406,41 @@
   }
   .mockcard { animation: none !important; }
 }
+
+/* ---- Landing audiences / contact ---- */
+.cta-grid--3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.contact-note {
+  text-align: center; margin: var(--s5) auto 0; max-width: 48ch;
+  font-size: var(--text-sm); line-height: var(--leading-normal);
+}
+
+/* ---- Journey page ---- */
+.page--journey { max-width: 960px; }
+.journey-layout {
+  display: grid; gap: var(--s6);
+  grid-template-columns: 1fr;
+  margin-top: var(--s5);
+}
+@media (min-width: 800px) {
+  .journey-layout { grid-template-columns: minmax(14rem, 0.9fr) 1.4fr; align-items: start; }
+}
+.journey-aside {
+  padding: var(--s5); border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface);
+}
+.perspective-toggle {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-bottom: var(--s4);
+}
+.journey-card {
+  padding: var(--s5); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-sm);
+  display: grid; gap: var(--s4);
+}
+.journey-card h2 {
+  margin: 0; font-size: var(--text-2xl); line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-none);
+}
+.journey-card__acting { margin: 0; font-size: var(--text-sm); }
+.journey-card__actions { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.journey-booking-id { margin: 0; font-size: var(--text-md); }
+.journey-card--done { border-color: color-mix(in srgb, var(--success) 35%, var(--line)); }

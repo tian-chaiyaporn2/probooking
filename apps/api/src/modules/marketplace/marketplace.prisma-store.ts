@@ -1327,19 +1327,32 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async listPendingVerifications(): Promise<PendingVerification[]> {
+    // Ops review needs licence/address/profession at verify time — decrypt here (write path
+    // encrypts them at rest). Only Submitted rows are returned, and the endpoint is ops-gated.
     const clinics = await prisma.clinicWorkspace.findMany({
       where: { verification: "Submitted" },
-      select: { id: true, branchName: true },
+      select: { id: true, branchName: true, licenceNo: true, address: true },
       take: 50,
     });
     const pros = await prisma.professionalProfile.findMany({
       where: { verification: "Submitted" },
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, profession: true },
       take: 50,
     });
     return [
-      ...clinics.map((c) => ({ kind: "clinic" as const, id: c.id, name: c.branchName })),
-      ...pros.map((p) => ({ kind: "professional" as const, id: p.id, name: p.displayName })),
+      ...clinics.map((c) => ({
+        kind: "clinic" as const,
+        id: c.id,
+        name: c.branchName,
+        licenceNo: decryptField(c.licenceNo),
+        address: decryptField(c.address),
+      })),
+      ...pros.map((p) => ({
+        kind: "professional" as const,
+        id: p.id,
+        name: p.displayName,
+        profession: p.profession,
+      })),
     ];
   }
 

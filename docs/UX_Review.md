@@ -6,6 +6,10 @@
 **Sources:** Live UI code (`apps/web`), design tokens, Thai copy (`lib/strings.ts`), PRD v1.5 journeys & principles  
 **Date:** 2026-07-18
 
+> **Implementation note (same PR):** Priority recommendations from §7 are landed in-code —
+> Phase 0 honesty (landing/nav), staff depth (Ops confirm + per-row busy + session + Finance drill-down),
+> and a Thai `/journey` offer→Payment Protected→payout walkthrough. See the app routes and components below.
+
 ---
 
 ## 1. Executive summary

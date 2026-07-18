@@ -36,7 +36,7 @@ test("home links to the flow", async ({ page }) => {
 
 test("pages are responsive — no horizontal page overflow on a small screen", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 }); // small phone
-  for (const path of ["/", "/flow", "/ops", "/finance"]) {
+  for (const path of ["/", "/journey", "/flow", "/ops", "/finance"]) {
     await page.goto(path);
     // /ops and /finance now open on a staff sign-in form; sign in, then wait for the
     // data-driven dashboard to settle so the overflow check runs against real content.
@@ -113,6 +113,7 @@ test("ops dashboard verifies a pending clinic", async ({ page }) => {
   const row = page.getByTestId(`pending-${clinic.id}`);
   await expect(row).toBeVisible();
   await row.getByTestId("verify-btn").click();
+  await page.getByTestId("dialog-confirm").click();
   // After verifying, the clinic leaves the pending list.
   await expect(page.getByTestId(`pending-${clinic.id}`)).toHaveCount(0);
 });

@@ -76,6 +76,9 @@ export const requestOtp = (phone: string) =>
 export const verifyOtp = (phone: string, code: string) =>
   post<{ token: string; role: string }>("/auth/otp/verify", { phone, code });
 
+/** Revoke the presented token so it cannot be reused (even before expiry). */
+export const logout = (token: string) => post<{ revoked: boolean }>("/auth/logout", undefined, token);
+
 /**
  * One-shot login for the demo flow, where the code is echoed back under AUTH_DEV_MODE.
  * In production `requestOtp` returns no code, so callers must collect it from SMS and call
@@ -215,6 +218,9 @@ export interface PendingVerification {
   kind: "clinic" | "professional";
   id: string;
   name: string;
+  licenceNo?: string;
+  address?: string;
+  profession?: string;
 }
 
 export const getOpsCases = (token: string) => get<{ cases: CaseSummary[] }>("/ops/cases", token);

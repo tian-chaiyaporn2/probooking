@@ -221,6 +221,12 @@ export interface PendingVerification {
   kind: "clinic" | "professional";
   id: string;
   name: string;
+  /** Clinic licence (decrypted for Ops review). */
+  licenceNo?: string;
+  /** Clinic address (decrypted for Ops review). */
+  address?: string;
+  /** Professional self-declared profession. */
+  profession?: string;
 }
 
 // ----- Finance (PAY-11 reconciliation view) -----

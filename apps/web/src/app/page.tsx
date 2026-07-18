@@ -1,13 +1,70 @@
 import Link from "next/link";
 import { AppHeader } from "../components/AppHeader";
 import { ButtonLink, ButtonAnchor } from "../components/Button";
-import { ShieldCheckIcon, CalendarIcon, WalletIcon, ArrowRightIcon } from "../components/icons";
+import {
+  ShieldCheckIcon,
+  CalendarIcon,
+  WalletIcon,
+  ArrowRightIcon,
+  ClinicIcon,
+  StethoscopeIcon,
+  UsersIcon,
+} from "../components/icons";
 import { th } from "../lib/strings";
 
+const AUDIENCES = [
+  {
+    href: "/journey",
+    icon: <ClinicIcon />,
+    title: th.home.audienceClinic,
+    desc: th.home.audienceClinicDesc,
+    testid: "audience-clinic",
+  },
+  {
+    href: "/journey",
+    icon: <StethoscopeIcon />,
+    title: th.home.audiencePro,
+    desc: th.home.audienceProDesc,
+    testid: "audience-pro",
+  },
+  {
+    href: "/ops",
+    icon: <UsersIcon />,
+    title: th.home.audienceStaff,
+    desc: th.home.audienceStaffDesc,
+    testid: "audience-staff",
+  },
+];
+
 const SURFACES = [
-  { href: "/flow", icon: <CalendarIcon />, title: th.home.flowLink, desc: th.home.flowDesc, testid: "flow-link" },
-  { href: "/ops", icon: <ShieldCheckIcon />, title: th.home.opsLink, desc: th.home.opsDesc, testid: "ops-link" },
-  { href: "/finance", icon: <WalletIcon />, title: th.home.financeLink, desc: th.home.financeDesc, testid: "finance-link" },
+  {
+    href: "/journey",
+    icon: <CalendarIcon />,
+    title: th.home.journeyLink,
+    desc: th.home.journeyDesc,
+    testid: "journey-link",
+  },
+  {
+    href: "/ops",
+    icon: <ShieldCheckIcon />,
+    title: th.home.opsLink,
+    desc: th.home.opsDesc,
+    testid: "ops-link",
+  },
+  {
+    href: "/finance",
+    icon: <WalletIcon />,
+    title: th.home.financeLink,
+    desc: th.home.financeDesc,
+    testid: "finance-link",
+  },
+  {
+    href: "/flow",
+    icon: <CalendarIcon />,
+    title: th.home.flowLink,
+    desc: th.home.flowDesc,
+    testid: "flow-link",
+  },
 ];
 
 export default function Home() {
@@ -24,7 +81,7 @@ export default function Home() {
             <h1>{th.home.tagline}</h1>
             <p className="lead muted">{th.home.description}</p>
             <div className="hero__actions">
-              <ButtonLink href="/flow" variant="primary" size="lg" data-testid="hero-flow-link">
+              <ButtonLink href="/journey" variant="primary" size="lg" data-testid="hero-journey-link">
                 {th.home.ctaPrimary} <ArrowRightIcon />
               </ButtonLink>
               <ButtonAnchor href="#how" variant="ghost" size="lg">
@@ -47,12 +104,26 @@ export default function Home() {
                 </span>
               </div>
               <div className="mockcard__divide" />
-              <div className="mockcard__line"><span>เวร · คลินิกสุขุมวิท</span><span>8 ชม.</span></div>
-              <div className="mockcard__line"><span>ค่าตอบแทน</span><span>฿10,000.00</span></div>
-              <div className="mockcard__line"><span>ค่าบริการ 12%</span><span>฿1,200.00</span></div>
+              <div className="mockcard__line">
+                <span>เวร · คลินิกสุขุมวิท</span>
+                <span>8 ชม.</span>
+              </div>
+              <div className="mockcard__line">
+                <span>ค่าตอบแทน</span>
+                <span>฿10,000.00</span>
+              </div>
+              <div className="mockcard__line">
+                <span>ค่าบริการ 12%</span>
+                <span>฿1,200.00</span>
+              </div>
               <div className="mockcard__divide" />
-              <div className="mockcard__line mockcard__total"><span>รวม</span><span>฿11,200.00</span></div>
-              <span className="mockcard__stamp"><WalletIcon /> คุ้มครองการชำระเงิน</span>
+              <div className="mockcard__line mockcard__total">
+                <span>รวม</span>
+                <span>฿11,200.00</span>
+              </div>
+              <span className="mockcard__stamp">
+                <WalletIcon /> คุ้มครองการชำระเงิน
+              </span>
             </div>
           </div>
         </section>
@@ -76,11 +147,33 @@ export default function Home() {
         <p className="trust-line" aria-label={th.home.trust.join(" · ")}>
           {th.home.trust.map((t, i) => (
             <span key={t}>
-              {i > 0 && <span className="trust-line__dot" aria-hidden>·</span>}
+              {i > 0 && <span className="trust-line__dot" aria-hidden>
+                ·
+              </span>}
               {t}
             </span>
           ))}
         </p>
+
+        <section>
+          <div className="section-head">
+            <h2>{th.home.audiencesTitle}</h2>
+            <p>{th.home.audiencesSubtitle}</p>
+          </div>
+          <div className="cta-grid cta-grid--3">
+            {AUDIENCES.map((c) => (
+              <Link key={c.testid} href={c.href} className="cta-card" data-testid={c.testid}>
+                <span className="cta-card__icon">{c.icon}</span>
+                <span className="cta-card__title">{c.title}</span>
+                <span className="cta-card__desc">{c.desc}</span>
+                <span className="cta-card__arrow">
+                  {th.home.open} <ArrowRightIcon />
+                </span>
+              </Link>
+            ))}
+          </div>
+          <p className="contact-note muted">{th.home.contactNote}</p>
+        </section>
 
         <section>
           <div className="section-head">
@@ -89,7 +182,7 @@ export default function Home() {
           </div>
           <div className="cta-grid">
             {SURFACES.map((c) => (
-              <Link key={c.href} href={c.href} className="cta-card" data-testid={c.testid}>
+              <Link key={c.href + c.testid} href={c.href} className="cta-card" data-testid={c.testid}>
                 <span className="cta-card__icon">{c.icon}</span>
                 <span className="cta-card__title">{c.title}</span>
                 <span className="cta-card__desc">{c.desc}</span>

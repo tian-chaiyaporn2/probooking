@@ -8,6 +8,7 @@ import {
   verifyClinic,
   verifyProfessional,
   resolveHold,
+  logout,
   type CaseSummary,
   type PendingVerification,
   type MarketplaceMetrics,
@@ -20,6 +21,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { SectionBlock } from "../../components/SectionBlock";
 import { EmptyState } from "../../components/EmptyState";
 import { Skeleton, StatSkeletonGrid } from "../../components/Skeleton";
+import { Dialog } from "../../components/Dialog";
 import {
   RefreshIcon,
   CalendarIcon,
@@ -36,6 +38,11 @@ import { useToast } from "../../components/Toast";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
 import { badgeToneForKind } from "../../lib/tones";
+import { clearStaffSession, loadStaffSession, saveStaffSession } from "../../lib/session";
+
+type ConfirmAction =
+  | { type: "verify"; kind: "clinic" | "professional"; id: string; name: string }
+  | { type: "resolve"; bookingId: string; subject: string };
 
 /**
  * Operations dashboard (ADM-01). Internal tool that calls controlled API actions:
@@ -47,20 +54,52 @@ export default function OpsPage() {
   const [metrics, setMetrics] = useState<MarketplaceMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
+  const [booting, setBooting] = useState(true);
   const toast = useToast();
   const loadSeq = useRef(0);
 
-  const signOut = useCallback(() => {
+  useEffect(() => {
+    const saved = loadStaffSession("operations");
+    if (saved) setToken(saved.token);
+    setBooting(false);
+  }, []);
+
+  const acceptToken = useCallback((next: string) => {
+    saveStaffSession("operations", next);
+    setSessionNotice(null);
+    setToken(next);
+  }, []);
+
+  const signOut = useCallback(async () => {
     loadSeq.current += 1;
+    const previous = token;
     setToken(null);
     setMetrics(null);
     setPending([]);
     setCases([]);
     setLoadError(null);
     setLoading(false);
-    setBusy(false);
+    setBusyId(null);
+    setConfirm(null);
+    clearStaffSession("operations");
+    if (previous) {
+      try {
+        await logout(previous);
+      } catch {
+        // Best-effort revoke; local session is already cleared.
+      }
+    }
+  }, [token]);
+
+  const expireSession = useCallback(() => {
+    clearStaffSession("operations");
+    setToken(null);
+    setSessionNotice(th.staffLogin.sessionExpiredBanner);
   }, []);
 
   const load = useCallback(async () => {
@@ -85,55 +124,59 @@ export default function OpsPage() {
       toast.error(msg);
       const raw = e instanceof Error ? e.message.toLowerCase() : "";
       if (raw.includes("403") || raw.includes("401") || raw.includes("forbidden") || raw.includes("authentication")) {
-        signOut();
+        expireSession();
       }
     } finally {
       if (seq === loadSeq.current) setLoading(false);
     }
-  }, [token, toast, signOut]);
+  }, [token, toast, expireSession]);
 
   useEffect(() => {
     if (token) void load();
   }, [token, load]);
 
-  if (!token) {
+  async function runConfirm() {
+    if (!token || !confirm) return;
+    const auth = token;
+    const action = confirm;
+    const id = action.type === "verify" ? action.id : action.bookingId;
+    setBusyId(id);
+    try {
+      if (action.type === "verify") {
+        if (action.kind === "clinic") await verifyClinic(action.id, auth);
+        else await verifyProfessional(action.id, auth);
+        toast.success(`${action.kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
+      } else {
+        await resolveHold(action.bookingId, auth);
+        toast.success("ปลดการระงับแล้ว");
+      }
+      setConfirm(null);
+      await load();
+    } catch (e) {
+      toast.error(getThaiErrorMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (booting) {
     return (
       <>
         <AppHeader current="/ops" />
-        <StaffLogin surface="operations" onToken={setToken} />
+        <main id="main" className="page">
+          <p className="muted">{th.common.loading}</p>
+        </main>
       </>
     );
   }
 
-  async function verify(kind: "clinic" | "professional", id: string) {
-    if (!token) return;
-    const auth = token;
-    setBusy(true);
-    try {
-      if (kind === "clinic") await verifyClinic(id, auth);
-      else await verifyProfessional(id, auth);
-      await load();
-      toast.success(`${kind === "clinic" ? "คลินิก" : "บุคลากร"}ผ่านการตรวจสอบแล้ว`);
-    } catch (e) {
-      toast.error(getThaiErrorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resolve(bookingId: string) {
-    if (!token) return;
-    const auth = token;
-    setBusy(true);
-    try {
-      await resolveHold(bookingId, auth);
-      await load();
-      toast.success("ปลดการระงับแล้ว");
-    } catch (e) {
-      toast.error(getThaiErrorMessage(e));
-    } finally {
-      setBusy(false);
-    }
+  if (!token) {
+    return (
+      <>
+        <AppHeader current="/ops" />
+        <StaffLogin surface="operations" onToken={acceptToken} sessionNotice={sessionNotice} />
+      </>
+    );
   }
 
   return (
@@ -145,10 +188,10 @@ export default function OpsPage() {
           subtitle={th.ops.subtitle}
           actions={
             <>
-              <Button data-testid="refresh" onClick={() => void load()} disabled={busy || loading} icon={<RefreshIcon />}>
+              <Button data-testid="refresh" onClick={() => void load()} disabled={busyId !== null || loading} icon={<RefreshIcon />}>
                 {th.common.refresh}
               </Button>
-              <Button data-testid="sign-out" variant="subtle" onClick={signOut}>
+              <Button data-testid="sign-out" variant="subtle" onClick={() => void signOut()}>
                 {th.staffLogin.signOut}
               </Button>
             </>
@@ -207,27 +250,75 @@ export default function OpsPage() {
                   </li>
                 ))}
               {!loading && pending.length === 0 && (
-                <EmptyState as="li" title={th.ops.emptyPending} icon={<InboxIcon />} />
+                <EmptyState
+                  as="li"
+                  title={th.ops.emptyPending}
+                  description={th.ops.emptyPendingHint}
+                  icon={<InboxIcon />}
+                />
               )}
-              {pending.map((p) => (
-                <li key={p.id} data-testid={`pending-${p.id}`}>
-                  <span className={`row__avatar row__avatar--${p.kind}`} aria-hidden>
-                    {p.kind === "clinic" ? <ClinicIcon /> : <StethoscopeIcon />}
-                  </span>
-                  <span className="row__main">
-                    <span className="row__name">{p.name}</span>
-                    <span className="row__sub">
-                      <Badge tone={badgeToneForKind(p.kind)}>{th.ops.kind[p.kind]}</Badge>
-                      <code className="row__id">{p.id.slice(0, 8)}…</code>
+              {pending.map((p) => {
+                const open = expandedId === p.id;
+                return (
+                  <li key={p.id} data-testid={`pending-${p.id}`} className={open ? "rowlist__item--open" : undefined}>
+                    <span className={`row__avatar row__avatar--${p.kind}`} aria-hidden>
+                      {p.kind === "clinic" ? <ClinicIcon /> : <StethoscopeIcon />}
                     </span>
-                  </span>
-                  <span className="row__actions">
-                    <Button data-testid="verify-btn" variant="primary" busy={busy} onClick={() => void verify(p.kind, p.id)}>
-                      {th.ops.verify}
-                    </Button>
-                  </span>
-                </li>
-              ))}
+                    <span className="row__main">
+                      <span className="row__name">{p.name}</span>
+                      <span className="row__sub">
+                        <Badge tone={badgeToneForKind(p.kind)}>{th.ops.kind[p.kind]}</Badge>
+                        <code className="row__id">{p.id.slice(0, 8)}…</code>
+                      </span>
+                      {open && (
+                        <dl className="row__detail">
+                          {p.licenceNo ? (
+                            <>
+                              <dt>{th.ops.licence}</dt>
+                              <dd>{p.licenceNo}</dd>
+                            </>
+                          ) : null}
+                          {p.address ? (
+                            <>
+                              <dt>{th.ops.address}</dt>
+                              <dd>{p.address}</dd>
+                            </>
+                          ) : null}
+                          {p.profession ? (
+                            <>
+                              <dt>{th.ops.profession}</dt>
+                              <dd>{p.profession}</dd>
+                            </>
+                          ) : null}
+                          <dt>{th.ops.entityId}</dt>
+                          <dd>
+                            <code>{p.id}</code>
+                          </dd>
+                        </dl>
+                      )}
+                    </span>
+                    <span className="row__actions">
+                      <Button
+                        variant="subtle"
+                        aria-expanded={open}
+                        aria-label={open ? th.a11y.collapseRow : th.a11y.expandRow}
+                        onClick={() => setExpandedId(open ? null : p.id)}
+                      >
+                        {open ? th.common.hideDetails : th.common.details}
+                      </Button>
+                      <Button
+                        data-testid="verify-btn"
+                        variant="primary"
+                        busy={busyId === p.id}
+                        disabled={busyId !== null && busyId !== p.id}
+                        onClick={() => setConfirm({ type: "verify", kind: p.kind, id: p.id, name: p.name })}
+                      >
+                        {th.ops.verify}
+                      </Button>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </SectionBlock>
@@ -245,10 +336,16 @@ export default function OpsPage() {
                   </li>
                 ))}
               {!loading && cases.length === 0 && (
-                <EmptyState as="li" title={th.ops.emptyCases} icon={<CheckIcon />} />
+                <EmptyState
+                  as="li"
+                  title={th.ops.emptyCases}
+                  description={th.ops.emptyCasesHint}
+                  icon={<CheckIcon />}
+                />
               )}
               {cases.map((c) => {
                 const refId = c.refId;
+                const hint = th.ops.caseHint[c.kind];
                 return (
                   <li key={c.id} data-testid={`case-${c.id}`}>
                     <Badge tone={badgeToneForKind(c.kind)}>{th.ops.caseKind[c.kind] ?? c.kind}</Badge>
@@ -260,10 +357,16 @@ export default function OpsPage() {
                         ) : null}
                         {refId && <code className="row__id">{refId.slice(0, 8)}…</code>}
                       </span>
+                      {hint ? <span className="row__hint muted">{hint}</span> : null}
                     </span>
                     {c.kind === "credential_hold" && refId ? (
                       <span className="row__actions">
-                        <Button data-testid="resolve-btn" busy={busy} onClick={() => void resolve(refId)}>
+                        <Button
+                          data-testid="resolve-btn"
+                          busy={busyId === refId}
+                          disabled={busyId !== null && busyId !== refId}
+                          onClick={() => setConfirm({ type: "resolve", bookingId: refId, subject: c.subject })}
+                        >
                           {th.ops.resolveHold}
                         </Button>
                       </span>
@@ -275,6 +378,27 @@ export default function OpsPage() {
           </div>
         </SectionBlock>
       </main>
+
+      <Dialog
+        open={confirm !== null}
+        title={
+          confirm?.type === "verify"
+            ? th.ops.verifyConfirmTitle
+            : th.ops.resolveConfirmTitle
+        }
+        confirmLabel={confirm?.type === "verify" ? th.ops.verify : th.ops.resolveHold}
+        busy={confirm !== null && busyId !== null}
+        onCancel={() => {
+          if (busyId === null) setConfirm(null);
+        }}
+        onConfirm={() => void runConfirm()}
+      >
+        {confirm?.type === "verify" ? (
+          <p>{th.ops.verifyConfirmBody(confirm.name, th.ops.kind[confirm.kind] ?? confirm.kind)}</p>
+        ) : confirm?.type === "resolve" ? (
+          <p>{th.ops.resolveConfirmBody(confirm.subject)}</p>
+        ) : null}
+      </Dialog>
     </>
   );
 }
