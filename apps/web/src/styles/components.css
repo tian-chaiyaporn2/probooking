@@ -80,8 +80,7 @@
   .nav-toggle:hover { border-color: var(--muted); background: var(--bg); }
 }
 .nav-backdrop {
-  /* Portaled to document.body — must outrank .app-header (10) but stay under
-     .app-header--menu-open (22) so the toggle remains usable. */
+  /* Portaled to document.body — above .app-header (10), under .app-header--menu-open (22). */
   position: fixed; inset: 0; z-index: 20; border: none; cursor: pointer;
   /* Match drawer: explicit cover so body overflow lock cannot shrink the scrim. */
   width: 100%;
