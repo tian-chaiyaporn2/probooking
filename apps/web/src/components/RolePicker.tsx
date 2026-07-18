@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "./Toast";
 import { loginAs } from "../lib/api";
 import { getThaiErrorMessage } from "../lib/strings";
-import { DEMO_ACCOUNTS, saveSession, type DemoAccount } from "../lib/demo-accounts";
+import { DEMO_ACCOUNTS, saveSession, clearSession, type DemoAccount } from "../lib/demo-accounts";
 
 /**
  * The "sign in as" demo picker. Each card logs in as a ready-made account for a role and
@@ -22,6 +22,8 @@ export function RolePicker() {
     setBusy(acc.phone);
     try {
       const token = await loginAs(acc.phone);
+      // Wipe any prior party/staff session before writing the new one.
+      clearSession();
       saveSession(token, acc.phone);
       router.push(acc.route);
     } catch (e) {

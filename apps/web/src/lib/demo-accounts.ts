@@ -87,6 +87,10 @@ export function loadSession(): { token: string; phone: string } | null {
 export function clearSession(): void {
   try {
     sessionStorage.removeItem(KEY);
+    // Also drop staff-scoped sessions so a prior Ops/Finance login cannot bleed into
+    // the next RolePicker pick (clinic/pro should not inherit a staff token).
+    sessionStorage.removeItem("pb.staff.session.operations");
+    sessionStorage.removeItem("pb.staff.session.finance");
   } catch {
     /* ignore */
   }

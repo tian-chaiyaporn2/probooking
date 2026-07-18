@@ -33,3 +33,20 @@ export function clearStaffSession(surface: StaffSurface): void {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(keyFor(surface));
 }
+
+/** Clear both staff surfaces (use when switching into a party role via RolePicker). */
+export function clearAllStaffSessions(): void {
+  clearStaffSession("operations");
+  clearStaffSession("finance");
+}
+
+/** Clear party + staff session keys so role switches cannot leak prior identity. */
+export function clearAllAppSessions(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem("probook.session");
+  } catch {
+    /* ignore */
+  }
+  clearAllStaffSessions();
+}

@@ -9,6 +9,9 @@
 > **Implementation note (same PR):** Priority recommendations from §7 are landed in-code —
 > Phase 0 honesty (landing/nav), staff depth (Ops confirm + per-row busy + session + Finance drill-down),
 > and a Thai `/journey` offer→Payment Protected→payout walkthrough. See the app routes and components below.
+>
+> **Superseded in part:** After merges, `/clinic` and `/pro` workspaces + RolePicker exist.
+> See [`UX_Review_Followup.md`](./UX_Review_Followup.md) for the current-state review and follow-up work.
 
 ---
 

@@ -48,7 +48,9 @@ import { loadSession, clearSession, saveSession } from "../../lib/demo-accounts"
 
 type ConfirmAction =
   | { type: "verify"; kind: "clinic" | "professional" | "insurance"; id: string; name: string }
-  | { type: "resolve"; bookingId: string; subject: string };
+  | { type: "resolve"; bookingId: string; subject: string }
+  | { type: "hold"; bookingId: string; name: string }
+  | { type: "suspend"; professionalId: string; name: string };
 
 /**
  * Operations dashboard (ADM-01). Internal tool that calls controlled API actions:
@@ -159,7 +161,12 @@ export default function OpsPage() {
     if (!token || !confirm) return;
     const auth = token;
     const action = confirm;
-    const id = action.type === "verify" ? action.id : action.bookingId;
+    const id =
+      action.type === "verify"
+        ? action.id
+        : action.type === "suspend"
+          ? `suspend-${action.professionalId}`
+          : action.bookingId;
     setBusyId(id);
     try {
       if (action.type === "verify") {
@@ -173,26 +180,18 @@ export default function OpsPage() {
               ? th.ops.insuranceVerified
               : "บุคลากรผ่านการตรวจสอบแล้ว",
         );
-      } else {
+      } else if (action.type === "resolve") {
         await resolveHold(action.bookingId, auth);
         toast.success("ปลดการระงับแล้ว");
+      } else if (action.type === "hold") {
+        await holdCredential(action.bookingId, auth);
+        toast.success(th.ops.credentialHeld);
+      } else {
+        await suspendCredential(action.professionalId, auth);
+        toast.success(th.ops.credentialSuspended);
       }
       setConfirm(null);
       await load();
-    } catch (e) {
-      toast.error(getThaiErrorMessage(e));
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function enforce(id: string, fn: () => Promise<unknown>, ok: string) {
-    if (!token) return;
-    setBusyId(id);
-    try {
-      await fn();
-      await load();
-      toast.success(ok);
     } catch (e) {
       toast.error(getThaiErrorMessage(e));
     } finally {
@@ -446,7 +445,7 @@ export default function OpsPage() {
                         busy={busyId === b.bookingId}
                         disabled={busyId !== null && busyId !== b.bookingId}
                         onClick={() =>
-                          void enforce(b.bookingId, () => holdCredential(b.bookingId, token), th.ops.credentialHeld)
+                          setConfirm({ type: "hold", bookingId: b.bookingId, name: b.professionalName })
                         }
                       >
                         {th.ops.holdCredential}
@@ -459,11 +458,11 @@ export default function OpsPage() {
                         busy={busyId === `suspend-${b.professionalId}`}
                         disabled={busyId !== null && busyId !== `suspend-${b.professionalId}`}
                         onClick={() =>
-                          void enforce(
-                            `suspend-${b.professionalId}`,
-                            () => suspendCredential(b.professionalId, token),
-                            th.ops.credentialSuspended,
-                          )
+                          setConfirm({
+                            type: "suspend",
+                            professionalId: b.professionalId,
+                            name: b.professionalName,
+                          })
                         }
                       >
                         {th.ops.suspend}
@@ -482,9 +481,21 @@ export default function OpsPage() {
         title={
           confirm?.type === "verify"
             ? th.ops.verifyConfirmTitle
-            : th.ops.resolveConfirmTitle
+            : confirm?.type === "resolve"
+              ? th.ops.resolveConfirmTitle
+              : confirm?.type === "hold"
+                ? th.party.holdConfirmTitle
+                : th.party.suspendConfirmTitle
         }
-        confirmLabel={confirm?.type === "verify" ? th.ops.verify : th.ops.resolveHold}
+        confirmLabel={
+          confirm?.type === "verify"
+            ? th.ops.verify
+            : confirm?.type === "resolve"
+              ? th.ops.resolveHold
+              : confirm?.type === "hold"
+                ? th.ops.holdCredential
+                : th.ops.suspend
+        }
         busy={confirm !== null && busyId !== null}
         onCancel={() => {
           if (busyId === null) setConfirm(null);
@@ -495,6 +506,10 @@ export default function OpsPage() {
           <p>{th.ops.verifyConfirmBody(confirm.name, th.ops.kind[confirm.kind] ?? confirm.kind)}</p>
         ) : confirm?.type === "resolve" ? (
           <p>{th.ops.resolveConfirmBody(confirm.subject)}</p>
+        ) : confirm?.type === "hold" ? (
+          <p>{th.party.holdConfirmBody}</p>
+        ) : confirm?.type === "suspend" ? (
+          <p>{th.party.suspendConfirmBody(confirm.name)}</p>
         ) : null}
       </Dialog>
     </>
