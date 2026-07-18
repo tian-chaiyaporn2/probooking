@@ -370,6 +370,9 @@
   background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--radius); box-shadow: var(--shadow-sm);
 }
+/* Padded interactive surfaces (forms, profile). Flush cards host edge-to-edge rowlists. */
+.card--pad { padding: var(--s5); }
+.card--pad > :first-child { margin-top: 0; }
 
 .stat-grid {
   display: grid; gap: var(--s3);
@@ -545,7 +548,9 @@
 /* ---- Dialog ---- */
 .dialog {
   border: none; padding: 0; background: transparent;
-  max-width: calc(100vw - 2rem); width: min(28rem, 100%);
+  max-width: calc(100vw - 2rem - var(--safe-left) - var(--safe-right));
+  width: min(28rem, 100%);
+  margin: auto;
 }
 .dialog::backdrop {
   background: rgba(15, 23, 42, 0.45);
@@ -567,6 +572,52 @@
 .dialog__body { color: var(--text); font-size: var(--text-md); line-height: var(--leading-normal); }
 .dialog__body p { margin: 0; }
 .dialog__actions { display: flex; flex-wrap: wrap; gap: var(--s3); justify-content: flex-end; }
+
+/* ---- Party workspace (clinic / pro) ---- */
+.page--party { --page-max: 880px; }
+.workspace-head {
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between;
+  gap: var(--s4); margin-bottom: var(--s5);
+}
+.workspace-head h1 { margin: 0; }
+.workspace-head__meta {
+  display: block; margin-top: var(--s1); font-size: var(--text-sm); color: var(--muted);
+  line-height: var(--leading-snug);
+}
+.compose-row {
+  display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end;
+}
+.compose-row__field {
+  display: flex; flex-direction: column; gap: var(--s1);
+  font-size: var(--text-sm); flex: 1 1 8rem; min-width: 0;
+}
+.compose-row__field .input,
+.compose-row__field input {
+  width: 100%; min-height: var(--touch-min); padding: 0.55rem 0.85rem;
+  border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); font: inherit;
+  font-size: max(16px, var(--text-base));
+}
+.compose-row__check {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: var(--text-md); min-height: var(--touch-min);
+  padding-block: 0.25rem;
+}
+
+/* Booking thread compose (prefer classes over inline) */
+.thread__panel { margin-top: var(--s3); }
+.thread__compose {
+  display: flex; flex-direction: column; gap: 0.4rem; margin-top: var(--s3);
+}
+.thread__compose textarea {
+  width: 100%; padding: 0.55rem 0.85rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  font: inherit; font-size: max(16px, var(--text-base)); resize: vertical;
+  min-height: 4.5rem;
+}
+.thread__compose textarea.thread__draft--warn {
+  border-color: var(--warning);
+}
 
 /* ---- Timeline ---- */
 .timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
@@ -628,7 +679,22 @@
 .row__actions { display: inline-flex; flex-wrap: wrap; gap: var(--s2); margin-inline-start: auto; }
 
 /* ---- Finance filters / detail ---- */
-.filter-bar { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s4); }
+.filter-bar {
+  display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end;
+  margin-bottom: var(--s4);
+}
+.filter-bar label {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  font-size: var(--text-sm); flex: 1 1 9rem; min-width: 0;
+}
+.filter-bar input,
+.filter-bar select {
+  width: 100%; min-height: var(--touch-min); padding: 0.55rem 0.85rem;
+  border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); font: inherit;
+  font-size: max(16px, var(--text-base));
+  -webkit-appearance: none; appearance: none;
+}
 .data-table__detail td { background: var(--bg); padding: var(--s4); }
 .recon-detail { display: grid; gap: var(--s3); max-width: 28rem; }
 .recon-detail__title { margin: 0; font-weight: var(--weight-semibold); color: var(--ink); }

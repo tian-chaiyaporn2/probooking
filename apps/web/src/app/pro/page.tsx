@@ -147,14 +147,11 @@ export default function ProPage() {
   return (
     <>
       <AppHeader current="/pro" />
-      <main id="main" className="page" style={{ maxWidth: 880 }}>
-        <div
-          className="actions"
-          style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}
-        >
+      <main id="main" className="page page--party">
+        <div className="workspace-head">
           <div>
-            <h1 style={{ margin: 0 }}>{me?.professionalName ?? "บุคลากร"}</h1>
-            <span className="muted" style={{ fontSize: "0.85rem" }}>
+            <h1>{me?.professionalName ?? "บุคลากร"}</h1>
+            <span className="workspace-head__meta">
               บุคลากร ·{" "}
               {me?.professionalVerification && (
                 <Badge tone="success">
@@ -163,14 +160,14 @@ export default function ProPage() {
               )}
             </span>
           </div>
-          <span className="actions">
+          <div className="actions">
             <Link href="/signin" className="btn btn--subtle">
               {th.party.switchRole}
             </Link>
             <Button variant="subtle" onClick={signOut}>
               {th.staffLogin.signOut}
             </Button>
-          </span>
+          </div>
         </div>
 
         {profile ? <ProfilePanel profile={profile} /> : null}
@@ -231,7 +228,10 @@ export default function ProPage() {
                       variant="subtle"
                       busy={busy}
                       onClick={() =>
-                        void run(() => declineOffer(o.offerId, token), "ปฏิเสธข้อเสนอแล้ว")
+                        void run(
+                          () => declineOffer(o.offerId, token),
+                          "ปฏิเสธข้อเสนอแล้ว",
+                        )
                       }
                     >
                       {th.party.declineOffer}
