@@ -85,7 +85,7 @@ export function BookingThread({
         {open ? th.party.hideThread : th.party.showThread}
       </Button>
       {open && (
-        <div className="thread__panel" style={{ marginTop: "var(--s3)" }}>
+        <div className="thread__panel">
           {contact && (contact.clinicPhone || contact.professionalPhone) ? (
             <p
               className="muted"
@@ -127,15 +127,7 @@ export function BookingThread({
               })}
             </ul>
           )}
-          <label
-            className="thread__compose"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              marginTop: "var(--s3)",
-            }}
-          >
+          <label className="thread__compose">
             <span className="muted" style={{ fontSize: "0.82rem" }}>
               {th.party.messageHint}
             </span>
@@ -145,17 +137,7 @@ export function BookingThread({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={th.party.messagePlaceholder}
-              style={{
-                width: "100%",
-                padding: "0.5rem 0.7rem",
-                borderRadius: 8,
-                border: softWarn
-                  ? "1px solid var(--warn, #b45309)"
-                  : "1px solid var(--line)",
-                background: "var(--bg)",
-                color: "var(--text)",
-                resize: "vertical",
-              }}
+              className={softWarn ? "thread__draft--warn" : undefined}
             />
           </label>
           {softWarn ? (

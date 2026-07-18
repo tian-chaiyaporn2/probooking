@@ -156,68 +156,40 @@ export default function ClinicPage() {
   return (
     <>
       <AppHeader current="/clinic" />
-      <main id="main" className="page" style={{ maxWidth: 880 }}>
-        <div
-          className="actions"
-          style={{ justifyContent: "space-between", marginBottom: "var(--s5)" }}
-        >
+      <main id="main" className="page page--party">
+        <div className="workspace-head">
           <div>
-            <h1 style={{ margin: 0 }}>{clinic?.name ?? "คลินิก"}</h1>
-            <span className="muted" style={{ fontSize: "0.85rem" }}>
+            <h1>{clinic?.name ?? "คลินิก"}</h1>
+            <span className="workspace-head__meta">
               เจ้าของคลินิก ·{" "}
               {clinic ? (
                 <Badge tone="success">{statusLabel(clinic.verification)}</Badge>
               ) : null}
             </span>
           </div>
-          <span className="actions">
+          <div className="actions">
             <Link href="/signin" className="btn btn--subtle">
               {th.party.switchRole}
             </Link>
             <Button variant="subtle" onClick={signOut}>
               {th.staffLogin.signOut}
             </Button>
-          </span>
+          </div>
         </div>
 
         <div className="card card--pad" style={{ marginBottom: "var(--s5)" }}>
-          <h2 style={{ marginTop: 0 }}>{th.party.postShift}</h2>
-          <div
-            className="actions"
-            style={{ gap: "var(--s3)", alignItems: "flex-end" }}
-          >
-            <label
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                fontSize: "0.85rem",
-              }}
-            >
+          <h2>{th.party.postShift}</h2>
+          <div className="compose-row">
+            <label className="compose-row__field">
               {th.party.compensationBaht}
               <input
                 data-testid="shift-comp"
                 inputMode="numeric"
                 value={comp}
                 onChange={(e) => setComp(e.target.value.replace(/[^0-9]/g, ""))}
-                style={{
-                  padding: "0.5rem 0.7rem",
-                  borderRadius: 8,
-                  border: "1px solid var(--line)",
-                  background: "var(--bg)",
-                  color: "var(--text)",
-                  width: 140,
-                }}
               />
             </label>
-            <label
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: "0.9rem",
-              }}
-            >
+            <label className="compose-row__check">
               <input
                 type="checkbox"
                 checked={urgent}
@@ -259,7 +231,7 @@ export default function ClinicPage() {
         </div>
 
         <div className="card card--pad" style={{ marginBottom: "var(--s5)" }}>
-          <h2 style={{ marginTop: 0 }}>{th.party.searchPros}</h2>
+          <h2>{th.party.searchPros}</h2>
           <div className="filter-bar">
             <label>
               {th.party.searchProfession}

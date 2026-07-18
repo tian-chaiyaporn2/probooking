@@ -79,41 +79,78 @@ test("home links to the flow", async ({ page }) => {
   await expect(page).toHaveURL(/\/flow$/);
 });
 
-test("pages are responsive — no horizontal page overflow on a small screen", async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 740 }); // small phone
-  for (const path of ["/", "/journey", "/flow", "/ops", "/finance"]) {
-    await page.goto(path);
-    // /ops and /finance now open on a staff sign-in form; sign in, then wait for the
-    // data-driven dashboard to settle so the overflow check runs against real content.
-    if (path === "/ops") {
-      await staffUiLogin(page, "+66900000009");
-      await expect(page.getByTestId("refresh")).toBeVisible();
+test("pages are responsive — no horizontal page overflow on phone and tablet", async ({ page }) => {
+  const viewports = [
+    { width: 360, height: 740 }, // small phone
+    { width: 390, height: 844 }, // common phone
+    { width: 768, height: 1024 }, // tablet portrait
+    { width: 834, height: 1194 }, // large tablet portrait
+  ];
+  const paths = ["/", "/signin", "/journey", "/flow", "/ops", "/finance"];
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    for (const path of paths) {
+      // Fresh session each path so Ops/Finance OTP forms stay reachable across viewports.
+      await page.goto(path);
+      await page.evaluate(() => sessionStorage.clear());
+      await page.reload();
+      if (path === "/ops") {
+        await staffUiLogin(page, "+66900000009");
+        await expect(page.getByTestId("refresh")).toBeVisible();
+      }
+      if (path === "/finance") {
+        await staffUiLogin(page, "+66900000004");
+        await expect(page.getByTestId("fin-summary")).toBeVisible();
+      }
+      // The page itself must not scroll horizontally (wide tables scroll inside their box).
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(
+        overflow,
+        `horizontal overflow on ${path} at ${viewport.width}x${viewport.height}`,
+      ).toBeLessThanOrEqual(1);
     }
-    if (path === "/finance") {
-      await staffUiLogin(page, "+66900000004");
-      await expect(page.getByTestId("fin-summary")).toBeVisible();
-    }
-    // The page itself must not scroll horizontally (wide tables scroll inside their box).
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow, `horizontal overflow on ${path}`).toBeLessThanOrEqual(1);
   }
 });
 
-test("mobile nav collapses into a drawer that opens and closes", async ({ page }) => {
+test("mobile and tablet nav collapses into a drawer that opens and closes", async ({ page }) => {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 }, // below 960px drawer breakpoint
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    // The desktop nav is hidden; a menu button stands in for it.
+    await expect(page.getByRole("navigation", { name: "เมนูหลัก" })).toBeHidden();
+    await page.getByLabel("เปิดเมนู").click();
+    // Drawer opens as a labelled dialog; its links are visible and Escape dismisses it.
+    const drawer = page.getByRole("dialog", { name: "เมนูหลัก" });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "เดโม" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
+    await expect(page.getByLabel("เปิดเมนู")).toBeVisible();
+  }
+});
+
+test("landing keeps brand before product visual on phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  // The desktop nav is hidden; a menu button stands in for it.
-  await expect(page.getByRole("navigation", { name: "เมนูหลัก" })).toBeHidden();
-  await page.getByLabel("เปิดเมนู").click();
-  // Drawer opens as a labelled dialog; its links are visible and Escape dismisses it.
-  const drawer = page.getByRole("dialog", { name: "เมนูหลัก" });
-  await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole("link", { name: "เดโม" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(drawer).toBeHidden();
-  await expect(page.getByLabel("เปิดเมนู")).toBeVisible();
+  const order = await page.evaluate(() => {
+    const brand = document.querySelector(".hero__brand");
+    const visual = document.querySelector(".hero__visual");
+    if (!brand || !visual) return null;
+    const position = brand.compareDocumentPosition(visual);
+    return {
+      brandFirst: !!(position & Node.DOCUMENT_POSITION_FOLLOWING),
+      brandTop: brand.getBoundingClientRect().top,
+      visualTop: visual.getBoundingClientRect().top,
+    };
+  });
+  expect(order).not.toBeNull();
+  expect(order!.brandFirst).toBe(true);
+  expect(order!.brandTop).toBeLessThan(order!.visualTop);
 });
 
 test("booking flow confirms a booking with the correct checkout total", async ({ page }) => {

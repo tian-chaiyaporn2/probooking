@@ -14,7 +14,7 @@ export function ProfilePanel({ profile }: { profile: VerifiedProfile }) {
       data-testid="profile-panel"
       style={{ marginBottom: "var(--s5)" }}
     >
-      <h2 style={{ marginTop: 0 }}>{th.party.profileTitle}</h2>
+      <h2>{th.party.profileTitle}</h2>
       <p style={{ margin: "0 0 var(--s3)" }}>
         <strong>{selfDeclared.displayName}</strong>
         <span className="muted">

@@ -12,6 +12,7 @@
 >
 > **Superseded in part:** After merges, `/clinic` and `/pro` workspaces + RolePicker exist.
 > See [`UX_Review_Followup.md`](./UX_Review_Followup.md) for the current-state review and follow-up work.
+> See [`Mobile_Tablet_UI_Review.md`](./Mobile_Tablet_UI_Review.md) for phone/tablet responsive findings.
 
 ---
 
