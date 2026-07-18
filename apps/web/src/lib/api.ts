@@ -23,18 +23,31 @@ function authHeaders(
  * `429: {"statusCode":429,"message":"too many OTP requests…"}` into toasts and the login
  * form. Prefer the `message`; fall back to the raw text only if it is not that shape.
  */
+/** An API error that also carries the HTTP status, so callers can branch on 401/403 (e.g.
+ * expire a stale session) instead of substring-matching a message that never holds the code. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function errorFrom(res: Response): Promise<Error> {
   const text = await res.text();
+  let message = text || `Request failed (${res.status})`;
   try {
     const body = JSON.parse(text) as { message?: string | string[] };
     const msg = Array.isArray(body.message)
       ? body.message.join("; ")
       : body.message;
-    if (msg) return new Error(msg);
+    if (msg) message = msg;
   } catch {
-    // not JSON — fall through to the raw text
+    // not JSON — keep the raw text
   }
-  return new Error(text || `Request failed (${res.status})`);
+  return new ApiError(message, res.status);
 }
 
 async function post<T>(
