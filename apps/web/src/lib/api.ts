@@ -201,6 +201,9 @@ export const offerToProfessional = (
 export const acceptOffer = (id: string, token: string) =>
   post<Accepted>(`/offers/${id}/accept`, undefined, token);
 
+export const declineOffer = (id: string, token: string) =>
+  post<{ id: string; state: string }>(`/offers/${id}/decline`, undefined, token);
+
 // No `prefundingSucceeded`: whether funds were captured is the API's finding, not ours.
 export const confirmOffer = (id: string, token: string) =>
   post<Confirmed>(`/offers/${id}/confirm`, undefined, token);

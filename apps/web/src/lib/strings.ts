@@ -345,6 +345,7 @@ export const th = {
     offersToMe: "ข้อเสนอถึงฉัน",
     noOffers: "ยังไม่มีข้อเสนอ — สมัครเวรด้านล่างก่อน",
     acceptOffer: "ยอมรับ",
+    declineOffer: "ปฏิเสธ",
     openShifts: "เวรที่เปิดรับ",
     noOpenShifts: "ยังไม่มีเวรเปิดรับ",
     apply: "สมัคร",
