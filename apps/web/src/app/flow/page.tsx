@@ -163,11 +163,12 @@ export default function FlowPage() {
           subtitle={th.flow.subtitle}
         />
 
-        <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
-          {running ? th.flow.running : th.flow.run}
-        </Button>
-        {(running || steps.length > 0) && (
-          <div className="flow-progress">
+        <div className="flow-start">
+          <Button data-testid="run-flow" variant="primary" size="lg" busy={running} onClick={run}>
+            {running ? th.flow.running : th.flow.run}
+          </Button>
+          {(running || steps.length > 0) && (
+            <div className="flow-progress">
             <div className="flow-progress__meta">
               <span id="flow-progress-label">{th.flow.progress(Math.min(steps.length, FLOW_TOTAL), FLOW_TOTAL)}</span>
               {running && <span className="muted">{th.common.loading}</span>}
@@ -186,7 +187,8 @@ export default function FlowPage() {
               />
             </div>
           </div>
-        )}
+          )}
+        </div>
 
         {/* Preview the flow before it runs, so the page is not an empty button in a void. */}
         {steps.length === 0 && !bookingId && !running && (

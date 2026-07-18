@@ -22,6 +22,7 @@ import { SectionBlock } from "../../components/SectionBlock";
 import { StatSkeletonGrid } from "../../components/Skeleton";
 import { RefreshIcon, DownloadIcon, CheckIcon, AlertIcon } from "../../components/icons";
 import { useToast } from "../../components/Toast";
+import { Field, Input } from "../../components/Field";
 import { StaffLogin } from "../../components/StaffLogin";
 import { th, getThaiErrorMessage } from "../../lib/strings";
 import { loadSession, clearSession } from "../../lib/demo-accounts";
@@ -303,38 +304,35 @@ export default function FinancePage() {
       {refundFor && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={th.finance.refundTitle} data-testid="refund-form">
           <div className="modal card card--pad">
-            <h2 style={{ marginTop: 0 }}>{th.finance.refundTitle}</h2>
-            <p className="muted" style={{ fontSize: "0.85rem" }}>
+            <h2>{th.finance.refundTitle}</h2>
+            <p className="muted lead">
               {th.finance.colBooking} <code>{refundFor.bookingId.slice(0, 8)}</code> · {th.finance.captured}{" "}
               {formatThb(refundFor.captured)}
             </p>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.85rem", marginBottom: "var(--s3)" }}>
-              {th.finance.refundAmount}
-              <input
+            <Field label={th.finance.refundAmount} htmlFor="refund-amount">
+              <Input
+                id="refund-amount"
                 data-testid="refund-amount"
                 inputMode="decimal"
                 value={refundAmount}
                 onChange={(e) => {
-                  // Allow baht with up to two decimal places (satang); keep only the first dot.
                   let v = e.target.value.replace(/[^0-9.]/g, "");
                   const dot = v.indexOf(".");
                   if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "").slice(0, 2);
                   setRefundAmount(v);
                 }}
-                style={{ padding: "0.5rem 0.7rem", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)" }}
               />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.85rem", marginBottom: "var(--s4)" }}>
-              {th.finance.refundReason}
-              <input
+            </Field>
+            <Field label={th.finance.refundReason} htmlFor="refund-reason">
+              <Input
+                id="refund-reason"
                 data-testid="refund-reason"
                 value={refundReason}
                 placeholder={th.finance.refundReasonPlaceholder}
                 onChange={(e) => setRefundReason(e.target.value)}
-                style={{ padding: "0.5rem 0.7rem", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg)", color: "var(--text)" }}
               />
-            </label>
-            <div className="actions" style={{ justifyContent: "flex-end" }}>
+            </Field>
+            <div className="actions modal__actions">
               <Button variant="subtle" onClick={() => setRefundFor(null)}>
                 {th.finance.cancel}
               </Button>

@@ -17,7 +17,7 @@
   animation: rise-in 0.55s var(--ease) both;
 }
 .hero__eyebrow {
-  display: inline-flex; align-items: center; gap: 0.4rem;
+  display: inline-flex; align-items: center; gap: var(--s2);
   color: var(--primary-hover); font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-none); font-size: var(--text-sm);
   line-height: var(--leading-snug);
@@ -95,10 +95,10 @@
 .mockcard__total { font-size: var(--text-lg); }
 .mockcard__total span:last-child { color: var(--primary-hover); font-weight: var(--weight-bold); }
 .mockcard__stamp {
-  display: inline-flex; align-items: center; gap: 0.35rem; align-self: start;
+  display: inline-flex; align-items: center; gap: var(--s1); align-self: start;
   color: var(--success); background: var(--success-050);
   font-size: var(--text-xs); font-weight: var(--weight-bold);
-  padding: 0.25rem 0.65rem; border-radius: var(--radius-sm);
+  padding: var(--s1) var(--s2); border-radius: var(--radius-sm);
   border: 1px solid color-mix(in srgb, var(--success) 22%, transparent);
   letter-spacing: var(--tracking-none); line-height: var(--leading-snug);
 }
@@ -125,7 +125,7 @@
   .flow-preview > li:hover { border-color: var(--primary); }
 }
 .steps {
-  display: grid; gap: var(--s2); grid-template-columns: 1fr;
+  display: grid; gap: var(--s4); grid-template-columns: 1fr;
 }
 @media (min-width: 720px) {
   .steps {
@@ -152,7 +152,7 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .cta-card:hover { box-shadow: var(--shadow); border-color: var(--primary); transform: translateY(-3px); }
-  .cta-card:hover .cta-card__arrow { gap: 0.55rem; }
+  .cta-card:hover .cta-card__arrow { gap: var(--s2); }
   .cta-card:hover .cta-card__icon { transform: scale(1.06); }
 }
 .cta-card:active { border-color: var(--primary); }
@@ -166,7 +166,7 @@
 .cta-card__desc { color: var(--muted); font-size: var(--text-md); flex: 1 1 auto; line-height: var(--leading-normal); letter-spacing: var(--tracking-none); }
 .cta-card__arrow {
   color: var(--primary); font-weight: var(--weight-bold); font-size: var(--text-md);
-  display: inline-flex; align-items: center; gap: 0.35rem; transition: gap .18s var(--ease);
+  display: inline-flex; align-items: center; gap: var(--s1); transition: gap .18s var(--ease);
   letter-spacing: var(--tracking-none);
 }
 
@@ -187,7 +187,7 @@
 
 /* ---- Flow demo ---- */
 .flow-preview {
-  list-style: none; margin: var(--s6) 0 0; padding: 0;
+  list-style: none; margin: var(--s4) 0 0; padding: 0;
   display: grid; gap: var(--s3);
 }
 .flow-preview > li {
@@ -228,7 +228,7 @@
   animation: rise-in 0.35s var(--ease) both;
 }
 .flow-result__status {
-  display: inline-flex; align-items: center; gap: 0.4rem;
+  display: inline-flex; align-items: center; gap: var(--s2);
   font-weight: 700; color: var(--success); margin-bottom: var(--s3);
 }
 .flow-result__status--inline { margin-bottom: 0; }
@@ -247,7 +247,7 @@
   border: 1px solid var(--line);
 }
 .checkout th,
-.checkout td { padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--line); }
+.checkout td { padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); }
 .checkout th {
   text-align: left; font-weight: 500; color: var(--muted);
 }
@@ -261,7 +261,7 @@
 }
 .checkout tr.checkout__total th { color: var(--ink); }
 .flow-result__actions { margin-top: var(--s4); display: grid; gap: var(--s3); }
-.flow-result__rating { margin-top: 0.35rem; }
+.flow-result__rating { margin-top: var(--s2); }
 .table-truncated { font-size: 0.8rem; margin-top: var(--s3); }
 
 /* ---- Responsive ---- */
@@ -332,8 +332,8 @@
   .page-head .actions { width: 100%; }
   .page-head .actions .btn { flex: 1 1 auto; }
   .stat__value { font-size: var(--text-xl); }
-  .trust-line { font-size: var(--text-xs); gap: 0.25rem; }
-  .trust-line__dot { margin-inline: 0.35rem; }
+  .trust-line { font-size: var(--text-xs); gap: var(--s1); }
+  .trust-line__dot { margin-inline: var(--s1); }
   .footer { flex-direction: column; align-items: flex-start; gap: var(--s2); }
   .data-table { font-size: var(--text-sm); min-width: 32rem; }
   .data-table td, .data-table thead th { padding: var(--s2) var(--s3); }

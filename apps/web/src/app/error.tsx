@@ -19,11 +19,9 @@ export default function Error({
   }, [error]);
 
   return (
-    <main className="page" style={{ maxWidth: 480, textAlign: "center", paddingTop: "var(--s8)" }}>
-      <h1 style={{ marginBottom: "var(--s3)" }}>เกิดข้อผิดพลาด</h1>
-      <p style={{ color: "var(--muted)", marginBottom: "var(--s5)" }}>
-        ไม่สามารถแสดงหน้านี้ได้ชั่วคราว กรุณาลองใหม่อีกครั้ง
-      </p>
+    <main className="page page--gate">
+      <h1>เกิดข้อผิดพลาด</h1>
+      <p className="muted page--gate__lead">ไม่สามารถแสดงหน้านี้ได้ชั่วคราว กรุณาลองใหม่อีกครั้ง</p>
       <Button variant="primary" onClick={() => reset()}>
         ลองอีกครั้ง
       </Button>

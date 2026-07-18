@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
+import { PageHeader } from "../../components/PageHeader";
 import { RolePicker } from "../../components/RolePicker";
 import { useToast } from "../../components/Toast";
 import { resetDemo } from "../../lib/api";
@@ -33,14 +34,14 @@ export default function SignInPage() {
   return (
     <>
       <AppHeader current="/signin" />
-      <main className="page" style={{ maxWidth: 720 }}>
-        <header style={{ marginBottom: "var(--s5)" }}>
-          <h1 style={{ margin: "0 0 var(--s2)" }}>เข้าใช้งานในบทบาทต่าง ๆ</h1>
-          <p className="muted" style={{ margin: 0 }}>เลือกบัญชีทดลองเพื่อเข้าใช้งานในมุมมองของแต่ละบทบาท</p>
-        </header>
+      <main className="page page--signin">
+        <PageHeader
+          title="เข้าใช้งานในบทบาทต่าง ๆ"
+          subtitle="เลือกบัญชีทดลองเพื่อเข้าใช้งานในมุมมองของแต่ละบทบาท"
+        />
         <RolePicker />
-        <div className="actions" style={{ justifyContent: "space-between", marginTop: "var(--s5)", flexWrap: "wrap", gap: "var(--s3)" }}>
-          <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+        <div className="signin-foot actions">
+          <p className="muted signin-foot__hint">
             บัญชีทดลองสำหรับเดโมเท่านั้น (โหมด AUTH_DEV_MODE) — รหัส OTP จะกรอกให้อัตโนมัติ
           </p>
           <button
