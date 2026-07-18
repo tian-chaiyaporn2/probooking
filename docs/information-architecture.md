@@ -235,7 +235,7 @@ flowchart LR
 | C3 | Browse open shifts | Pro | `GET /shifts` | `/pro` |
 | C4a | Apply (non-binding) | Pro | `POST /shifts/:id/apply` | `/pro` |
 | C4b | Respond to invitation | Pro | invitation states | Gap (API + BDD) |
-| C5 | Accept / decline offer | Pro | `POST /offers/:id/accept` | `/pro` |
+| C5 | Accept / decline offer | Pro | `POST /offers/:id/accept` · `POST /offers/:id/decline` | `/pro` |
 | C6 | See Payment Protected | Pro | offer/booking status | `/pro` |
 | C7a | Mark arrived | Pro | `POST /bookings/:id/arrive` | `/pro` |
 | C7b | Mark complete | Pro | `POST /bookings/:id/complete` | `/pro` |

@@ -86,3 +86,17 @@ Then("role {string} may not send an offer", function (this: ProBookingWorld, rol
 Then("accepting an offer in state {string} is rejected", function (this: ProBookingWorld, state: string) {
   assert.throws(() => advanceOffer(state as never, "AwaitingPayment"), IllegalTransitionError);
 });
+
+When("the professional declines the offer", async function (this: ProBookingWorld) {
+  // OFF: PendingResponse -> Declined (terminal). The conditional `from` claim mirrors the
+  // controller — a concurrent accept/expire must not be overwritten.
+  const next = advanceOffer(this.state.offer.state, "Declined");
+  this.state.offer = await this.state.store.setOfferState(this.state.offer.id, next, {
+    from: "PendingResponse",
+  });
+});
+
+Then("the offer is in {string}", async function (this: ProBookingWorld, state: string) {
+  const offer = await this.state.store.getOffer(this.state.offer.id);
+  assert.equal(offer.state, state);
+});

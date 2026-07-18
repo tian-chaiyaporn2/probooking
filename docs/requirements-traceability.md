@@ -51,7 +51,7 @@ Covered by: `packages/domain/test/*`, `features/04`, `features/05`, `e2e/tests/b
 ## BDD coverage (§9.4 + edge/error/success cases)
 
 All 14 §9.4 acceptance areas plus dedicated success/edge/error case suites are
-executable — `pnpm test:bdd` → **96 scenarios / 256 steps** green, no `@wip`.
+executable — `pnpm test:bdd` → **98 scenarios / 261 steps** green, no `@wip`.
 `pnpm test:bdd:all` also runs 7 `@wip` scenarios that stay pending until product
 hooks land (soft-hold overlap, open-to-requests matching, location/availability
 filters, CMP-04 clinic-confirm-without-submit, CMP-05 overtime/shortened pay,

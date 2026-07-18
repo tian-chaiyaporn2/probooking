@@ -25,3 +25,12 @@ Feature: Offer and application lifecycle — success/edge/error cases
 
   Scenario: An expired offer can never be accepted (OFF-03)
     Then accepting an offer in state "Expired" is rejected
+
+  Scenario: A professional declines a pending offer (OFF: PendingResponse -> Declined)
+    Given a shift with a candidate professional
+    When the clinic sends an offer
+    And the professional declines the offer
+    Then the offer is in "Declined"
+
+  Scenario: A declined offer is terminal — it can never be accepted
+    Then accepting an offer in state "Declined" is rejected
