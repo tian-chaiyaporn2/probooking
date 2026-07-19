@@ -300,7 +300,8 @@ model Offer {
   fundingDueAt   DateTime? @db.Timestamptz(3) // set on acceptance (OFF-03: 30 min)
   booking        Booking?
 
-  // One active offer per shift (OFF-02). Enforced by the partial unique index
+  // One active offer per shift (OFF-02). Active = PendingResponse, AwaitingPayment, or
+  // PaymentFailed (capture failed but the funding/retry window is still binding). Enforced by the partial unique index
   // "Offer_one_active_per_shift" (migration 20260717180000_concurrency_invariants) —
   // Prisma cannot express a partial unique index, so it exists in SQL only. A service-layer
   // read cannot enforce this: two concurrent sends both see "no active offer".

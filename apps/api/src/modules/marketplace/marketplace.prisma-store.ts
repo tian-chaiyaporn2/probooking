@@ -392,7 +392,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       urgency: s.urgency as ShiftUrgency,
       startsAt: s.startsAt.getTime(),
       state: s.state,
-      hasActiveOffer: s.offers.some((o) => o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+      hasActiveOffer: s.offers.some((o) => o.state === "PendingResponse" || o.state === "AwaitingPayment" || o.state === "PaymentFailed"),
       booked: s.booking !== null,
     };
   }
@@ -557,7 +557,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       where: {
         state: "Published",
         booking: null,
-        offers: { none: { state: { in: ["PendingResponse", "AwaitingPayment"] } } },
+        offers: { none: { state: { in: ["PendingResponse", "AwaitingPayment", "PaymentFailed"] } } },
         ...(filters?.urgency ? { urgency: filters.urgency } : {}),
         ...(filters?.category ? { category: { contains: filters.category, mode: "insensitive" as const } } : {}),
         ...(filters?.minCompensation !== undefined || filters?.maxCompensation !== undefined
@@ -619,7 +619,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       }),
       prisma.offer.updateMany({
         where: {
-          state: "AwaitingPayment",
+          state: { in: ["AwaitingPayment", "PaymentFailed"] },
           fundingDueAt: { not: null, lte: nowDate },
         },
         data: { state: "Expired" },
@@ -758,7 +758,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       },
     });
     return shifts.map((s) => {
-      const active = s.offers.find((o) => o.state === "PendingResponse" || o.state === "AwaitingPayment");
+      const active = s.offers.find((o) => o.state === "PendingResponse" || o.state === "AwaitingPayment" || o.state === "PaymentFailed");
       return {
         shiftId: s.id,
         category: s.category,
