@@ -177,7 +177,7 @@ Phone → OTP stages, role gate, session notice, demo shortcut, Thai errors, dis
 |---|---|
 | **CheckoutSummary** | **P2:** Flow harness bypasses it. Solid elsewhere. |
 | **StatusTimeline** | **P2:** No `aria-current="step"` on current item. Unused `TimelineNote` helper. |
-| **ProfilePanel** | **P1 (R31):** `selfDeclared.profession` shown raw (e.g. `physician`) in Thai UI. **P2:** Inline styles; ★ glyph. |
+| **ProfilePanel** | **P1 (R31):** `selfDeclared.profession` shown raw (e.g. `dental_assistant`) in Thai UI. **P2:** Inline styles; ★ glyph. |
 
 ---
 

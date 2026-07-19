@@ -5,7 +5,7 @@
 **Status:** Final product definition for design, estimation, BDD, and launch planning  
 **Market:** Thailand  
 **Initial region:** Bangkok and surrounding provinces  
-**Initial professionals:** Thai-licensed physicians and dentists  
+**Initial professionals:** Dental assistants (ผู้ช่วยทันตแพทย์), widening to nurses (พยาบาล)  
 **Target public launch:** Q1 2027, subject to Phase 0 and legal/payment readiness  
 **Companion:** ProBooking Rollout Plan v1.1
 
@@ -66,7 +66,7 @@ A normal booking must be self-service. Human Operations may handle verification 
 - Permanent recruitment, payroll employment, or emergency dispatch.
 - Guaranteed fill or universal Instant Book.
 - High-acuity categories without clinical approval.
-- Nurses and other professions.
+- Professions beyond dental assistants and nurses.
 - Multi-branch enterprise administration.
 - Recurring, bulk, or multi-position shifts.
 - Native apps, PWA, full calendar, or real-time chat.
@@ -174,7 +174,7 @@ Rules:
 
 ## 4.2 Professional journey
 
-1. Register and verify identity, licence, specialty, and payout account.
+1. Register and verify identity and payout account; licensed professions (nurse) also verify a licence.
 2. Build a profile and add availability.
 3. Search shifts, apply, or answer invitations.
 4. Review and accept exact offer terms.
@@ -201,14 +201,14 @@ Rules:
 - **AUTH-03:** Agreements and policies are versioned and auditable.
 - **AUTH-04:** Unverified users may browse restricted public content but cannot transact.
 - **ORG-01:** A clinic submits branch identity, licence, authority, address, billing data, and profile content.
-- **PRO-01:** A professional submits identity, licence, specialty evidence, experience, payout account, and optional insurance evidence.
+- **PRO-01:** A professional submits identity, experience, payout account, and optional insurance evidence. Credential requirements are profession-dependent: a licensed profession (nurse) also submits licence and specialty evidence; a dental assistant is not a licensed practitioner and submits no licence.
 
 ## 5.2 Verification and profiles
 
 - **VER-01:** Approved official sources or documented manual review verify mandatory facts.
 - **VER-02:** Verification states: Draft, Submitted, Under Review, Needs Information, Verified, Rejected, Suspended, Expired, Closed.
 - **VER-03:** Public profiles separate verified facts from self-declared content and show last-checked dates.
-- **VER-04:** Required credentials must remain valid through shift end.
+- **VER-04:** Required credentials must remain valid through shift end. Which credentials are required depends on the profession — a licensed profession (nurse) requires a valid licence; a dental assistant does not.
 - **VER-05:** Required insurance must remain valid through shift end; status shows Verified, Under Review, Expired, Not Provided, or Unverified.
 - **VER-06:** A required credential or insurance failure after confirmation places the booking on Hold for Operations review.
 - **VER-07:** Payout account must match the verified professional.
@@ -332,7 +332,7 @@ Holds and support cases are overlays; they do not overwrite history. Customer la
 All must be true:
 
 - Active verified clinic and professional.
-- Required licence and specialty valid through shift end.
+- Required licence and specialty (for licensed professions) valid through shift end.
 - Required insurance valid through shift end.
 - Supported clinic service and shift category.
 - No suspension, hold, overlap, or expired offer.
@@ -457,7 +457,7 @@ Forecasts must include payment cost, verification, support, outreach, refunds, r
 - 80% of the final ten use the intended product path.
 - Ten completed bookings originate from customer search, posting, application, or invitation—rather than Operations selecting both sides.
 - Repeat use or clear repeat intent from at least two clinics and ten professionals.
-- No unresolved money discrepancy or invalid mandatory licence in a confirmed booking.
+- No unresolved money discrepancy or invalid mandatory licence (where the profession requires one) in a confirmed booking.
 - Every completed booking has accepted terms, payment, completion, allocation, and financial-event records.
 - Core usability issues resolved; legal, payment, tax, privacy, and claim wording approved.
 
@@ -521,7 +521,7 @@ BDD should cover at least:
 - Thai legal review: marketplace terms, worker classification, electronic agreements, liability, cancellation, dispute, and marketing claims.
 - Payment-partner approval of durable Payment Protected flow, refunds, payouts, chargebacks, and settlement timing.
 - Accounting/tax decision: VAT, withholding, invoices, receipts, and professional payout documents.
-- Confirmed official sources and manual verification procedure for clinics, physicians, dentists, specialties, and insurance evidence.
+- Confirmed official sources and manual verification procedure for clinics, professionals (dental assistants and nurses), licences (where applicable), and insurance evidence.
 - Approved launch categories and prohibited/high-risk work.
 - Data-retention schedule and incident contacts.
 - Final service fee, support hours, cancellation policy, and offer timers.
@@ -550,7 +550,7 @@ Do not use without separate approval:
 # 11. Executive decisions
 
 1. ProBooking is a temporary clinic-shift marketplace, not patient booking or payroll.
-2. Phase 1 covers one-position physician and dentist shifts at one verified clinic branch.
+2. Phase 1 covers one-position dental assistant and nurse shifts at one verified clinic branch.
 3. Bangkok and surrounding provinces launch first.
 4. Verification may be manual; mandatory verification is free.
 5. Two-sided search, availability, invitations, reviews, urgent assistance, and Payment Protected remain launch selling points.

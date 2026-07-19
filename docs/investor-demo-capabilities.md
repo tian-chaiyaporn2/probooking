@@ -59,7 +59,7 @@ If search is empty, I want an honest empty state plus a next step (post a shift 
 
 ## C. Professional — find work and get paid
 
-As a verified physician/dentist, I want to:
+As a verified dental assistant/nurse, I want to:
 
 1. Open my workspace and see verification, licence, and payout readiness at a glance.
 2. Set availability (or see that without it I am not shown as available).
