@@ -760,6 +760,107 @@ test("§6.4: a refund needs two different authorized people (dual-control guard)
   expect((await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, { headers: fin2Auth })).status()).toBe(409);
 });
 
+test("a goodwill refund on an active booking is absorbed by the fee; completion still pays full comp", async ({
+  page,
+}) => {
+  // Regression: a dual-control refund issued on a still-active booking used to make the
+  // completion conservation check (captured == comp + fee + refunds) impossible to balance,
+  // trapping the booking — neither completable nor cancellable. The platform fee now absorbs
+  // the refund first, so the professional keeps their full compensation.
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: Awaited<ReturnType<typeof page.request.get>>) =>
+    (await r.json()) as any;
+  const ops = await j(
+    await page.request.post(`${api}/auth/dev/token`, {
+      data: { role: "operations" },
+    }),
+  );
+  const opsAuth = { authorization: `Bearer ${ops.token}` };
+  const fin1Auth = await loginAs(page.request, api, "+66900000001");
+  const fin2Auth = await loginAs(page.request, api, "+66900000002");
+
+  const clinic = await j(
+    await page.request.post(`${api}/clinics`, {
+      data: {
+        branchName: `Gw ${uniq}`,
+        licenceNo: "L",
+        address: "BKK",
+        ownerPhone: `+66gc${uniq}`,
+      },
+    }),
+  );
+  await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, {
+    headers: opsAuth,
+  });
+  const pro = await j(
+    await page.request.post(`${api}/professionals`, {
+      data: {
+        displayName: "Dr Gw",
+        profession: "physician",
+        phone: `+66gp${uniq}`,
+        payoutRef: "x",
+      },
+    }),
+  );
+  await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, {
+    headers: opsAuth,
+  });
+  const clinicAuth = await loginAs(page.request, api, `+66gc${uniq}`);
+  const proAuth = await loginAs(page.request, api, `+66gp${uniq}`);
+  const shift = await j(
+    await page.request.post(`${api}/shifts`, {
+      data: { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
+      headers: clinicAuth,
+    }),
+  );
+  await page.request.post(`${api}/shifts/${shift.shiftId}/apply`, {
+    data: { professionalId: pro.id },
+    headers: proAuth,
+  });
+  const offer = await j(
+    await page.request.post(`${api}/shifts/${shift.shiftId}/offer`, {
+      data: { professionalId: pro.id },
+      headers: clinicAuth,
+    }),
+  );
+  await page.request.post(`${api}/offers/${offer.id}/accept`, {
+    headers: proAuth,
+  });
+  const confirmed = await j(
+    await page.request.post(`${api}/offers/${offer.id}/confirm`, {
+      headers: clinicAuth,
+    }),
+  );
+  const bookingId = confirmed.booking.id;
+
+  // Finance issues a 50k goodwill refund on the still-active (Confirmed) booking (< the
+  // 120k fee, so the fee fully absorbs it).
+  const approval = await j(
+    await page.request.post(`${api}/finance/refunds`, {
+      data: { bookingId, amount: 50_000, reason: "goodwill" },
+      headers: fin1Auth,
+    }),
+  );
+  await page.request.post(`${api}/finance/refunds/${approval.id}/approve`, {
+    headers: fin2Auth,
+  });
+
+  // The booking now completes normally — and must NOT be trapped.
+  await page.request.post(`${api}/bookings/${bookingId}/complete`, {
+    headers: proAuth,
+  });
+  const accept = await page.request.post(
+    `${api}/bookings/${bookingId}/accept-completion`,
+    { headers: clinicAuth },
+  );
+  expect(accept.ok()).toBe(true);
+  const done = await j(accept);
+  expect(done.payoutState).toBe("Paid");
+  // The professional keeps their FULL compensation; the platform fee ate the refund.
+  expect(done.payoutAmount).toBe(1_000_000);
+});
+
 test("§7.3: logout revokes a token, and revoke-sessions kills a subject's tokens", async ({ page }) => {
   const api = "http://localhost:4000";
   const j = async (r: Awaited<ReturnType<typeof page.request.get>>) => (await r.json()) as any;
