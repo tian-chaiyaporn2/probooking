@@ -116,6 +116,7 @@ export function conserves(c: Conservation): boolean {
   // Legs other than `adjustments` (signed by design) must be non-negative or a buggy
   // caller can "balance" while moving money the wrong way.
   if (
+    c.captured < 0 ||
     c.protectedRemainder < 0 ||
     c.payout < 0 ||
     c.fee < 0 ||

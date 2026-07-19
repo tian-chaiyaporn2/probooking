@@ -92,6 +92,23 @@ describe("money (integer satang, LOC-02)", () => {
     ).toBe(false);
   });
 
+  it("rejects a negative captured even when a signed adjustment would balance it (PAY-07)", () => {
+    // `adjustments` is signed by design, so a negative capture could "balance" against a
+    // negative adjustment and slip through the equality check — the captured>=0 guard blocks it.
+    expect(
+      conserves({
+        captured: satang(-100),
+        protectedRemainder: satang(0),
+        payout: satang(0),
+        fee: satang(0),
+        tax: satang(0),
+        refunds: satang(0),
+        providerCosts: satang(0),
+        adjustments: satang(-100),
+      }),
+    ).toBe(false);
+  });
+
   it("builds a checkout that totals compensation + fee + tax (PAY-02)", () => {
     const c = buildCheckout(thb(5_000), { tax: satang(0) });
     expect(c.serviceFee).toBe(60_000);
