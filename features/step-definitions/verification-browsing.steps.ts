@@ -71,7 +71,7 @@ When("a clinic views the public profile", async function (this: ProBookingWorld)
 Then("verified facts are labelled as platform-verified", function (this: ProBookingWorld) {
   // The profile's `verified` section carries platform-confirmed facts (VER-03).
   assert.equal(this.state.profile.verified.identityVerified, true);
-  assert.equal(this.state.profile.verified.licence.state, "Verified");
+  assert.equal(this.state.profile.verified.credential.state, "Verified");
 });
 
 Then("self-declared content is clearly distinguished", function (this: ProBookingWorld) {

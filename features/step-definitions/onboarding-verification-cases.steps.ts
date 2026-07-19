@@ -36,7 +36,7 @@ When("Operations verifies then suspends the professional", async function (this:
 
 Then("the professional's licence reads {string}", async function (this: ProBookingWorld, state: string) {
   const profile = await this.state.store.getProfessionalProfile(this.state.professionalId);
-  assert.equal(profile.verified.licence.state, state);
+  assert.equal(profile.verified.credential.state, state);
 });
 
 Then("the identity is marked verified", async function (this: ProBookingWorld) {
@@ -66,7 +66,7 @@ Then("registering another professional with the same phone conflicts", async fun
 });
 
 // VER-04 has two halves — suspension AND expiry — and only suspension was reachable: the
-// in-memory store hardcoded `licenceValidThroughShiftEnd: true`, so a bug letting an
+// in-memory store hardcoded `credentialValidThroughShiftEnd: true`, so a bug letting an
 // expired-licence professional book would pass every suite that runs against this store.
 Given("a professional with an offer whose licence has expired", async function (this: ProBookingWorld) {
   this.state.store = newStore();
@@ -83,13 +83,12 @@ Given("a professional with an offer whose licence is still valid", async functio
 
 Then("the licence does not cover the shift", async function (this: ProBookingWorld) {
   const e = await this.state.store.getOfferEligibility(this.state.seed.offerId);
-  assert.equal(e.licenceValidThroughShiftEnd, false);
+  assert.equal(e.credentialValidThroughShiftEnd, false);
   // The §6.3 gate must actually reject on that fact, not merely report it.
   const result = checkConfirmationEligibility({
     clinicActiveVerified: true,
     professionalActiveVerified: true,
-    licenceValidThroughShiftEnd: e.licenceValidThroughShiftEnd,
-    specialtyValidThroughShiftEnd: true,
+    credentialValidThroughShiftEnd: e.credentialValidThroughShiftEnd,
     insuranceRequired: false,
     insuranceValidThroughShiftEnd: true,
     clinicServiceSupported: true,
@@ -101,10 +100,10 @@ Then("the licence does not cover the shift", async function (this: ProBookingWor
     durablePrefundingSucceeded: true,
   });
   assert.equal(result.eligible, false);
-  assert.ok(result.failures.includes("licence_invalid_through_shift_end"));
+  assert.ok(result.failures.includes("credential_invalid_through_shift_end"));
 });
 
 Then("the licence covers the shift", async function (this: ProBookingWorld) {
   const e = await this.state.store.getOfferEligibility(this.state.seed.offerId);
-  assert.equal(e.licenceValidThroughShiftEnd, true);
+  assert.equal(e.credentialValidThroughShiftEnd, true);
 });

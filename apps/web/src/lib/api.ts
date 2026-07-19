@@ -519,7 +519,8 @@ export interface VerifiedProfile {
   };
   verified: {
     identityVerified: boolean;
-    licence: { state: string; validUntil: number | null } | null;
+    // VER-04 credential: a nurse's licence or a dental assistant's certificate (kind says which).
+    credential: { kind: string; state: string; validUntil: number | null } | null;
     insurance: { state: string; validUntil: number | null } | null;
     rating: { count: number; average: number } | null;
   };

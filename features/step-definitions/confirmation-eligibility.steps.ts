@@ -12,8 +12,7 @@ const HOUR = 60 * 60 * 1000;
 const baseCtx = (): ConfirmationContext => ({
   clinicActiveVerified: true,
   professionalActiveVerified: true,
-  licenceValidThroughShiftEnd: true,
-  specialtyValidThroughShiftEnd: true,
+  credentialValidThroughShiftEnd: true,
   insuranceRequired: false,
   insuranceValidThroughShiftEnd: true,
   clinicServiceSupported: true,
@@ -93,7 +92,7 @@ When(
 Then("offer eligibility reports the licence does not cover the shift", async function (this: ProBookingWorld) {
   const elig = await this.state.store.getOfferEligibility(this.state.seed.offerId);
   assert.ok(elig);
-  assert.equal(elig.licenceValidThroughShiftEnd, false);
+  assert.equal(elig.credentialValidThroughShiftEnd, false);
 });
 
 Given("a confirmed booking that requires insurance", async function (this: ProBookingWorld) {

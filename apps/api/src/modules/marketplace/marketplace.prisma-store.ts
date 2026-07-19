@@ -6,7 +6,7 @@ import {
   aggregateRating,
   ratingFromCounts,
   DEFAULT_SERVICE_FEE_BPS,
-  requiresLicence,
+  credentialKind,
 } from "@probook/domain";
 import { ConflictError, isConflict } from "./errors.util.js";
 import { LIST_LIMITS } from "./list-limits.js";
@@ -238,13 +238,15 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
           verification: "Submitted",
         },
       });
-      // Only licensed professions carry a licence credential (VER-04). A dental assistant is
-      // not a licensed practitioner, so none is created — identity is what gets verified.
-      if (requiresLicence(input.profession)) {
-        await tx.credential.create({
-          data: { professionalId: profile.id, kind: "licence", state: "Submitted" },
-        });
-      }
+      // Every profession submits a credential (VER-04); the kind depends on the profession —
+      // a nurse's licence or a dental assistant's certificate.
+      await tx.credential.create({
+        data: {
+          professionalId: profile.id,
+          kind: credentialKind(input.profession),
+          state: "Submitted",
+        },
+      });
       await tx.payoutAccount.create({
         data: { professionalId: profile.id, bankRefMasked: input.payoutRef, verified: false },
       });
@@ -272,13 +274,13 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       // credential kinds (specialty_evidence, identity) are reviewed separately and
       // must not be blanket-endorsed here.
       prisma.credential.updateMany({
-        where: { professionalId: id, kind: "licence" },
+        where: { professionalId: id, kind: credentialKind(p.profession) },
         data: { state: "Verified" },
       }),
       // Fail-closed licence checks need a validity window. Newly verified pros with no
       // recorded expiry get ~2 years so confirmation eligibility can evaluate them.
       prisma.credential.updateMany({
-        where: { professionalId: id, kind: "licence", validUntil: null },
+        where: { professionalId: id, kind: credentialKind(p.profession), validUntil: null },
         data: { validUntil: new Date(Date.now() + TWO_YEARS_MS) },
       }),
       prisma.payoutAccount.updateMany({ where: { professionalId: id }, data: { verified: true } }),
@@ -313,25 +315,19 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // VER-04: the licence credential gates confirmation — a suspended or expired
     // licence must block the booking even after the offer was accepted. Fail closed:
     // missing, unverified, or null-expiry licences are not valid through the shift.
-    const licence = offer.professional.credentials.find((c) => c.kind === "licence");
-    const professionalNotSuspended = licence?.state !== "Suspended";
-    const licenceValidThroughShiftEnd =      licence?.state === "Verified" &&
-      licence.validUntil !== null &&
-      licence.validUntil.getTime() >= shiftEnd;
-    // Specialty evidence is optional: absent → nothing to invalidate; present → must cover
-    // the shift end and not be Suspended (same shape as licence).
-    const specialty = offer.professional.credentials.find((c) => c.kind === "specialty_evidence");
-    const specialtyValidThroughShiftEnd =
-      !specialty ||
-      (specialty.state !== "Suspended" &&
-        (!specialty.validUntil || specialty.validUntil.getTime() >= shiftEnd));    return {
+    const cred = offer.professional.credentials.find(
+      (c) => c.kind === credentialKind(offer.professional.profession),
+    );
+    const professionalNotSuspended = cred?.state !== "Suspended";
+    const credentialValidThroughShiftEnd =
+      cred?.state === "Verified" &&
+      cred.validUntil !== null &&
+      cred.validUntil.getTime() >= shiftEnd;
+    return {
       clinicVerified: offer.shift.workspace.verification === "Verified",
       professionalVerified: offer.professional.verification === "Verified",
       professionalNotSuspended,
-      licenceRequired: requiresLicence(offer.professional.profession),
-      licenceValidThroughShiftEnd,
-      specialtyRequired: false,
-      specialtyValidThroughShiftEnd,
+      credentialValidThroughShiftEnd,
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,
     };
@@ -972,7 +968,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
 
   async suspendCredential(professionalId: string): Promise<boolean> {
     const cred = await prisma.credential.findFirst({
-      where: { professionalId, kind: "licence" },
+      where: { professionalId },
     });
     if (!cred) return false;
     if (cred.state === "Suspended") return true; // idempotent
@@ -1403,7 +1399,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       include: { credentials: true, insurance: true },
     });
     if (!p) return null;
-    const licence = p.credentials.find((c) => c.kind === "licence");
+    const cred = p.credentials.find((c) => c.kind === credentialKind(p.profession));
     // Latest insurance evidence by validity (VER-05).
     const insurance = [...p.insurance].sort(
       (a, b) => (b.validUntil?.getTime() ?? 0) - (a.validUntil?.getTime() ?? 0),
@@ -1414,8 +1410,8 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       selfDeclared: { displayName: p.displayName, profession: p.profession, specialty: p.specialty },
       verified: {
         identityVerified: p.verification === "Verified",
-        licence: licence
-          ? { state: licence.state, validUntil: licence.validUntil?.getTime() ?? null }
+        credential: cred
+          ? { kind: cred.kind, state: cred.state, validUntil: cred.validUntil?.getTime() ?? null }
           : null,
         insurance: insurance
           ? { state: insurance.state, validUntil: insurance.validUntil?.getTime() ?? null }
@@ -1525,7 +1521,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       where: { state: { in: ["Confirmed", "InProgress", "AwaitingCompletion"] } },
       include: {
         professional: {
-          select: { displayName: true, credentials: { where: { kind: "licence" }, select: { state: true } } },
+          select: { displayName: true, credentials: { select: { state: true } } },
         },
         shift: { include: { workspace: { select: { branchName: true } } } },
       },

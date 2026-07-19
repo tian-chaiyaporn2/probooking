@@ -4,8 +4,7 @@ import { checkConfirmationEligibility, type ConfirmationContext } from "../src/e
 const ok: ConfirmationContext = {
   clinicActiveVerified: true,
   professionalActiveVerified: true,
-  licenceValidThroughShiftEnd: true,
-  specialtyValidThroughShiftEnd: true,
+  credentialValidThroughShiftEnd: true,
   insuranceRequired: false,
   insuranceValidThroughShiftEnd: true,
   clinicServiceSupported: true,
