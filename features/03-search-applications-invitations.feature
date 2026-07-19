@@ -10,9 +10,9 @@ Feature: Search, empty results, applications, and invitations
     And the clinic is offered shift posting and matching assistance
 
   Scenario: Verified professionals filter by profession
-    Given a verified physician and a verified dentist
-    When searching professionals by profession "physician"
-    Then only the physician is returned
+    Given a verified nurse and a verified dental_assistant
+    When searching professionals by profession "nurse"
+    Then only the nurse is returned
 
   Scenario: Open shifts filter by category urgency and compensation and sort urgent then soonest
     Given published shifts with mixed urgency compensation and start times

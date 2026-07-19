@@ -156,7 +156,7 @@ async function main() {
   const now = Date.now();
 
   await registerClinic("คลินิกรอยจอง", "TH-PEND-001", "กรุงเทพฯ", PHONES.clinicPending, false);
-  await registerProfessional("นพ. รอตรวจ", "physician", PHONES.drPending, "xxxx-0000", false);
+  await registerProfessional("ผู้ช่วยรอตรวจ", "dental_assistant", PHONES.drPending, "xxxx-0000", false);
 
   const clinicA = await registerClinic(
     "คลินิกสุขุมวิทสไมล์",
@@ -174,29 +174,29 @@ async function main() {
   );
 
   const somchai = await registerProfessional(
-    "นพ. สมชาย ใจดี",
-    "physician",
+    "สมชาย ใจดี",
+    "dental_assistant",
     PHONES.drSomchai,
     "xxxx-1111",
     true,
   );
   const wanida = await registerProfessional(
-    "ทพ. วนิดา รักษ์ฟัน",
-    "dentist",
+    "วนิดา รักษ์ฟัน",
+    "nurse",
     PHONES.drWanida,
     "xxxx-2222",
     true,
   );
   const prasert = await registerProfessional(
-    "นพ. ประเสริฐ มั่นคง",
-    "physician",
+    "ประเสริฐ มั่นคง",
+    "dental_assistant",
     PHONES.drPrasert,
     "xxxx-3333",
     true,
   );
   const suspended = await registerProfessional(
-    "นพ. ถูกระงับ",
-    "physician",
+    "ผู้ช่วยถูกระงับ",
+    "dental_assistant",
     PHONES.drSuspended,
     "xxxx-4444",
     true,

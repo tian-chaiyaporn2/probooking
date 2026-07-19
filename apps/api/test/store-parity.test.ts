@@ -41,7 +41,7 @@ async function seedConfirmedBooking(store: MarketplaceRepository, compensation =
   await store.verifyClinic(clinic.id);
   const pro = await store.registerProfessional({
     displayName: "P",
-    profession: "physician",
+    profession: "nurse",
     phone: `+66pp${n}`,
     payoutRef: "x",
   });
@@ -128,7 +128,7 @@ describe.each(stores)("$name store contract", ({ make }) => {
     const n = uniq();
     const pro = await store.registerProfessional({
       displayName: "AV",
-      profession: "physician",
+      profession: "nurse",
       phone: `+66av${n}`,
       payoutRef: "x",
     });
@@ -157,7 +157,7 @@ describe.each(stores)("$name store contract", ({ make }) => {
     await store.verifyClinic(clinic.id);
     const pro1 = await store.registerProfessional({
       displayName: "P1",
-      profession: "physician",
+      profession: "nurse",
       phone: `+66o1${n}`,
       payoutRef: "x",
     });
@@ -190,7 +190,7 @@ describe.each(stores)("$name store contract", ({ make }) => {
     const n = uniq();
     const pro2 = await store.registerProfessional({
       displayName: "P2",
-      profession: "physician",
+      profession: "nurse",
       phone: `+66o2${n}`,
       payoutRef: "x",
     });
@@ -213,6 +213,33 @@ describe.each(stores)("$name store contract", ({ make }) => {
     expect(isConflict(err)).toBe(true);
   });
 
+  it("credential model is profession-dependent: a dental assistant has no licence, a nurse does (VER-04)", async () => {
+    const store = make();
+    const n = uniq();
+    const assistant = await store.registerProfessional({
+      displayName: "A",
+      profession: "dental_assistant",
+      phone: `+66da${n}`,
+      payoutRef: "x",
+    });
+    await store.verifyProfessional(assistant.id);
+    const nurse = await store.registerProfessional({
+      displayName: "N",
+      profession: "nurse",
+      phone: `+66nu${n}`,
+      payoutRef: "x",
+    });
+    await store.verifyProfessional(nurse.id);
+
+    const aProfile = await store.getProfessionalProfile(assistant.id);
+    const nProfile = await store.getProfessionalProfile(nurse.id);
+    // A dental assistant is not a licensed practitioner — no licence credential at all.
+    expect(aProfile?.verified.licence).toBeNull();
+    // A nurse is licensed — the licence verifies with the professional.
+    expect(nProfile?.verified.licence).not.toBeNull();
+    expect(nProfile?.verified.licence?.state).toBe("Verified");
+  });
+
   it("expires a PaymentFailed offer once its funding window has elapsed", async () => {
     const store = make();
     const n = uniq();
@@ -225,7 +252,7 @@ describe.each(stores)("$name store contract", ({ make }) => {
     await store.verifyClinic(clinic.id);
     const pro = await store.registerProfessional({
       displayName: "P",
-      profession: "physician",
+      profession: "nurse",
       phone: `+66ep${n}`,
       payoutRef: "x",
     });

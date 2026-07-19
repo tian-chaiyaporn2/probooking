@@ -180,7 +180,7 @@ model ProfessionalProfile {
   user          User               @relation(fields: [userId], references: [id])
   userId        String             @unique
   displayName   String
-  profession    String // physician | dentist (Phase 1)
+  profession    String // dental_assistant | nurse (Phase 1)
   specialty     String?
   verification  VerificationState  @default(Draft)
   credentials   Credential[]

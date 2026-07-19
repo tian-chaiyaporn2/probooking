@@ -49,7 +49,13 @@ import type {
   CreateApprovalInput,
   ExecuteApprovalInput,
 } from "./marketplace.types.js";
-import { advanceBooking, advanceVerification, aggregateRating, autoAcceptDueAt } from "@probook/domain";
+import {
+  advanceBooking,
+  advanceVerification,
+  aggregateRating,
+  autoAcceptDueAt,
+  requiresLicence,
+} from "@probook/domain";
 import { ConflictError } from "./errors.util.js";
 import { assertLedgerHeadroom, remainingLedgerFunds } from "./money-ledger.util.js";
 import type { OfferState, VerificationState, RatingSummary, Role } from "@probook/domain";
@@ -265,15 +271,18 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async verifyProfessional(id: string): Promise<EntityRef | null> {
     const current = this.professionals.get(id);
     if (current === undefined) return null;
-    // Fail-closed licence checks need a window; stamp 2 years so verified pros pass.
+    // Only licensed professions (e.g. nurse) carry a licence — a dental assistant is not
+    // licensed, so no window is stamped (mirrors the Prisma store not creating a credential).
+    const licensed = requiresLicence(this.professionalProfiles.get(id)?.profession ?? "");
+    // Fail-closed licence checks need a window; stamp 2 years so verified licensed pros pass.
     const licenceUntil = Date.now() + 2 * 365 * 24 * 60 * 60 * 1000;
     if (current === "Verified") {
-      if (!this.licenceValidUntil.has(id)) this.licenceValidUntil.set(id, licenceUntil);
+      if (licensed && !this.licenceValidUntil.has(id)) this.licenceValidUntil.set(id, licenceUntil);
       return { id, verification: "Verified" }; // idempotent
     }
     const next = advanceVerification(current, "Verified");
     this.professionals.set(id, next);
-    this.licenceValidUntil.set(id, licenceUntil);
+    if (licensed) this.licenceValidUntil.set(id, licenceUntil);
     return { id, verification: next };
   }
 
@@ -299,7 +308,12 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       // this store — a bug letting an expired-licence professional book would pass every
       // suite that runs against it.
       professionalNotSuspended: !this.suspendedCredentials.has(o.professionalId),
+      licenceRequired: requiresLicence(
+        this.professionalProfiles.get(o.professionalId)?.profession ?? "",
+      ),
       licenceValidThroughShiftEnd: this.licenceValidThrough(o.professionalId, shiftEnd),
+      // Specialty is not required for the current professions.
+      specialtyRequired: false,
       // Memory store has no specialty_evidence seam yet — specialty gate stays permissive
       // here (Prisma path reads the credential when present).
       specialtyValidThroughShiftEnd: true,
@@ -793,7 +807,9 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const suspended = this.suspendedCredentials.has(id);
     const rating = await this.getSubjectRating(id);
     const ins = this.insurance.get(id);
-    // Derive licence state from verification + suspension; validUntil from the map.
+    // Derive licence state from verification + suspension; validUntil from the map. Only
+    // licensed professions have a licence at all — a dental assistant's is null (VER-04).
+    const licensed = requiresLicence(profile?.profession ?? "");
     const licenceState = suspended ? "Suspended" : verification === "Verified" ? "Verified" : "Submitted";
     const validUntil = this.licenceValidUntil.get(id) ?? null;
     return {
@@ -805,7 +821,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       },
       verified: {
         identityVerified: verification === "Verified",
-        licence: { state: licenceState, validUntil },
+        licence: licensed ? { state: licenceState, validUntil } : null,
         insurance: ins ? { state: ins.state, validUntil: ins.validUntil } : null,
         rating: rating ? { count: rating.count, average: rating.average } : null,
       },

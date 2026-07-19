@@ -6,6 +6,7 @@ import {
   aggregateRating,
   ratingFromCounts,
   DEFAULT_SERVICE_FEE_BPS,
+  requiresLicence,
 } from "@probook/domain";
 import { ConflictError, isConflict } from "./errors.util.js";
 import { LIST_LIMITS } from "./list-limits.js";
@@ -237,9 +238,13 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
           verification: "Submitted",
         },
       });
-      await tx.credential.create({
-        data: { professionalId: profile.id, kind: "licence", state: "Submitted" },
-      });
+      // Only licensed professions carry a licence credential (VER-04). A dental assistant is
+      // not a licensed practitioner, so none is created — identity is what gets verified.
+      if (requiresLicence(input.profession)) {
+        await tx.credential.create({
+          data: { professionalId: profile.id, kind: "licence", state: "Submitted" },
+        });
+      }
       await tx.payoutAccount.create({
         data: { professionalId: profile.id, bankRefMasked: input.payoutRef, verified: false },
       });
@@ -323,7 +328,9 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       clinicVerified: offer.shift.workspace.verification === "Verified",
       professionalVerified: offer.professional.verification === "Verified",
       professionalNotSuspended,
+      licenceRequired: requiresLicence(offer.professional.profession),
       licenceValidThroughShiftEnd,
+      specialtyRequired: false,
       specialtyValidThroughShiftEnd,
       insuranceRequired,
       insuranceValidThroughShiftEnd: insuranceValid,

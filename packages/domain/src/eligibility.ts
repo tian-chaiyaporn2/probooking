@@ -9,7 +9,12 @@
 export interface ConfirmationContext {
   clinicActiveVerified: boolean;
   professionalActiveVerified: boolean;
+  /** Profession-dependent (VER-04): only licensed professions (e.g. nurse) require a valid
+   * licence; a dental assistant is not licensed. Defaults to true for back-compat. */
+  licenceRequired?: boolean;
   licenceValidThroughShiftEnd: boolean;
+  /** Specialty evidence is not required for the current professions. Defaults to true. */
+  specialtyRequired?: boolean;
   specialtyValidThroughShiftEnd: boolean;
   insuranceRequired: boolean;
   insuranceValidThroughShiftEnd: boolean;
@@ -32,8 +37,12 @@ export function checkConfirmationEligibility(ctx: ConfirmationContext): Eligibil
 
   if (!ctx.clinicActiveVerified) failures.push("clinic_not_active_verified");
   if (!ctx.professionalActiveVerified) failures.push("professional_not_active_verified");
-  if (!ctx.licenceValidThroughShiftEnd) failures.push("licence_invalid_through_shift_end");
-  if (!ctx.specialtyValidThroughShiftEnd) failures.push("specialty_invalid_through_shift_end");
+  if ((ctx.licenceRequired ?? true) && !ctx.licenceValidThroughShiftEnd) {
+    failures.push("licence_invalid_through_shift_end");
+  }
+  if ((ctx.specialtyRequired ?? true) && !ctx.specialtyValidThroughShiftEnd) {
+    failures.push("specialty_invalid_through_shift_end");
+  }
   if (ctx.insuranceRequired && !ctx.insuranceValidThroughShiftEnd) {
     failures.push("insurance_invalid_through_shift_end");
   }

@@ -11,7 +11,7 @@ const NOW = 1_700_000_000_000;
 Given("a professional with no availability blocks", async function (this: ProBookingWorld) {
   this.state.store = newStore();
   const pro = await this.state.store.registerProfessional({
-    displayName: "D", profession: "physician", phone: "+66avl1", payoutRef: "x",
+    displayName: "D", profession: "nurse", phone: "+66avl1", payoutRef: "x",
   });
   this.state.professionalId = pro.id;
 });
@@ -87,7 +87,7 @@ Then("the overlapping acceptance is blocked", function (this: ProBookingWorld) {
 // ----- Area 3 -----
 Given("a clinic search that matches no professionals", async function (this: ProBookingWorld) {
   this.state.store = newStore();
-  this.state.results = await this.state.store.searchProfessionals({ profession: "dentist" });
+  this.state.results = await this.state.store.searchProfessionals({ profession: "dental_assistant" });
 });
 
 When("the results render", function (this: ProBookingWorld) {
@@ -102,28 +102,28 @@ Then("the clinic is offered shift posting and matching assistance", function (th
   assert.equal(this.state.assist, true);
 });
 
-Given("a verified physician and a verified dentist", async function (this: ProBookingWorld) {
+Given("a verified nurse and a verified dental_assistant", async function (this: ProBookingWorld) {
   this.state.store = newStore();
-  const physician = await this.state.store.registerProfessional({
-    displayName: "Dr Phys", profession: "physician", phone: "+66src1", payoutRef: "x",
+  const nurse = await this.state.store.registerProfessional({
+    displayName: "Dr Phys", profession: "nurse", phone: "+66src1", payoutRef: "x",
   });
-  await this.state.store.verifyProfessional(physician.id);
-  const dentist = await this.state.store.registerProfessional({
-    displayName: "Dr Dent", profession: "dentist", phone: "+66src2", payoutRef: "x",
+  await this.state.store.verifyProfessional(nurse.id);
+  const dental_assistant = await this.state.store.registerProfessional({
+    displayName: "Dr Dent", profession: "dental_assistant", phone: "+66src2", payoutRef: "x",
   });
-  await this.state.store.verifyProfessional(dentist.id);
-  this.state.physicianId = physician.id;
-  this.state.dentistId = dentist.id;
+  await this.state.store.verifyProfessional(dental_assistant.id);
+  this.state.nurseId = nurse.id;
+  this.state.dental_assistantId = dental_assistant.id;
 });
 
 When("searching professionals by profession {string}", async function (this: ProBookingWorld, profession: string) {
   this.state.results = await this.state.store.searchProfessionals({ profession });
 });
 
-Then("only the physician is returned", function (this: ProBookingWorld) {
+Then("only the nurse is returned", function (this: ProBookingWorld) {
   assert.equal(this.state.results.length, 1);
-  assert.equal(this.state.results[0].id, this.state.physicianId);
-  assert.equal(this.state.results[0].profession, "physician");
+  assert.equal(this.state.results[0].id, this.state.nurseId);
+  assert.equal(this.state.results[0].profession, "nurse");
 });
 
 Given("published shifts with mixed urgency compensation and start times", async function (this: ProBookingWorld) {
@@ -194,7 +194,7 @@ Given("a professional applies to a shift", async function (this: ProBookingWorld
   });
   await this.state.store.verifyClinic(clinic.id);
   const pro = await this.state.store.registerProfessional({
-    displayName: "D", profession: "physician", phone: "+66app2", payoutRef: "x",
+    displayName: "D", profession: "nurse", phone: "+66app2", payoutRef: "x",
   });
   const { shiftId } = await this.state.store.postShift({
     clinicWorkspaceId: clinic.id, category: "general", compensation: 1_000_000,
@@ -212,7 +212,7 @@ Given("a clinic invites a professional to a shift", async function (this: ProBoo
   });
   await this.state.store.verifyClinic(clinic.id);
   const pro = await this.state.store.registerProfessional({
-    displayName: "D", profession: "physician", phone: "+66inv2", payoutRef: "x",
+    displayName: "D", profession: "nurse", phone: "+66inv2", payoutRef: "x",
   });
   const { shiftId } = await this.state.store.postShift({
     clinicWorkspaceId: clinic.id, category: "general", compensation: 1_000_000,

@@ -81,7 +81,7 @@ export default function FlowPage() {
       });
       const pro = await registerProfessional({
         displayName: "Dr. Demo",
-        profession: "physician",
+        profession: "dental_assistant",
         phone: `+66p${uniq}`,
         payoutRef: "xxxx-1234",
       });

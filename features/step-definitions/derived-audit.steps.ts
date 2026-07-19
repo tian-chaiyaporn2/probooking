@@ -19,7 +19,7 @@ Given("an offer in AwaitingPayment", async function (this: ProBookingWorld) {
   const store = newStore();
   const clinic = await store.registerClinic({ branchName: "C", licenceNo: "L", address: "A", ownerPhone: "+66lbl1" });
   await store.verifyClinic(clinic.id);
-  const pro = await store.registerProfessional({ displayName: "D", profession: "physician", phone: "+66lbl2", payoutRef: "x" });
+  const pro = await store.registerProfessional({ displayName: "D", profession: "nurse", phone: "+66lbl2", payoutRef: "x" });
   await store.verifyProfessional(pro.id);
   const { shiftId } = await store.postShift({
     clinicWorkspaceId: clinic.id, category: "general", compensation: 1_000_000,

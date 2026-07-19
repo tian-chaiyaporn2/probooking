@@ -287,7 +287,7 @@ export default function ClinicPage() {
                 data-testid="pro-search-profession"
                 value={profession}
                 onChange={(e) => setProfession(e.target.value)}
-                placeholder="physician"
+                placeholder="ผู้ช่วยทันตแพทย์"
               />
             </label>
             <Button

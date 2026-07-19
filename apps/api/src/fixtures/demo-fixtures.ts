@@ -82,8 +82,8 @@ export async function seedDemoFixtures(
     ownerPhone: DEMO_PHONES.clinicPending,
   });
   const pendingPro = await store.registerProfessional({
-    displayName: "นพ. รอตรวจ",
-    profession: "physician",
+    displayName: "ผู้ช่วยรอตรวจ",
+    profession: "dental_assistant",
     phone: DEMO_PHONES.drPending,
     payoutRef: "xxxx-0000",
   });
@@ -106,22 +106,22 @@ export async function seedDemoFixtures(
 
   // --- Verified professionals ---
   const somchai = await store.registerProfessional({
-    displayName: "นพ. สมชาย ใจดี",
-    profession: "physician",
+    displayName: "สมชาย ใจดี",
+    profession: "dental_assistant",
     phone: DEMO_PHONES.drSomchai,
     payoutRef: "xxxx-1111",
   });
   await store.verifyProfessional(somchai.id);
   const wanida = await store.registerProfessional({
-    displayName: "ทพ. วนิดา รักษ์ฟัน",
-    profession: "dentist",
+    displayName: "วนิดา รักษ์ฟัน",
+    profession: "nurse",
     phone: DEMO_PHONES.drWanida,
     payoutRef: "xxxx-2222",
   });
   await store.verifyProfessional(wanida.id);
   const prasert = await store.registerProfessional({
-    displayName: "นพ. ประเสริฐ มั่นคง",
-    profession: "physician",
+    displayName: "ประเสริฐ มั่นคง",
+    profession: "dental_assistant",
     phone: DEMO_PHONES.drPrasert,
     payoutRef: "xxxx-3333",
   });
@@ -129,8 +129,8 @@ export async function seedDemoFixtures(
 
   // Verified but suspended — demonstrates VER-04/06 without blocking other fixtures.
   const suspended = await store.registerProfessional({
-    displayName: "นพ. ถูกระงับ",
-    profession: "physician",
+    displayName: "ผู้ช่วยถูกระงับ",
+    profession: "dental_assistant",
     phone: DEMO_PHONES.drSuspended,
     payoutRef: "xxxx-4444",
   });

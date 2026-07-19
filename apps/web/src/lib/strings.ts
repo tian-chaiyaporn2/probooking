@@ -430,8 +430,7 @@ export const th = {
   } as Record<string, string>,
   /** Professional titles. Falls back to the raw value if unmapped. */
   profession: {
-    physician: "แพทย์",
-    dentist: "ทันตแพทย์",
+    dental_assistant: "ผู้ช่วยทันตแพทย์",
     nurse: "พยาบาล",
   } as Record<string, string>,
   nextAction: {

@@ -30,7 +30,7 @@ async function seedAcceptedOffer(compensation = 1_000_000) {
   await store.verifyClinic(clinic.id);
   const pro = await store.registerProfessional({
     displayName: "Dr Int",
-    profession: "physician",
+    profession: "nurse",
     phone: `+66ip${n}`,
     payoutRef: "x-1",
   });

@@ -14,7 +14,7 @@ describe("InMemoryMarketplaceStore money headroom", () => {
     await store.verifyClinic(clinic.id);
     const pro = await store.registerProfessional({
       displayName: "P",
-      profession: "physician",
+      profession: "nurse",
       phone: "+66222222222",
       payoutRef: "x",
     });

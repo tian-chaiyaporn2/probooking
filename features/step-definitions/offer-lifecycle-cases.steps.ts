@@ -12,7 +12,7 @@ async function seedShiftWithCandidate(store: any) {
   const n = ++seq;
   const clinic = await store.registerClinic({ branchName: "C", licenceNo: "L", address: "A", ownerPhone: `+66off${n}` });
   await store.verifyClinic(clinic.id);
-  const pro = await store.registerProfessional({ displayName: "D", profession: "physician", phone: `+66ofp${n}`, payoutRef: "x" });
+  const pro = await store.registerProfessional({ displayName: "D", profession: "nurse", phone: `+66ofp${n}`, payoutRef: "x" });
   await store.verifyProfessional(pro.id);
   const { shiftId } = await store.postShift({
     clinicWorkspaceId: clinic.id, category: "general", compensation: 1_000_000,

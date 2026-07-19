@@ -73,7 +73,7 @@ const registerClinicSchema = z.object({
 
 const registerProfessionalSchema = z.object({
   displayName: z.string().min(1).max(200),
-  profession: z.enum(["physician", "dentist"]),
+  profession: z.enum(["dental_assistant", "nurse"]),
   phone: z.string().min(8).max(32),
   payoutRef: z.string().min(1).max(100),
 });
