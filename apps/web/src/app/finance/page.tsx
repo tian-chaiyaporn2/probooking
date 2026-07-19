@@ -404,11 +404,15 @@ export default function FinancePage() {
                       }
                       onRefund={() => {
                         if (!r.bookingId) return;
+                        const remaining = r.captured - r.refunds; // satang
                         setRefundFor({
                           bookingId: r.bookingId,
-                          captured: r.captured - r.refunds,
+                          captured: remaining,
                         });
-                        setRefundAmount("");
+                        // Prefill a modest, always-valid amount (≤ remaining) so the demo
+                        // refund flow is one click rather than a blocked, empty form.
+                        const presetBaht = Math.min(500, Math.floor(remaining / 100));
+                        setRefundAmount(presetBaht > 0 ? String(presetBaht) : "");
                         setRefundReason("");
                         setRefundAmountError(null);
                       }}

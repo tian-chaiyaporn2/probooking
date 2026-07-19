@@ -238,6 +238,41 @@ export async function seedDemoFixtures(
   });
   await store.setOfferState(expiredOffer.id, "Expired");
 
+  // --- Actionable states OWNED BY THE SIGN-IN DEMO ACCOUNTS (clinicA + Dr Somchai) ---
+  // The states above sit on secondary accounts (wanida/clinicB), so the interactive flows
+  // weren't walkable from the accounts a demo tester actually signs in as. These make them so.
+
+  // (a) A clinicA shift Somchai has applied to, with NO offer yet → the demo CLINIC can see a
+  //     candidate and send an offer straight from its own dashboard.
+  const demoClinicOpen = await store.postShift({
+    clinicWorkspaceId: clinicA.id,
+    category: "general",
+    compensation: 950_000,
+    urgency: "standard",
+    shiftStart: now + 3 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(demoClinicOpen.shiftId, somchai.id);
+  await store.applyToShift(demoClinicOpen.shiftId, wanida.id);
+
+  // (b) A PendingResponse offer TO Somchai on another clinicA shift → the demo PRO can accept
+  //     or decline an offer immediately after signing in.
+  const demoProShift = await store.postShift({
+    clinicWorkspaceId: clinicA.id,
+    category: "general",
+    compensation: 1_100_000,
+    urgency: "urgent",
+    shiftStart: now + 2 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(demoProShift.shiftId, somchai.id);
+  await store.createOfferForShift({
+    shiftId: demoProShift.shiftId,
+    professionalId: somchai.id,
+    sentAt: now,
+    expiresAt: now + 12 * HOUR,
+  });
+
   // --- Completed + paid booking (finance reconciliation, REP-01/02) ---
   const completedShift = await store.postShift({
     clinicWorkspaceId: clinicA.id,
