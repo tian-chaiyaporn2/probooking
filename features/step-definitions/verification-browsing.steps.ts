@@ -56,8 +56,9 @@ Then("they cannot apply, invite, offer, or pay", async function (this: ProBookin
 
 Given("a professional with a verified licence and a self-declared bio", async function (this: ProBookingWorld) {
   this.state.store = newStore();
+  // A verified LICENCE requires a licensed profession (nurse); a dental assistant has none.
   const pro = await this.state.store.registerProfessional({
-    displayName: "Dr Grace", profession: "dental_assistant", phone: "+66prof", payoutRef: "x",
+    displayName: "พยาบาลเกรซ", profession: "nurse", phone: "+66prof", payoutRef: "x",
   });
   await this.state.store.verifyProfessional(pro.id);
   this.state.professionalId = pro.id;
@@ -77,6 +78,6 @@ Then("self-declared content is clearly distinguished", function (this: ProBookin
   const p = this.state.profile;
   // Self-declared claims live in their own section, never merged into `verified`.
   assert.ok("selfDeclared" in p && "verified" in p);
-  assert.equal(p.selfDeclared.displayName, "Dr Grace");
+  assert.equal(p.selfDeclared.displayName, "พยาบาลเกรซ");
   assert.equal("displayName" in p.verified, false);
 });
