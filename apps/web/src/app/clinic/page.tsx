@@ -224,8 +224,11 @@ export default function ClinicPage() {
               <input
                 data-testid="shift-comp"
                 inputMode="numeric"
+                maxLength={7}
                 value={comp}
-                onChange={(e) => setComp(e.target.value.replace(/[^0-9]/g, ""))}
+                onChange={(e) =>
+                  setComp(e.target.value.replace(/[^0-9]/g, "").slice(0, 7))
+                }
               />
             </label>
             <label className="compose-row__check">
@@ -265,7 +268,7 @@ export default function ClinicPage() {
               {th.party.postShift}
             </Button>
           </div>
-          {Number(comp) > 0 ? (
+          {Number(comp) > 0 && Number.isSafeInteger(Number(comp) * 100) ? (
             <div style={{ marginTop: "var(--s4)" }}>
               <CheckoutSummary
                 checkout={checkoutFromCompensation(Number(comp) * 100)}

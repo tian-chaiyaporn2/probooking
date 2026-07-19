@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ApiError,
   getOpsPending,
   getOpsCases,
   getOpsBookings,
@@ -150,13 +151,10 @@ export default function OpsPage() {
       const msg = getThaiErrorMessage(e);
       setLoadError(msg);
       toast.error(msg);
-      const raw = e instanceof Error ? e.message.toLowerCase() : "";
-      if (
-        raw.includes("403") ||
-        raw.includes("401") ||
-        raw.includes("forbidden") ||
-        raw.includes("authentication")
-      ) {
+      // An auth/permission failure (revoked/expired token, or a role that no longer matches
+      // this surface) should drop the stale session and return to the staff login. Branch on
+      // the HTTP status, not the message text — the message never contains the code.
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
         expireSession();
       }
     } finally {
