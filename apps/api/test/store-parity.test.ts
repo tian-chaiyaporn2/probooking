@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { InMemoryMarketplaceStore } from "../src/modules/marketplace/marketplace.memory-store.js";
 import { PrismaMarketplaceStore } from "../src/modules/marketplace/marketplace.prisma-store.js";
-import { ConflictError } from "../src/modules/marketplace/errors.util.js";
+import { ConflictError, isConflict } from "../src/modules/marketplace/errors.util.js";
 import { LIST_LIMITS } from "../src/modules/marketplace/list-limits.js";
 import type { MarketplaceRepository } from "../src/modules/marketplace/marketplace.types.js";
 
@@ -143,6 +143,113 @@ describe.each(stores)("$name store contract", ({ make }) => {
     const starts = list.map((b) => b.startsAt);
     expect(starts).toEqual([...starts].sort((a, b) => a - b));
     expect(list[0].startsAt).toBe(base);
+  });
+
+  /** A shift with one offer moved to PaymentFailed (accepted, then the capture failed). */
+  async function seedPaymentFailedOffer(store: MarketplaceRepository) {
+    const n = uniq();
+    const clinic = await store.registerClinic({
+      branchName: `OC ${n}`,
+      licenceNo: "L",
+      address: "BKK",
+      ownerPhone: `+66oc${n}`,
+    });
+    await store.verifyClinic(clinic.id);
+    const pro1 = await store.registerProfessional({
+      displayName: "P1",
+      profession: "physician",
+      phone: `+66o1${n}`,
+      payoutRef: "x",
+    });
+    await store.verifyProfessional(pro1.id);
+    const { shiftId } = await store.postShift({
+      clinicWorkspaceId: clinic.id,
+      category: "general",
+      compensation: 1_000_000,
+      urgency: "standard",
+      shiftStart: Date.now() + 48 * 3_600_000,
+      insuranceRequired: false,
+    });
+    await store.applyToShift(shiftId, pro1.id);
+    const offer = await store.createOfferForShift({
+      shiftId,
+      professionalId: pro1.id,
+      sentAt: Date.now(),
+      expiresAt: Date.now() + 12 * 3_600_000,
+    });
+    await store.setOfferState(offer.id, "AwaitingPayment", {
+      fundingDueAt: Date.now() + 30 * 60_000,
+    });
+    await store.setOfferState(offer.id, "PaymentFailed"); // capture failed; retry window open
+    return { clinic, shiftId, offerId: offer.id };
+  }
+
+  it("treats a PaymentFailed offer as active: a second offer for the shift is refused (OFF-02)", async () => {
+    const store = make();
+    const { shiftId } = await seedPaymentFailedOffer(store);
+    const n = uniq();
+    const pro2 = await store.registerProfessional({
+      displayName: "P2",
+      profession: "physician",
+      phone: `+66o2${n}`,
+      payoutRef: "x",
+    });
+    await store.verifyProfessional(pro2.id);
+    await store.applyToShift(shiftId, pro2.id);
+    // The failed-but-retryable offer still holds the single active-offer slot, in both stores
+    // (memory throws ConflictError; Prisma via the partial unique index → P2002).
+    let err: unknown;
+    try {
+      await store.createOfferForShift({
+        shiftId,
+        professionalId: pro2.id,
+        sentAt: Date.now(),
+        expiresAt: Date.now() + 12 * 3_600_000,
+      });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeDefined();
+    expect(isConflict(err)).toBe(true);
+  });
+
+  it("expires a PaymentFailed offer once its funding window has elapsed", async () => {
+    const store = make();
+    const n = uniq();
+    const clinic = await store.registerClinic({
+      branchName: `EX ${n}`,
+      licenceNo: "L",
+      address: "BKK",
+      ownerPhone: `+66ec${n}`,
+    });
+    await store.verifyClinic(clinic.id);
+    const pro = await store.registerProfessional({
+      displayName: "P",
+      profession: "physician",
+      phone: `+66ep${n}`,
+      payoutRef: "x",
+    });
+    await store.verifyProfessional(pro.id);
+    const { shiftId } = await store.postShift({
+      clinicWorkspaceId: clinic.id,
+      category: "general",
+      compensation: 1_000_000,
+      urgency: "standard",
+      shiftStart: Date.now() + 48 * 3_600_000,
+      insuranceRequired: false,
+    });
+    await store.applyToShift(shiftId, pro.id);
+    const offer = await store.createOfferForShift({
+      shiftId,
+      professionalId: pro.id,
+      sentAt: Date.now(),
+      expiresAt: Date.now() + 12 * 3_600_000,
+    });
+    // Funding window already in the past, then the capture fails.
+    await store.setOfferState(offer.id, "AwaitingPayment", { fundingDueAt: Date.now() - 1_000 });
+    await store.setOfferState(offer.id, "PaymentFailed");
+    const expired = await store.expireStaleOffers(Date.now());
+    expect(expired).toBeGreaterThanOrEqual(1);
   });
 });
 

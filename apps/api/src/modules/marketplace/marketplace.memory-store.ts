@@ -217,7 +217,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
           offersForShift.some((o) => o.id === offerId),
         );
         const active = offersForShift.find(
-          (o) => o.state === "PendingResponse" || o.state === "AwaitingPayment",
+          (o) => o.state === "PendingResponse" || o.state === "AwaitingPayment" || o.state === "PaymentFailed",
         );
         return {
           shiftId: s.id,
@@ -346,7 +346,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const s = this.shifts.get(id);
     if (!s) return null;
     const hasActiveOffer = [...this.offers.values()].some(
-      (o) => o.shiftId === id && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+      (o) => o.shiftId === id && (o.state === "PendingResponse" || o.state === "AwaitingPayment" || o.state === "PaymentFailed"),
     );
     const booked = [...this.bookings.values()].some((b) => b.shiftId === id);
     return {
@@ -391,7 +391,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (!shift) throw new Error("shift not found");
     // OFF-02: at most one active offer per shift (mirrors the Prisma partial-unique guard).
     const active = [...this.offers.values()].some(
-      (o) => o.shiftId === input.shiftId && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+      (o) => o.shiftId === input.shiftId && (o.state === "PendingResponse" || o.state === "AwaitingPayment" || o.state === "PaymentFailed"),
     );
     if (active) throw new ConflictError("shift already has an active offer");
     const record: OfferRecord = {
@@ -489,7 +489,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     const isOpen = (s: MemShift) => {
       if (s.state !== "Published") return false;
       const hasActive = [...this.offers.values()].some(
-        (o) => o.shiftId === s.id && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+        (o) => o.shiftId === s.id && (o.state === "PendingResponse" || o.state === "AwaitingPayment" || o.state === "PaymentFailed"),
       );
       const booked = [...this.bookings.values()].some((b) => b.shiftId === s.id);
       if (hasActive || booked) return false;
@@ -534,7 +534,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         o.state = "Expired";
         count++;
       } else if (
-        o.state === "AwaitingPayment" &&
+        (o.state === "AwaitingPayment" || o.state === "PaymentFailed") &&
         o.fundingDueAt !== null &&
         o.fundingDueAt <= now
       ) {
