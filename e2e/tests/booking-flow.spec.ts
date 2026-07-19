@@ -419,7 +419,9 @@ test("verified profile separates self-declared claims from verified facts (VER-0
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: auth });
   const after = await j(await page.request.get(`${api}/professionals/${pro.id}/profile`));
   expect(after.verified.identityVerified).toBe(true);
-  expect(after.verified.licence).toBeNull(); // a dental assistant is not licensed (no licence credential)
+  // a dental assistant carries a certificate credential (verified after Ops review)
+  expect(after.verified.credential?.kind).toBe("certificate");
+  expect(after.verified.credential?.state).toBe("Verified");
   expect(after.selfDeclared.profession).toBe("dental_assistant");
 });
 

@@ -48,9 +48,12 @@ export function ProfilePanel({
               ? th.party.identityVerified
               : th.party.identityPending}
           </Badge>
-          {verified.licence ? (
-            <Badge tone={verificationBadgeTone(verified.licence.state)}>
-              {th.party.licence}: {statusLabel(verified.licence.state)}
+          {verified.credential ? (
+            <Badge tone={verificationBadgeTone(verified.credential.state)}>
+              {verified.credential.kind === "licence"
+                ? th.party.licence
+                : th.party.certificate}
+              : {statusLabel(verified.credential.state)}
             </Badge>
           ) : null}
           {verified.insurance ? (

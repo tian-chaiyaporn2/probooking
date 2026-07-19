@@ -492,6 +492,7 @@ export const th = {
     identityVerified: "ยืนยันตัวตนแล้ว",
     identityPending: "รอยืนยันตัวตน",
     licence: "ใบอนุญาต",
+    certificate: "ประกาศนียบัตร",
     insurance: "ประกันภัย",
     ratingColdStart: "ยังไม่มีคะแนนรีวิว",
     rolePro: "บุคลากร",

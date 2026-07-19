@@ -68,7 +68,8 @@ export interface VerifiedProfile {
   };
   verified: {
     identityVerified: boolean; // profile reached Verified (VER-02)
-    licence: { state: string; validUntil: number | null } | null; // VER-04 credential
+    // VER-04 credential: a nurse's licence or a dental assistant's certificate (kind says which).
+    credential: { kind: string; state: string; validUntil: number | null } | null;
     insurance: { state: string; validUntil: number | null } | null; // VER-05 evidence
     rating: { count: number; average: number } | null; // null below cold-start (REV-04)
   };
@@ -109,11 +110,8 @@ export interface EntityRef {
 export interface OfferEligibility {
   clinicVerified: boolean;
   professionalVerified: boolean;
-  professionalNotSuspended: boolean; // VER-04: licence credential not suspended by Ops
-  licenceRequired: boolean; // VER-04: only licensed professions (nurse) require a licence
-  licenceValidThroughShiftEnd: boolean; // VER-04: licence not expired before shift ends
-  specialtyRequired: boolean; // specialty gate applies (false for the current professions)
-  specialtyValidThroughShiftEnd: boolean; // specialty_evidence credential, if any
+  professionalNotSuspended: boolean; // VER-04: credential not suspended by Ops
+  credentialValidThroughShiftEnd: boolean; // VER-04: required credential valid through shift end
   insuranceRequired: boolean; // VER-05: does the shift require insurance?
   insuranceValidThroughShiftEnd: boolean;
 }

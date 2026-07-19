@@ -213,7 +213,7 @@ describe.each(stores)("$name store contract", ({ make }) => {
     expect(isConflict(err)).toBe(true);
   });
 
-  it("credential model is profession-dependent: a dental assistant has no licence, a nurse does (VER-04)", async () => {
+  it("credential model is profession-dependent: a dental assistant carries a certificate, a nurse a licence (VER-04)", async () => {
     const store = make();
     const n = uniq();
     const assistant = await store.registerProfessional({
@@ -233,11 +233,12 @@ describe.each(stores)("$name store contract", ({ make }) => {
 
     const aProfile = await store.getProfessionalProfile(assistant.id);
     const nProfile = await store.getProfessionalProfile(nurse.id);
-    // A dental assistant is not a licensed practitioner — no licence credential at all.
-    expect(aProfile?.verified.licence).toBeNull();
-    // A nurse is licensed — the licence verifies with the professional.
-    expect(nProfile?.verified.licence).not.toBeNull();
-    expect(nProfile?.verified.licence?.state).toBe("Verified");
+    // Both hold a verified credential; the KIND differs — a dental assistant carries a
+    // certificate, a nurse a licence (VER-04).
+    expect(aProfile?.verified.credential?.kind).toBe("certificate");
+    expect(aProfile?.verified.credential?.state).toBe("Verified");
+    expect(nProfile?.verified.credential?.kind).toBe("licence");
+    expect(nProfile?.verified.credential?.state).toBe("Verified");
   });
 
   it("expires a PaymentFailed offer once its funding window has elapsed", async () => {

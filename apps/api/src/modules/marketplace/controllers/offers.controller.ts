@@ -205,15 +205,11 @@ export class OffersController {
     const preCaptureCtx: ConfirmationContext = {
       clinicActiveVerified: eligibility?.clinicVerified ?? false,
       professionalActiveVerified: eligibility?.professionalVerified ?? false,
-      // VER-04: read licence suspension/expiry at confirm time — a credential the
-      // professional held at offer time may have been suspended by Operations since.
-      // Profession-dependent (VER-04): a dental assistant is not licensed, so no licence gate.
-      licenceRequired: eligibility?.licenceRequired ?? true,
-      licenceValidThroughShiftEnd:
-        eligibility?.licenceValidThroughShiftEnd ?? false,
-      specialtyRequired: eligibility?.specialtyRequired ?? false,
-      specialtyValidThroughShiftEnd:
-        eligibility?.specialtyValidThroughShiftEnd ?? true,
+      // VER-04: read the required credential's suspension/expiry at confirm time — a credential
+      // the professional held at offer time may have been suspended by Operations since. Fail
+      // closed if eligibility is unknown.
+      credentialValidThroughShiftEnd:
+        eligibility?.credentialValidThroughShiftEnd ?? false,
       insuranceRequired: eligibility?.insuranceRequired ?? false,
       // Fail closed: unknown insurance facts must not book an insurance-required shift.
       insuranceValidThroughShiftEnd:
