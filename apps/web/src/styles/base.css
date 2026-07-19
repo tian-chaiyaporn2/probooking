@@ -9,6 +9,8 @@ html {
   /* Older iOS Safari: fill the visual viewport when 100vh is short. */
   height: 100%;
   height: -webkit-fill-available;
+  /* clip (not hidden): kill whole-page horizontal rubber-band without breaking sticky. */
+  overflow-x: clip;
 }
 
 ::selection {

@@ -104,18 +104,21 @@ test("pages are responsive — no horizontal page overflow on phone and tablet",
     { width: 768, height: 1024 }, // tablet portrait
     { width: 834, height: 1194 }, // large tablet portrait
   ];
+  const assertNoPageOverflow = async (path: string, viewport: { width: number; height: number }) => {
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(
+      overflow,
+      `horizontal overflow on ${path} at ${viewport.width}x${viewport.height}`,
+    ).toBeLessThanOrEqual(1);
+  };
   // Public paths: check every viewport without auth.
   for (const path of ["/", "/signin", "/journey", "/flow"]) {
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
       await page.goto(path);
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(
-        overflow,
-        `horizontal overflow on ${path} at ${viewport.width}x${viewport.height}`,
-      ).toBeLessThanOrEqual(1);
+      await assertNoPageOverflow(path, viewport);
     }
   }
   // Staff dashboards: sign in once per surface, then resize (avoids OTP interval collisions).
@@ -131,13 +134,25 @@ test("pages are responsive — no horizontal page overflow on phone and tablet",
     await expect(page.getByTestId(ready)).toBeVisible();
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(
-        overflow,
-        `horizontal overflow on ${path} at ${viewport.width}x${viewport.height}`,
-      ).toBeLessThanOrEqual(1);
+      await assertNoPageOverflow(path, viewport);
+    }
+  }
+  // Party workspaces (pro wash used to bleed ~12px past the viewport on mobile).
+  // Unique phones — do not OTP the shared demo accounts (OTP_MIN_INTERVAL_MS).
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`.slice(-8);
+  for (const { path, phone, ready, role } of [
+    { path: "/clinic", phone: `+66oc${uniq}`, ready: "post-shift", role: "clinic" },
+    { path: "/pro", phone: `+66op${uniq}`, ready: "pro-overview", role: "professional" },
+  ]) {
+    const { authorization } = await loginAs(page.request, api, phone);
+    const token = authorization.replace(/^Bearer\s+/i, "");
+    await page.setViewportSize(viewports[0]!);
+    await injectSession(page, path, token, phone, role);
+    await expect(page.getByTestId(ready)).toBeVisible({ timeout: 15_000 });
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      await assertNoPageOverflow(path, viewport);
     }
   }
 });
