@@ -10,59 +10,31 @@ import {
   NotFoundException,
   Param,
   Post,
-  Query,
-  UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
-import {
-  AuthGuard,
-  Roles,
-  CurrentUser,
-  Public,
-} from "../../auth/auth.guard.js";
+import { AuthGuard, Roles, CurrentUser } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
 import { parseBody } from "../http-validation.js";
 import { z } from "zod";
 import { isConflict } from "../errors.util.js";
 import {
-  advanceOffer,
-  advanceBooking,
-  advancePayout,
-  cancellationOutcome,
-  payableFromFraction,
-  isUrgentEligible,
-  isExpired,
-  canLeaveReview,
-  can,
   dualControlSatisfied,
   satang,
-  completionReviewDueAt,
-  type ConfirmationContext,
   type Capability,
   type Role,
-  type ShiftUrgency,
-  type CancelActor,
-  type CancelReason,
 } from "@probook/domain";
-import { OffersService } from "../../offers/offers.service.js";
-import { BookingsService } from "../../bookings/bookings.service.js";
 import { PaymentsService } from "../../payments/payments.service.js";
 import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
 } from "../../payments/payment.provider.js";
-import { NotificationsService } from "../notifications.service.js";
 import { MarketplaceAccessService } from "../marketplace-access.service.js";
 import {
   MARKETPLACE_REPOSITORY,
   type MarketplaceRepository,
-  type ShiftFilters,
-  type ProfessionalFilters,
-  type CallerIdentity,
 } from "../marketplace.types.js";
-import { normalizePhone } from "@probook/db";
-import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
+import { csvCell } from "./shared.js";
 
 const proposeRefundSchema = z.object({
   bookingId: z.string().max(64),

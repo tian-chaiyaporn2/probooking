@@ -4,7 +4,7 @@
  *
  * Every profession must hold a verified professional credential that stays valid through
  * shift end (VER-04) — the KIND differs: a nurse holds a licence (สภาการพยาบาล), a dental
- * assistant holds a training certificate (ประกาศนียบัตรผู้ช่วยทันตแพทย์). Both are submitted
+ * assistant holds a training certificate (ใบรับรองผู้ช่วยทันตแพทย์). Both are submitted
  * at registration and verified by Operations before the professional can be booked.
  */
 export const PROFESSIONS = ["dental_assistant", "nurse"] as const;

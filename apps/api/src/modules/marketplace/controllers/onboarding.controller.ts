@@ -3,15 +3,11 @@ import {
   Body,
   ConflictException,
   Controller,
-  ForbiddenException,
   Get,
-  Header,
   Inject,
   NotFoundException,
   Param,
   Post,
-  Query,
-  UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -45,9 +41,6 @@ import {
   type CancelActor,
   type CancelReason,
 } from "@probook/domain";
-import { OffersService } from "../../offers/offers.service.js";
-import { BookingsService } from "../../bookings/bookings.service.js";
-import { PaymentsService } from "../../payments/payments.service.js";
 import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
@@ -57,12 +50,9 @@ import { MarketplaceAccessService } from "../marketplace-access.service.js";
 import {
   MARKETPLACE_REPOSITORY,
   type MarketplaceRepository,
-  type ShiftFilters,
-  type ProfessionalFilters,
-  type CallerIdentity,
 } from "../marketplace.types.js";
 import { normalizePhone } from "@probook/db";
-import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
+import { HOUR_MS } from "./shared.js";
 
 const registerClinicSchema = z.object({
   branchName: z.string().min(1).max(200),

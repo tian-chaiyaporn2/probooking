@@ -201,7 +201,7 @@ Rules:
 - **AUTH-03:** Agreements and policies are versioned and auditable.
 - **AUTH-04:** Unverified users may browse restricted public content but cannot transact.
 - **ORG-01:** A clinic submits branch identity, licence, authority, address, billing data, and profile content.
-- **PRO-01:** A professional submits identity, a professional credential, experience, payout account, and optional insurance evidence. The credential is profession-dependent — a nurse's licence (สภาการพยาบาล) or a dental assistant's training certificate (ประกาศนียบัตรผู้ช่วยทันตแพทย์) — and is verified by Operations before booking.
+- **PRO-01:** A professional submits identity, a professional credential, experience, payout account, and optional insurance evidence. The credential is profession-dependent — a nurse's licence (สภาการพยาบาล) or a dental assistant's training certificate (ใบรับรองผู้ช่วยทันตแพทย์) — and is verified by Operations before booking.
 
 ## 5.2 Verification and profiles
 
