@@ -205,8 +205,8 @@ test("pages are responsive — no horizontal page overflow on phone and tablet",
     await page.setViewportSize(viewports[0]!);
     await injectSession(page, path, token, phone, role);
     await expect(page.getByTestId(ready)).toBeVisible({ timeout: 15_000 });
-    // The head now carries a long, space-free Thai name — confirm the page still fits and,
-    // crucially, that the name wraps inside its column rather than being clipped.
+    // The head now carries a long Thai name — confirm it actually rendered (the fill is
+    // real, not the short fallback) before asserting the filled layout still fits.
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
       path === "/clinic" ? "คลินิกทันตกรรม" : "พยาบาลวิชาชีพ",
     );
@@ -216,6 +216,62 @@ test("pages are responsive — no horizontal page overflow on phone and tablet",
       await assertContentWraps(path, viewport);
     }
   }
+});
+
+test("filled ops verification row wraps an unbreakable name and licence, never clips", async ({
+  page,
+}) => {
+  // A genuine bite for the filled-content wrap fixes. `html { overflow-x: clip }` hides
+  // page-level symptoms and Chromium line-breaks Thai on its own, so this uses tokens with
+  // no break opportunities (no spaces, no hyphens) — the only input that actually depends on
+  // the fixes staying: `.rowlist .row__name` and `.row__detail dd` wrapping inside their
+  // columns. Remove either wrap rule (or force `white-space: nowrap`) and this fails.
+  const api = "http://localhost:4000";
+  const uniq = `${Date.now()}`;
+  const j = async (r: any) => (await r.json()) as any;
+  const longName = "ClinicName" + "X".repeat(46); // row__name span (no other wrap fallback)
+  const longLicence = "LIC" + "9".repeat(52); // row__detail dd
+
+  // Register a clinic and leave it UNVERIFIED so it waits in the ops verification queue with
+  // its licence number shown in the expandable detail.
+  const clinic = await j(
+    await page.request.post(`${api}/clinics`, {
+      data: {
+        branchName: longName,
+        licenceNo: longLicence,
+        address: "BKK",
+        ownerPhone: `+66oc${uniq}`,
+      },
+    }),
+  );
+
+  // Sign in as operations exactly as the picker would (dedicated phone → no OTP-interval clash).
+  const opsToken = (await loginAs(page.request, api, "+66900000024")).authorization.slice(
+    "Bearer ".length,
+  );
+  await page.setViewportSize({ width: 360, height: 740 }); // tightest column — worst case
+  await injectSession(page, "/ops", opsToken, "+66900000024");
+  await expect(page.getByTestId("ops-metrics")).toBeVisible();
+
+  const row = page.getByTestId(`pending-${clinic.id}`);
+  await expect(row).toBeVisible();
+  await expect(row.locator(".row__name")).toContainText(longName); // fill is real
+  // Expand to reveal the licence detail (dl only renders when open).
+  await row.getByRole("button", { name: "ขยายแถว" }).click();
+  await expect(row.locator("dl.row__detail dd").filter({ hasText: longLicence })).toBeVisible();
+
+  // Neither the name span nor the licence value may overflow its own box: if a token is
+  // clipped instead of wrapped, scrollWidth exceeds clientWidth. (html overflow-x:clip means
+  // the page-level check cannot see this — hence the per-element measurement.)
+  const clipped = await row.evaluate((li: HTMLElement) => {
+    const bad: string[] = [];
+    for (const el of Array.from(li.querySelectorAll(".row__name, .row__detail dd"))) {
+      const e = el as HTMLElement;
+      if (e.scrollWidth - e.clientWidth > 1) bad.push(`${e.className || e.tagName} (${e.scrollWidth}>${e.clientWidth})`);
+    }
+    return bad;
+  });
+  expect(clipped, "filled ops row clipped a token instead of wrapping it").toEqual([]);
 });
 
 test("mobile and tablet nav collapses into a drawer that opens and closes", async ({ page }) => {
