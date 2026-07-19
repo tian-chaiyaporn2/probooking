@@ -210,25 +210,38 @@ export class BookingsController {
       throw new BadRequestException((e as Error).message);
     }
 
-    // PAY-08: payout may not exceed remaining headroom after prior refunds/payouts.
     const [paidOut, refunded] = await Promise.all([
       this.repo.sumPaidOut(id),
       this.repo.sumRefunded(id),
     ]);
+    // A goodwill refund can be issued on a still-active booking (finance dual-control). When
+    // that booking then completes normally, the platform fee absorbs the refund FIRST, so the
+    // professional keeps their full compensation whenever funds allow; only a refund larger
+    // than the fee reduces the payout. Without this, captured == compensation + fee + refunds
+    // could never balance once refunds > 0 — completion AND cancel both threw, trapping the
+    // funds. Everything is derived from captured, so PAY-07 balances by construction:
+    //   captured == payout + feeAfterRefund + tax + refunds.
+    const feeAfterRefund = Math.max(0, booking.serviceFee - refunded);
+    const payoutAmount = Math.max(
+      0,
+      booking.compensation - Math.max(0, refunded - booking.serviceFee),
+    );
     const remaining = booking.captured - paidOut - refunded;
+
+    // PAY-08: payout may not exceed remaining headroom after prior refunds/payouts.
     this.payments.assertWithinAllocation(
-      satang(booking.compensation),
+      satang(payoutAmount),
       satang(remaining),
       "payout",
     );
 
-    // PAY-07 conservation AFTER payout: protected is released to payout, so
-    // captured == payout(compensation) + fee + tax + prior refunds.
+    // PAY-07 conservation AFTER payout: protected is released to payout, the platform fee
+    // absorbs prior refunds first, so captured == payout + feeAfterRefund + tax + refunds.
     this.payments.assertConserved({
       captured: satang(booking.captured),
       protectedRemainder: satang(0),
-      payout: satang(booking.compensation),
-      fee: satang(booking.serviceFee),
+      payout: satang(payoutAmount),
+      fee: satang(feeAfterRefund),
       tax: satang(booking.tax),
       refunds: satang(refunded),
       providerCosts: satang(0),
@@ -238,11 +251,11 @@ export class BookingsController {
     try {
       const result = await this.repo.recordPayout({
         bookingId: id,
-        payoutAmount: booking.compensation,
+        payoutAmount,
         idempotencyKey: `payout:${id}`,
       });
       await this.access.audit(user, "accept_completion_payout", "booking", id, {
-        payoutAmount: booking.compensation,
+        payoutAmount,
         auto: user?.role === "worker",
       });
       // NOT-01: payout initiated — email the professional.

@@ -1057,15 +1057,22 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // Through the machine (§6.2), not around it — and as a conditional update, so the
     // precondition holds against a concurrent cancel rather than being a stale read.
     const next = advanceBooking(existing.state as BookingState, "AwaitingCompletion");
-    const claimed = await prisma.booking.updateMany({
-      where: { id, state: existing.state },
-      data: { state: next, autoAcceptAt },
-    });
-    if (claimed.count !== 1) {
-      throw new ConflictError("booking changed concurrently; completion not recorded");
-    }
-    await prisma.attendanceEvent.create({
-      data: { bookingId: id, kind: "Completed", actorId: existing.professionalId },
+    // Atomic: the state transition and its "Completed" attendance evidence (CMP-01/CAN-03)
+    // must commit together. Two separate writes could half-apply on a failure between them,
+    // leaving AwaitingCompletion with no attendance event — which hasArrived() then reads as
+    // "never arrived", diverging from the in-memory store. Every other multi-write op here is
+    // transactional; this one was the exception.
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.booking.updateMany({
+        where: { id, state: existing.state },
+        data: { state: next, autoAcceptAt },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictError("booking changed concurrently; completion not recorded");
+      }
+      await tx.attendanceEvent.create({
+        data: { bookingId: id, kind: "Completed", actorId: existing.professionalId },
+      });
     });
     return this.getBooking(id);
   }

@@ -36,19 +36,21 @@ function authHeaders(
  * ({ statusCode, message, error }), so surfacing the raw body dumped things like
  * `429: {"statusCode":429,"message":"too many OTP requests…"}` into toasts and the login
  * form. Prefer the `message`; fall back to the raw text only if it is not that shape.
+ * Always returns ApiError so callers can branch on HTTP status (401/403 session expiry).
  */
 async function errorFrom(res: Response): Promise<ApiError> {
   const text = await res.text();
+  let message = text || `Request failed (${res.status})`;
   try {
     const body = JSON.parse(text) as { message?: string | string[] };
     const msg = Array.isArray(body.message)
       ? body.message.join("; ")
       : body.message;
-    if (msg) return new ApiError(msg, res.status);
+    if (msg) message = msg;
   } catch {
-    // not JSON — fall through to the raw text
+    // not JSON — keep the raw text
   }
-  return new ApiError(text || `Request failed (${res.status})`, res.status);
+  return new ApiError(message, res.status);
 }
 
 async function post<T>(
