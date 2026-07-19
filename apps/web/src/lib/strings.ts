@@ -6,25 +6,26 @@
 export const th = {
   brand: "ProBooking",
   home: {
-    // EN: "Verified clinic staff you can book — payment protected"
-    tagline: "บุคลากรคลินิกที่ตรวจสอบแล้ว จองได้ — คุ้มครองการชำระเงิน",
-    // EN: "You pay after they accept — funds stay protected until the shift is done"
-    lead: "จ่ายหลังบุคลากรยอมรับ — เงินถูกคุ้มครองจนกว่าเวรจะเสร็จ",
-    // EN: "Phase 0 is concierge-led… This page shows the booking steps and internal tools."
+    // EN: "Fill clinic shifts with verified professionals — payment protected"
+    tagline: "เติมเวรคลินิกด้วยบุคลากรที่ตรวจสอบแล้ว — คุ้มครองการชำระเงิน",
+    // EN: "The clinic pays after they accept — funds stay protected until the shift is done"
+    lead: "คลินิกจ่ายหลังบุคลากรยอมรับ — เงินถูกคุ้มครองจนกว่าเวรจะเสร็จ",
+    // EN: "Phase 0 is concierge-led: ProBooking books end to end. This page shows the booking steps and internal tools."
     phaseNote:
-      "Phase 0 เป็น concierge: ทีม ProBooking ช่วยจองให้ครบวงจร หน้านี้แสดงขั้นตอนการจองและเครื่องมือทีมภายใน",
+      "Phase 0 ใช้ concierge — ทีม ProBooking ช่วยจองให้ครบวงจร หน้านี้แสดงขั้นตอนการจองและเครื่องมือทีมภายใน",
     marketSignal: "กรุงเทพฯ และปริมณฑล · แพทย์และทันตแพทย์",
     phase: "Phase 0 · กรุงเทพฯ และปริมณฑล",
     // EN: "Book verified professionals for temporary clinic shifts in Thailand — payment protected"
     metadataDescription:
       "จองบุคลากรที่ตรวจสอบแล้วสำหรับเวรคลินิกชั่วคราวในไทย — คุ้มครองการชำระเงิน",
     ctaPrimary: "เริ่ม demo",
-    ctaSecondary: "ดูวิธีทำงาน",
+    // Align with howTitle "จองอย่างไร"
+    ctaSecondary: "ดูวิธีจอง",
     // EN: Verified · Available · Bookable · Payment Protected
     trust: ["ตรวจสอบแล้ว", "พร้อมรับเวร", "จองได้", "คุ้มครองการชำระเงิน"],
     howTitle: "จองอย่างไร",
-    // EN: "From posting a shift to getting paid — four steps"
-    howSubtitle: "จากประกาศเวรถึงรับเงิน ในสี่ขั้นตอน",
+    // EN: "Four steps — from posting a shift to getting paid"
+    howSubtitle: "สี่ขั้นตอน จากประกาศเวรถึงรับเงิน",
     howPerspectiveClinic: "มุมคลินิก",
     howPerspectivePro: "มุมบุคลากร",
     stepsClinic: [
@@ -34,8 +35,8 @@ export const th = {
       },
       {
         t: "เชิญและเสนอ",
-        // EN: "Pick a professional, then send one binding offer"
-        d: "เลือกบุคลากร แล้วส่งข้อเสนอที่ผูกพันหนึ่งฉบับ",
+        // EN: "Choose a professional, then send one firm offer with clear pay"
+        d: "เลือกบุคลากร แล้วส่งข้อเสนอแบบผูกพัน พร้อมค่าตอบแทนชัดเจน",
       },
       {
         t: "ยืนยันและคุ้มครองเงิน",
@@ -44,8 +45,8 @@ export const th = {
       },
       {
         t: "รับรองและจ่าย",
-        // EN: "When the shift ends, confirm completion — we pay the professional and keep a record"
-        d: "เมื่อเวรเสร็จ ยืนยันว่าเสร็จงาน ระบบจ่ายค่าตอบแทนพร้อมบันทึก",
+        // EN: "When the shift ends, confirm completion — we pay out and keep a record"
+        d: "เมื่อเวรเสร็จ ยืนยันว่าเสร็จงาน ระบบจ่ายค่าตอบแทนและเก็บหลักฐาน",
       },
     ],
     stepsPro: [
@@ -58,9 +59,9 @@ export const th = {
         d: "สมัครเวรหรือรับคำเชิญ แล้วตรวจเงื่อนไขก่อนยอมรับ",
       },
       {
-        t: "ทำงานเมื่อเงินคุ้มครอง",
-        // EN: "Once the clinic confirms, pay is protected — you work to the agreed terms"
-        d: "หลังคลินิกยืนยัน เงินถูกคุ้มครอง — คุณทำงานตามข้อตกลง",
+        t: "ทำงานเมื่อเงินคุ้มครองแล้ว",
+        // EN: "Once the clinic confirms, your pay is protected — work to the agreed terms"
+        d: "หลังคลินิกยืนยัน เงินถูกคุ้มครอง — ทำงานตามข้อตกลงได้เลย",
       },
       {
         t: "เสร็จงานและรับเงิน",
@@ -75,7 +76,7 @@ export const th = {
       },
       {
         t: "เชิญและเสนอ",
-        d: "บุคลากรสมัครหรือถูกเชิญ คลินิกส่งข้อเสนอที่ผูกพันหนึ่งฉบับ",
+        d: "บุคลากรสมัครหรือถูกเชิญ คลินิกส่งข้อเสนอแบบผูกพัน",
       },
       {
         t: "ยืนยันและคุ้มครองเงิน",
@@ -83,13 +84,14 @@ export const th = {
       },
       {
         t: "ทำงานและรับเงิน",
-        d: "เมื่อเสร็จงาน ระบบจ่ายเงินให้บุคลากรพร้อมบันทึก",
+        d: "เมื่อเสร็จงาน ระบบจ่ายเงินให้บุคลากรและเก็บหลักฐาน",
       },
     ],
-    // EN: "Continue as…"
-    audiencesTitle: "คุณมาในฐานะใด",
+    // EN: "Choose your role"
+    audiencesTitle: "เลือกบทบาทของคุณ",
     // EN: "Try the demo, walk a booking, or talk to us about going live"
-    audiencesSubtitle: "ทดลอง demo เดินเส้นทางจอง หรือติดต่อทีมเพื่อใช้งานจริง",
+    audiencesSubtitle:
+      "ทดลอง demo · เดินเส้นทางจอง · หรือติดต่อทีมเพื่อใช้งานจริง",
     audienceClinic: "สำหรับคลินิก",
     audienceClinicDesc:
       "ต้องการบุคลากรชั่วคราว — ทีม concierge ช่วยประสานให้ครบวงจร",
@@ -108,7 +110,7 @@ export const th = {
     pickSubtitle:
       "ใช้บัญชีทดลองของแต่ละบทบาท คลิกเดียวเข้าสู่ระบบ — รหัส OTP กรอกให้อัตโนมัติ",
     guidedDemo: "แนะนำ: เริ่มที่คลินิก → สลับไปบุคลากร → ปฏิบัติการ → การเงิน",
-    // EN: "Clinic & professional" (avoid legal "contracting parties")
+    // EN: "Clinic & professional"
     partyGroup: "คลินิกและบุคลากร",
     staffGroup: "ทีมภายใน",
     flowSmokeNote: "สำหรับทีมพัฒนา: ทดสอบทั้งขั้นตอนอัตโนมัติ",
@@ -126,8 +128,9 @@ export const th = {
     financeDesc: "กระทบยอดคำสั่งชำระเงิน และตรวจว่ายอดตรงกัน",
     open: "เปิด",
     contactTitle: "สนใจใช้งานจริง?",
+    // EN: "Phase 0 is open to Bangkok-area clinics via concierge — self-serve public booking is not open yet"
     contactNote:
-      "Phase 0 เปิดให้คลินิกในกรุงเทพฯ และปริมณฑลผ่านทีม concierge — ยังไม่เปิดจองด้วยตนเองสาธารณะ",
+      "Phase 0 เปิดให้คลินิกในกรุงเทพฯ และปริมณฑลผ่านทีม concierge — ยังไม่เปิดให้จองเองบนระบบสาธารณะ",
     contactCta: "ติดต่อทีม concierge",
     contactEmail: "concierge@probooking.app",
     contactMailtoSubject: "สนใจใช้งาน ProBooking Phase 0",
@@ -172,7 +175,7 @@ export const th = {
     },
     stepDetail: {
       setup: "ลงทะเบียน แล้วให้ฝ่ายปฏิบัติการตรวจสอบคลินิกกับบุคลากร",
-      offer: "คลินิกส่งข้อเสนอที่ผูกพันหนึ่งฉบับ พร้อมค่าตอบแทนและค่าบริการ",
+      offer: "คลินิกส่งข้อเสนอแบบผูกพัน พร้อมค่าตอบแทนและค่าบริการ",
       accept:
         "บุคลากรตรวจเงื่อนไขแล้วยอมรับ — ยังไม่ใช่การจองจนกว่าคลินิกจะชำระเงิน",
       confirm: "คลินิกจ่ายเงินเพื่อคุ้มครอง — การจองได้รับการยืนยัน",
@@ -305,7 +308,7 @@ export const th = {
     colBooking: "การจอง",
     colOrder: "คำสั่งชำระเงิน",
     colUndistributed: "ยังไม่กระจาย",
-    // EN: "Balances" / "Does not balance" (content-ia F3)
+    // EN: "Balances" / "Does not balance"
     colConserved: "ตรงยอด",
     conservedYes: "ตรงยอด",
     conservedNo: "ไม่ตรงยอด",
@@ -395,8 +398,8 @@ export const th = {
     PaymentFailed: "ชำระเงินไม่สำเร็จ",
     Expired: "หมดอายุ",
     Declined: "ปฏิเสธแล้ว",
-    // Booking
-    Confirmed: "ยืนยันแล้ว · คุ้มครองการชำระเงิน",
+    // Booking — shorter badge form; full phrase lives in trust/checkout
+    Confirmed: "ยืนยันแล้ว · คุ้มครองเงิน",
     InProgress: "กำลังทำงาน",
     AwaitingCompletion: "รอรับรองเสร็จงาน",
     ServiceCompleted: "เสร็จงานแล้ว",
@@ -405,7 +408,7 @@ export const th = {
     // Payout
     NotEligible: "ยังไม่ถึงกำหนดจ่าย",
     Pending: "รอจ่าย",
-    Processing: "กำลังดำเนินการจ่าย",
+    Processing: "กำลังจ่าย",
     Paid: "จ่ายแล้ว",
     Failed: "จ่ายไม่สำเร็จ",
     Held: "ระงับการจ่าย",
@@ -436,12 +439,13 @@ export const th = {
     nurse: "พยาบาล",
   } as Record<string, string>,
   nextAction: {
-    PendingResponse: "บุคลากร: ตรวจค่าตอบแทนและค่าบริการ แล้วยอมรับข้อเสนอ",
+    // Action-first; role prefix kept where both parties share a view
+    PendingResponse: "บุคลากร: ตรวจค่าตอบแทนและค่าบริการ แล้วกดยอมรับ",
     AwaitingPayment: "คลินิก: ยืนยันและคุ้มครองเงินเพื่อสร้างการจอง",
-    Confirmed: "บุคลากร: มาถึงและทำงานตามเวร",
-    InProgress: "บุคลากร: ส่งงานเสร็จเมื่อทำงานครบ",
+    Confirmed: "บุคลากร: กดมาถึงเมื่อถึงเวร แล้วเริ่มงาน",
+    InProgress: "บุคลากร: เมื่อทำงานครบ กดส่งงานเสร็จ",
     AwaitingCompletion: "คลินิก: รับรองเสร็จงานเพื่อจ่ายเงิน",
-    ServiceCompleted: "ทั้งสองฝ่าย: รีวิวได้หลังเสร็จงาน",
+    ServiceCompleted: "ทั้งสองฝ่าย: ให้รีวิวหลังเสร็จงาน",
   } as Record<string, string>,
   party: {
     switchRole: "เปลี่ยนบทบาท",
@@ -466,7 +470,7 @@ export const th = {
     // EN: "Cancel this confirmed booking? Fees or refunds may apply per policy."
     cancelConfirmBody:
       "ยกเลิกการจองที่ยืนยันแล้ว? อาจมีค่าธรรมเนียมหรือคืนเงินตามเงื่อนไข",
-    offersToMe: "ข้อเสนอถึงฉัน",
+    offersToMe: "ข้อเสนอรอตอบ",
     noOffers: "ยังไม่มีข้อเสนอ",
     noOffersDesc: "สมัครเวรด้านล่าง แล้วรอคลินิกส่งข้อเสนอมา",
     acceptOffer: "ยอมรับ",
@@ -483,10 +487,11 @@ export const th = {
     review: "ให้รีวิว 5 ดาว",
     payoutLabel: "จ่ายออก",
     holdConfirmTitle: "ยืนยันการระงับการจอง",
-    holdConfirmBody: "ระงับคุณสมบัติของการจองนี้จนกว่าฝ่ายปฏิบัติการจะปลด?",
+    holdConfirmBody:
+      "ระงับคุณสมบัติของการจองนี้ไว้จนกว่าฝ่ายปฏิบัติการจะปลด?",
     suspendConfirmTitle: "ยืนยันการระงับใบอนุญาต",
     suspendConfirmBody: (name: string) =>
-      `ระงับใบอนุญาตของ「${name}」? การจองใหม่จะถูกบล็อก`,
+      `ระงับใบอนุญาตของ「${name}」? จะจองใหม่ไม่ได้จนกว่าจะปลด`,
     // Latin loanword per #41
     profileTitle: "Profile",
     identityVerified: "ยืนยันตัวตนแล้ว",
@@ -502,14 +507,14 @@ export const th = {
     overviewShifts: "เวรเปิดรับ",
     overviewJobs: "งานที่กำลังทำ",
     overviewOffersHint: "ต้องตอบรับหรือปฏิเสธ",
-    overviewShiftsHint: "ตรงกับตัวกรอง",
+    overviewShiftsHint: "ตรงกับตัวกรองของคุณ",
     overviewJobsHint: "ยืนยันแล้วหรือกำลังทำ",
     earnedLabel: "ได้รับแล้ว",
     pendingPayoutLabel: "รอจ่าย",
     ratingLabel: "คะแนนรีวิว",
     completedJobsLabel: "งานเสร็จ",
     bookableReady: "พร้อมรับงาน",
-    bookablePending: "รอยืนยันคุณสมบัติ",
+    bookablePending: "รอตรวจสอบคุณสมบัติ",
     attentionOffers: (n: number) =>
       n === 1 ? "มีข้อเสนอ 1 รายการรอคุณตอบ" : `มีข้อเสนอ ${n} รายการรอคุณตอบ`,
     attentionOffersCta: "ดูข้อเสนอ",
@@ -532,15 +537,15 @@ export const th = {
     filterCategory: "หมวด",
     filterUrgency: "ความด่วน",
     filterMinBaht: "ค่าตอบแทนขั้นต่ำ (บาท)",
-    filterApply: "กรอง",
-    filterClear: "ล้าง",
+    filterApply: "ใช้ตัวกรอง",
+    filterClear: "ล้างตัวกรอง",
     urgencyAll: "ทั้งหมด",
     urgencyUrgent: "ด่วน",
     urgencyStandard: "ปกติ",
     searchPros: "ค้นหาบุคลากร",
     searchProfession: "วิชาชีพ",
     searchGo: "ค้นหา",
-    searchIdle: "ค้นหาบุคลากรด้วยวิชาชีพด้านบน",
+    searchIdle: "เลือกวิชาชีพด้านบนแล้วกดค้นหา",
     noProsFound: "ไม่พบบุคลากรที่ตรงเงื่อนไข",
     profileLoadFailed: "โหลด Profile ไม่สำเร็จ ลองรีเฟรชหน้า",
     showThread: "ข้อความ",

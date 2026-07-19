@@ -492,7 +492,7 @@ export default function ClinicPage() {
                         void run(
                           `complete-${b.bookingId}`,
                           () => acceptCompletion(b.bookingId, token),
-                          "รับงานและจ่ายเงินแล้ว",
+                          "รับรองเสร็จและจ่ายเงินแล้ว",
                         )
                       }
                     >
