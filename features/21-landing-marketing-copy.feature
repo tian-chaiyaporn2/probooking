@@ -8,7 +8,7 @@ Feature: Landing marketing copy
 
   Scenario: Hero uses market signal instead of internal phase jargon
     Given the landing marketing strings are loaded
-    Then the hero eyebrow should be "กรุงเทพฯ และปริมณฑล · แพทย์และทันตแพทย์"
+    Then the hero eyebrow should be "แพทย์และทันตแพทย์ในกรุงเทพฯ และปริมณฑล"
     And the hero lead should mention payment protection
     And the hero primary CTA should be "เริ่ม demo"
 

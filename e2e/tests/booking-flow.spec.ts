@@ -169,7 +169,7 @@ test("landing hero exposes demo and how-it-works CTAs with trust line", async ({
   await expect(page.getByTestId("hero-cta-primary")).toHaveText("เริ่ม demo");
   await expect(page.getByTestId("hero-cta-secondary")).toHaveText("ดูวิธีจอง");
   await expect(page.getByTestId("trust-line")).toBeVisible();
-  await expect(page.getByText("กรุงเทพฯ และปริมณฑล · แพทย์และทันตแพทย์")).toBeVisible();
+  await expect(page.getByText("แพทย์และทันตแพทย์ในกรุงเทพฯ และปริมณฑล")).toBeVisible();
   await page.getByTestId("hero-cta-primary").click();
   await expect(page).toHaveURL(/#start$/);
 });
