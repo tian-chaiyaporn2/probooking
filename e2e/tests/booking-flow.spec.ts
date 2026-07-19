@@ -138,15 +138,17 @@ test("pages are responsive — no horizontal page overflow on phone and tablet",
     }
   }
   // Party workspaces (pro wash used to bleed ~12px past the viewport on mobile).
+  // Unique phones — do not OTP the shared demo accounts (OTP_MIN_INTERVAL_MS).
   const api = "http://localhost:4000";
-  for (const { path, phone, ready } of [
-    { path: "/clinic", phone: "+66910000001", ready: "post-shift" },
-    { path: "/pro", phone: "+66920000001", ready: "pro-overview" },
+  const uniq = `${Date.now()}`.slice(-8);
+  for (const { path, phone, ready, role } of [
+    { path: "/clinic", phone: `+66oc${uniq}`, ready: "post-shift", role: "clinic" },
+    { path: "/pro", phone: `+66op${uniq}`, ready: "pro-overview", role: "professional" },
   ]) {
     const { authorization } = await loginAs(page.request, api, phone);
     const token = authorization.replace(/^Bearer\s+/i, "");
     await page.setViewportSize(viewports[0]!);
-    await injectSession(page, path, token, phone);
+    await injectSession(page, path, token, phone, role);
     await expect(page.getByTestId(ready)).toBeVisible({ timeout: 15_000 });
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
