@@ -240,7 +240,8 @@
   bottom: max(1.25rem, calc(var(--safe-bottom) + 0.75rem));
   transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 0.5rem;
-  width: min(26rem, calc(100vw - 2rem - var(--safe-left) - var(--safe-right)));
+  /* Prefer % over 100vw — vw can exceed the layout viewport and nudge page scroll. */
+  width: min(26rem, calc(100% - 2rem - var(--safe-left) - var(--safe-right)));
   padding-inline: var(--safe-left) var(--safe-right);
   pointer-events: none;
 }
@@ -537,7 +538,7 @@
 /* ---- Dialog ---- */
 .dialog {
   border: none; padding: 0; background: transparent;
-  max-width: calc(100vw - 2rem - var(--safe-left) - var(--safe-right));
+  max-width: calc(100% - 2rem - var(--safe-left) - var(--safe-right));
   width: min(28rem, 100%);
   margin: auto;
 }
@@ -711,11 +712,14 @@
 /* ---- Professional workspace aesthetics ---- */
 .page--pro {
   position: relative;
+  /* Decorative wash may paint to the padding edge; never past the viewport. */
+  overflow-x: clip;
 }
 .page--pro::before {
   content: "";
   position: absolute;
-  inset: -1.5rem -1rem auto;
+  /* Vertical bleed only — horizontal negative inset caused ~12px page scroll on mobile. */
+  inset: -1.5rem 0 auto;
   height: 16rem;
   pointer-events: none;
   z-index: 0;
