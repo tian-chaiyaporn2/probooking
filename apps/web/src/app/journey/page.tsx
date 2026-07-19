@@ -114,7 +114,7 @@ export default function JourneyPage() {
           ownerPhone: `+66jc${uniq}`,
         });
         const pro = await registerProfessional({
-          displayName: "พญ. ธนพร ก.",
+          displayName: "สมชาย ใจดี",
           profession: "dental_assistant",
           phone: `+66jp${uniq}`,
           payoutRef: "xxxx-1234",
