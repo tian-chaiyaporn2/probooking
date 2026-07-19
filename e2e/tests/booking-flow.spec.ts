@@ -166,10 +166,10 @@ test("mobile and tablet nav collapses into a drawer that opens and closes", asyn
 test("landing hero exposes demo and how-it-works CTAs with trust line", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await expect(page.getByTestId("hero-cta-primary")).toHaveText("เริ่มเดโม");
-  await expect(page.getByTestId("hero-cta-secondary")).toHaveText("ดูวิธีทำงาน");
+  await expect(page.getByTestId("hero-cta-primary")).toHaveText("เริ่ม demo");
+  await expect(page.getByTestId("hero-cta-secondary")).toHaveText("ดูวิธีจอง");
   await expect(page.getByTestId("trust-line")).toBeVisible();
-  await expect(page.getByText("กรุงเทพฯ และปริมณฑล · แพทย์และทันตแพทย์")).toBeVisible();
+  await expect(page.getByText("แพทย์และทันตแพทย์ในกรุงเทพฯ และปริมณฑล")).toBeVisible();
   await page.getByTestId("hero-cta-primary").click();
   await expect(page).toHaveURL(/#start$/);
 });
@@ -178,7 +178,7 @@ test("landing contact block captures real-interest clinics", async ({ page }) =>
   await page.goto("/");
   const contact = page.getByTestId("contact-block");
   await expect(contact).toBeVisible();
-  await expect(page.getByTestId("contact-cta")).toHaveText("ติดต่อทีมคอนเซียร์จ");
+  await expect(page.getByTestId("contact-cta")).toHaveText("ติดต่อทีม concierge");
   await expect(page.getByTestId("contact-cta")).toHaveAttribute(
     "href",
     /mailto:concierge@probooking\.app\?subject=/,

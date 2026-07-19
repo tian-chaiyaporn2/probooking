@@ -415,7 +415,7 @@ export default function ClinicPage() {
                         void run(
                           `confirm-${s.offer!.id}`,
                           () => confirmOffer(s.offer!.id, token),
-                          "ยืนยันและกันเงินแล้ว",
+                          "ยืนยันและคุ้มครองเงินแล้ว",
                         )
                       }
                     >
@@ -495,7 +495,7 @@ export default function ClinicPage() {
                         void run(
                           `complete-${b.bookingId}`,
                           () => acceptCompletion(b.bookingId, token),
-                          "รับงานและจ่ายเงินแล้ว",
+                          "รับรองเสร็จและจ่ายเงินแล้ว",
                         )
                       }
                     >
