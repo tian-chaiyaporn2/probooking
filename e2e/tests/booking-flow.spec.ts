@@ -113,6 +113,34 @@ test("pages are responsive — no horizontal page overflow on phone and tablet",
       `horizontal overflow on ${path} at ${viewport.width}x${viewport.height}`,
     ).toBeLessThanOrEqual(1);
   };
+  // Page-level scroll is masked by `html { overflow-x: clip }`: clipped content never widens
+  // documentElement, so assertNoPageOverflow cannot tell filled text that *wraps* (the fix)
+  // from text that is *clipped/cut off* (the bug). This element-level net closes that gap —
+  // it flags any listed element whose content overflows its own box (scrollWidth >
+  // clientWidth), which is what clipping-instead-of-wrapping looks like. Headings already
+  // wrap globally (base.css h1,h2,h3), so this mainly guards the non-heading value/row/badge
+  // surfaces the filled dashboards render.
+  const assertContentWraps = async (
+    path: string,
+    viewport: { width: number; height: number },
+  ) => {
+    const overflowers = await page.evaluate((selectors: string[]) => {
+      const bad: string[] = [];
+      for (const sel of selectors) {
+        for (const el of Array.from(document.querySelectorAll(sel))) {
+          const e = el as HTMLElement;
+          if (e.scrollWidth - e.clientWidth > 1) {
+            bad.push(`${sel} (${e.scrollWidth}>${e.clientWidth})`);
+          }
+        }
+      }
+      return bad;
+    }, [".workspace-head h1", ".page-head h1", ".identity-card__name", ".stat__value", ".row__name", ".row__money", ".badge"]);
+    expect(
+      overflowers,
+      `content clipped instead of wrapped on ${path} at ${viewport.width}x${viewport.height}`,
+    ).toEqual([]);
+  };
   // Public paths: check every viewport without auth.
   for (const path of ["/", "/signin", "/journey", "/flow"]) {
     for (const viewport of viewports) {
@@ -141,18 +169,51 @@ test("pages are responsive — no horizontal page overflow on phone and tablet",
   // Unique phones — do not OTP the shared demo accounts (OTP_MIN_INTERVAL_MS).
   const api = "http://localhost:4000";
   const uniq = `${Date.now()}`.slice(-8);
-  for (const { path, phone, ready, role } of [
-    { path: "/clinic", phone: `+66oc${uniq}`, ready: "post-shift", role: "clinic" },
-    { path: "/pro", phone: `+66op${uniq}`, ready: "pro-overview", role: "professional" },
+  // Register each party under its own phone with a long name so the workspace head renders
+  // *filled* content — a long name next to the avatar and the action buttons — instead of
+  // the short "คลินิก" / role fallback the bare OTP account would show. This exercises the
+  // filled-head layout (F1: shrinkable title column beside avatar + actions) that the empty
+  // fallback never reaches.
+  const longClinicName =
+    "คลินิกทันตกรรมและศูนย์ทันตสุขภาพครบวงจรสาขาสุขุมวิททองหล่อเอกมัยพร้อมพงษ์";
+  const longProName = "พยาบาลวิชาชีพเชี่ยวชาญการดูแลผู้ป่วยและผู้ช่วยทันตแพทย์อาวุโสประจำคลินิก";
+  for (const { path, phone, ready, role, register } of [
+    {
+      path: "/clinic",
+      phone: `+66oc${uniq}`,
+      ready: "post-shift",
+      role: "clinic",
+      register: {
+        url: `${api}/clinics`,
+        data: { branchName: longClinicName, licenceNo: "L", address: "BKK", ownerPhone: `+66oc${uniq}` },
+      },
+    },
+    {
+      path: "/pro",
+      phone: `+66op${uniq}`,
+      ready: "pro-overview",
+      role: "professional",
+      register: {
+        url: `${api}/professionals`,
+        data: { displayName: longProName, profession: "nurse", phone: `+66op${uniq}`, payoutRef: "x" },
+      },
+    },
   ]) {
+    await page.request.post(register.url, { data: register.data });
     const { authorization } = await loginAs(page.request, api, phone);
     const token = authorization.replace(/^Bearer\s+/i, "");
     await page.setViewportSize(viewports[0]!);
     await injectSession(page, path, token, phone, role);
     await expect(page.getByTestId(ready)).toBeVisible({ timeout: 15_000 });
+    // The head now carries a long, space-free Thai name — confirm the page still fits and,
+    // crucially, that the name wraps inside its column rather than being clipped.
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      path === "/clinic" ? "คลินิกทันตกรรม" : "พยาบาลวิชาชีพ",
+    );
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
       await assertNoPageOverflow(path, viewport);
+      await assertContentWraps(path, viewport);
     }
   }
 });

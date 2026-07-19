@@ -189,7 +189,7 @@ export default function ClinicPage() {
       <AppHeader current="/clinic" />
       <main id="main" className="page page--party">
         <div className="workspace-head">
-          <div>
+          <div className="workspace-head__copy">
             <h1>
               {meLoading && !clinic ? (
                 <Skeleton variant="line" />

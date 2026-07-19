@@ -74,10 +74,12 @@
 .signin-card__label {
   font-weight: 700;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 .signin-card__sub {
   font-size: 0.82rem;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .signin-card__phone {
   font-size: 0.75rem;
@@ -147,10 +149,12 @@
 }
 .thread__meta {
   font-size: 0.72rem;
+  overflow-wrap: anywhere;
 }
 .thread__body {
   font-size: 0.9rem;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Landing secondary surfaces (after RolePicker — not competing heroes) */

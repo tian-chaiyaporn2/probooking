@@ -14,7 +14,7 @@ export function PageHeader({
 }) {
   return (
     <div className="page-head">
-      <div>
+      <div className="page-head__copy">
         {eyebrow}
         <h1>{title}</h1>
         {subtitle ? <p className="page-head__sub">{subtitle}</p> : null}
