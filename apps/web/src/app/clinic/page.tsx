@@ -261,7 +261,7 @@ export default function ClinicPage() {
                       },
                       token,
                     ),
-                  "ประกาศเวรแล้ว",
+                  "ประกาศงานแล้ว",
                 )
               }
             >
