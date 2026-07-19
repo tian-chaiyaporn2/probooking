@@ -43,7 +43,7 @@ Then("they cannot apply, invite, offer, or pay", async function (this: ProBookin
   // Without a verified professional + clinic, createOffer is still creatable at store layer,
   // but getOfferEligibility reports clinicVerified=false — the confirm gate AUTH-04 enforces.
   const pro = await this.state.store.registerProfessional({
-    displayName: "D", profession: "physician", phone: "+66unv-pro", payoutRef: "x",
+    displayName: "D", profession: "nurse", phone: "+66unv-pro", payoutRef: "x",
   });
   await this.state.store.verifyProfessional(pro.id);
   await this.state.store.applyToShift(shiftId, pro.id);
@@ -57,7 +57,7 @@ Then("they cannot apply, invite, offer, or pay", async function (this: ProBookin
 Given("a professional with a verified licence and a self-declared bio", async function (this: ProBookingWorld) {
   this.state.store = newStore();
   const pro = await this.state.store.registerProfessional({
-    displayName: "Dr Grace", profession: "dentist", phone: "+66prof", payoutRef: "x",
+    displayName: "Dr Grace", profession: "dental_assistant", phone: "+66prof", payoutRef: "x",
   });
   await this.state.store.verifyProfessional(pro.id);
   this.state.professionalId = pro.id;

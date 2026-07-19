@@ -43,7 +43,7 @@ Given("a shift with a pending offer awaiting acceptance", async function (this: 
   });
   await this.state.store.verifyClinic(clinic.id);
   const pro = await this.state.store.registerProfessional({
-    displayName: "D", profession: "physician", phone: "+66off2", payoutRef: "x",
+    displayName: "D", profession: "nurse", phone: "+66off2", payoutRef: "x",
   });
   await this.state.store.verifyProfessional(pro.id);
   const now = 1_700_000_000_000;

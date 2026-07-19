@@ -94,7 +94,7 @@ export interface RegisterClinicInput {
 
 export interface RegisterProfessionalInput {
   displayName: string;
-  profession: string; // physician | dentist (Phase 1)
+  profession: string; // dental_assistant | nurse (Phase 1)
   phone: string;
   payoutRef: string; // masked payout account reference (VER-07)
 }
@@ -110,7 +110,9 @@ export interface OfferEligibility {
   clinicVerified: boolean;
   professionalVerified: boolean;
   professionalNotSuspended: boolean; // VER-04: licence credential not suspended by Ops
+  licenceRequired: boolean; // VER-04: only licensed professions (nurse) require a licence
   licenceValidThroughShiftEnd: boolean; // VER-04: licence not expired before shift ends
+  specialtyRequired: boolean; // specialty gate applies (false for the current professions)
   specialtyValidThroughShiftEnd: boolean; // specialty_evidence credential, if any
   insuranceRequired: boolean; // VER-05: does the shift require insurance?
   insuranceValidThroughShiftEnd: boolean;

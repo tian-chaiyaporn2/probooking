@@ -11,7 +11,7 @@ Given("a registered professional", async function (this: ProBookingWorld) {
   this.state.store = newStore();
   this.state.phone = `+66onb${++seq}`;
   const pro = await this.state.store.registerProfessional({
-    displayName: "Dr Onb", profession: "physician", phone: this.state.phone, payoutRef: "x",
+    displayName: "Dr Onb", profession: "nurse", phone: this.state.phone, payoutRef: "x",
   });
   this.state.professionalId = pro.id;
 });
@@ -57,7 +57,7 @@ Then("registering another professional with the same phone conflicts", async fun
   let conflicted = false;
   try {
     await this.state.store.registerProfessional({
-      displayName: "Dup", profession: "physician", phone: this.state.phone, payoutRef: "y",
+      displayName: "Dup", profession: "nurse", phone: this.state.phone, payoutRef: "y",
     });
   } catch {
     conflicted = true;

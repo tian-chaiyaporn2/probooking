@@ -38,7 +38,7 @@ export const DEMO_ACCOUNTS_DATA: DemoAccountData[] = [
   {
     id: "professional",
     phone: "+66920000001",
-    label: "นพ. สมชาย ใจดี",
+    label: "สมชาย ใจดี",
     sublabel: "บุคลากร หางาน ยอมรับข้อเสนอ ทำงาน รับเงิน",
     role: "professional",
     group: "party",

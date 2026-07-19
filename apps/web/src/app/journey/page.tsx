@@ -115,7 +115,7 @@ export default function JourneyPage() {
         });
         const pro = await registerProfessional({
           displayName: "พญ. ธนพร ก.",
-          profession: "physician",
+          profession: "dental_assistant",
           phone: `+66jp${uniq}`,
           payoutRef: "xxxx-1234",
         });

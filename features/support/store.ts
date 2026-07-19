@@ -75,7 +75,7 @@ export async function seedConfirmedBooking(
   if (!professionalId) {
     const pro = await store.registerProfessional({
       displayName: "Dr Test",
-      profession: "physician",
+      profession: "nurse",
       phone: professionalPhone,
       payoutRef: "x-1",
     });
@@ -146,7 +146,7 @@ export async function seedAwaitingPaymentOffer(
   await store.verifyClinic(clinic.id);
   const pro = await store.registerProfessional({
     displayName: "Dr Test",
-    profession: "physician",
+    profession: "nurse",
     phone: `+66p${n}`,
     payoutRef: "x-1",
   });

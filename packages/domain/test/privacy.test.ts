@@ -37,7 +37,7 @@ describe("patient-data filter does not block legitimate clinical messages (§7.3
     ["ward 3 beds 12 5 7 9 11 2 4 6 8 10", "a ward/bed list"],
     ["rates 800 900 1000 120", "a list of rates"],
     ["shift on 12 13 2026 at 9 30 am", "dates and times"],
-    ["we need 2 physicians and 1 dentist for 8 hours", "ordinary numbers"],
+    ["we need 2 nurses and 1 dental_assistant for 8 hours", "ordinary numbers"],
   ])("allows %j (%s)", (text) => {
     expect(containsProhibitedPatientData(text)).toBe(false);
   });

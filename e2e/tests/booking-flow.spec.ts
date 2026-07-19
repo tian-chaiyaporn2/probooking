@@ -59,7 +59,7 @@ async function provisionConfirmedBooking(page: any, api: string, uniq: string) {
   }));
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Wk", profession: "physician", phone: `+66wp${uniq}`, payoutRef: "x" },
+    data: { displayName: "Dr Wk", profession: "nurse", phone: `+66wp${uniq}`, payoutRef: "x" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66wc${uniq}`);
@@ -358,7 +358,7 @@ test("a suspended professional cannot be confirmed (VER-04 gate)", async ({ page
   }));
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: auth });
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Susp", profession: "physician", phone: `+66sp${uniq}`, payoutRef: "x-1" },
+    data: { displayName: "Dr Susp", profession: "nurse", phone: `+66sp${uniq}`, payoutRef: "x-1" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: auth });
 
@@ -391,21 +391,21 @@ test("verified profile separates self-declared claims from verified facts (VER-0
   const auth = { authorization: `Bearer ${ops.token}` };
 
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Profile", profession: "dentist", phone: `+66pf${uniq}`, payoutRef: "x-1" },
+    data: { displayName: "Dr Profile", profession: "dental_assistant", phone: `+66pf${uniq}`, payoutRef: "x-1" },
   }));
 
   // Before verification: self-declared claims present, nothing verified.
   const before = await j(await page.request.get(`${api}/professionals/${pro.id}/profile`));
   expect(before.selfDeclared.displayName).toBe("Dr Profile");
-  expect(before.selfDeclared.profession).toBe("dentist");
+  expect(before.selfDeclared.profession).toBe("dental_assistant");
   expect(before.verified.identityVerified).toBe(false);
 
   // After Ops verifies, identity flips to verified but self-declared is unchanged.
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: auth });
   const after = await j(await page.request.get(`${api}/professionals/${pro.id}/profile`));
   expect(after.verified.identityVerified).toBe(true);
-  expect(after.verified.licence.state).toBe("Verified");
-  expect(after.selfDeclared.profession).toBe("dentist");
+  expect(after.verified.licence).toBeNull(); // a dental assistant is not licensed (no licence credential)
+  expect(after.selfDeclared.profession).toBe("dental_assistant");
 });
 
 test("reporting: history, receipt, metrics, and finance CSV export (REP-01..03)", async ({ page }) => {
@@ -423,7 +423,7 @@ test("reporting: history, receipt, metrics, and finance CSV export (REP-01..03)"
   }));
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Rep", profession: "physician", phone: `+66rq${uniq}`, payoutRef: "x-1" },
+    data: { displayName: "Dr Rep", profession: "nurse", phone: `+66rq${uniq}`, payoutRef: "x-1" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66rr${uniq}`);
@@ -500,7 +500,7 @@ test("privacy & security: audit trail, OTP rate limit, patient-data guard (§7.3
 
   // A privileged verify must appear in the immutable audit trail.
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Sec", profession: "physician", phone: `+66se${uniq}`, payoutRef: "x-1" },
+    data: { displayName: "Dr Sec", profession: "nurse", phone: `+66se${uniq}`, payoutRef: "x-1" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
 
@@ -587,7 +587,7 @@ test("the money lifecycle cannot be driven anonymously (authz regression guard)"
   }));
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Az", profession: "physician", phone: `+66ay${uniq}`, payoutRef: "x-1" },
+    data: { displayName: "Dr Az", profession: "nurse", phone: `+66ay${uniq}`, payoutRef: "x-1" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66az${uniq}`);
@@ -655,7 +655,7 @@ test("OFF-02 is enforced by the database, not only by a read (OFF-02 regression 
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const mk = async (tag: string) => {
     const p = await j(await page.request.post(`${api}/professionals`, {
-      data: { displayName: `Dr ${tag}`, profession: "physician", phone: `+66${tag}${uniq}`, payoutRef: "x" },
+      data: { displayName: `Dr ${tag}`, profession: "nurse", phone: `+66${tag}${uniq}`, payoutRef: "x" },
     }));
     await page.request.post(`${api}/ops/professionals/${p.id}/verify`, { headers: opsAuth });
     return { ...p, auth: await loginAs(page.request, api, `+66${tag}${uniq}`) };
@@ -702,7 +702,7 @@ test("§6.4: a refund needs two different authorized people (dual-control guard)
   }));
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Dc", profession: "physician", phone: `+66dp${uniq}`, payoutRef: "x" },
+    data: { displayName: "Dr Dc", profession: "nurse", phone: `+66dp${uniq}`, payoutRef: "x" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66dc${uniq}`);
@@ -797,7 +797,7 @@ test("a goodwill refund on an active booking is absorbed by the fee; completion 
     await page.request.post(`${api}/professionals`, {
       data: {
         displayName: "Dr Gw",
-        profession: "physician",
+        profession: "nurse",
         phone: `+66gp${uniq}`,
         payoutRef: "x",
       },
@@ -925,7 +925,7 @@ test("interactive multi-role flow: clinic and professional drive a booking by ha
   }));
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Play", profession: "physician", phone: `+66pp${uniq}`, payoutRef: "x" },
+    data: { displayName: "Dr Play", profession: "nurse", phone: `+66pp${uniq}`, payoutRef: "x" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
 
@@ -1007,7 +1007,7 @@ test("operations walkthrough: verify pending parties and resolve a credential ho
     data: { branchName: `Pend ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66oc${uniq}` },
   }));
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Pend", profession: "physician", phone: `+66op${uniq}`, payoutRef: "x" },
+    data: { displayName: "Dr Pend", profession: "nurse", phone: `+66op${uniq}`, payoutRef: "x" },
   }));
 
   // Sign in as operations exactly as the picker would (dedicated phone, no OTP-interval clash).
@@ -1132,7 +1132,7 @@ test("a professional can decline a pending offer", async ({ page }) => {
   }));
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Dec", profession: "physician", phone: `+66xp${uniq}`, payoutRef: "x" },
+    data: { displayName: "Dr Dec", profession: "nurse", phone: `+66xp${uniq}`, payoutRef: "x" },
   }));
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66xc${uniq}`);
