@@ -277,7 +277,7 @@ export default function ProPage() {
                     ? "…"
                     : nameInitials(displayName)}
                 </span>
-                <div>
+                <div className="workspace-head__copy">
                   <h1>
                     {meLoading && !me?.professionalName ? (
                       <Skeleton variant="line" />

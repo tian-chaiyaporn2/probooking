@@ -239,7 +239,7 @@ export function AppHeader({ current }: { current?: string }) {
             <span className="brand__mark" aria-hidden>
               P
             </span>
-            {th.brand}
+            <span className="brand__text">{th.brand}</span>
           </Link>
 
           <nav

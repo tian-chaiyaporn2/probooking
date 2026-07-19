@@ -90,8 +90,9 @@
   display: flex; justify-content: space-between; font-size: var(--text-md); gap: var(--s3);
   line-height: var(--leading-snug); letter-spacing: var(--tracking-none);
 }
+.mockcard__line span { min-width: 0; overflow-wrap: anywhere; }
 .mockcard__line span:first-child { color: var(--muted); }
-.mockcard__line span:last-child { font-weight: var(--weight-semibold); color: var(--text); font-variant-numeric: tabular-nums; }
+.mockcard__line span:last-child { font-weight: var(--weight-semibold); color: var(--text); font-variant-numeric: tabular-nums; text-align: end; }
 .mockcard__total { font-size: var(--text-lg); }
 .mockcard__total span:last-child { color: var(--primary-hover); font-weight: var(--weight-bold); }
 .mockcard__stamp {
@@ -243,11 +244,15 @@
 .flow-result__id { font-size: 0.9rem; margin-bottom: var(--s4); color: var(--muted); }
 .checkout {
   width: 100%; border-collapse: collapse; font-size: 0.92rem;
+  table-layout: fixed;
   background: var(--bg); border-radius: var(--radius-sm); overflow: hidden;
   border: 1px solid var(--line);
 }
 .checkout th,
-.checkout td { padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--line); }
+.checkout td {
+  padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere; word-break: break-word; vertical-align: top;
+}
 .checkout th {
   text-align: left; font-weight: 500; color: var(--muted);
 }
@@ -296,14 +301,7 @@
 @media (max-width: 768px) {
   .hero__actions { flex-direction: column; align-items: stretch; }
   .hero__actions .btn { width: 100%; }
-  .page-head,
-  .workspace-head { align-items: stretch; }
-  .page-head .actions,
-  .workspace-head .actions { width: 100%; }
-  .page-head .actions .btn,
-  .page-head > .btn,
-  .workspace-head .actions .btn { flex: 1 1 auto; width: 100%; }
-  .workspace-head__identity { width: 100%; }
+  .page-head > .btn { flex: 1 1 auto; width: 100%; }
   .pro-home__top { align-items: stretch; }
   .pro-home__top .actions { width: 100%; }
   .pro-home__top .actions .btn { flex: 1 1 auto; width: 100%; }
@@ -311,24 +309,10 @@
   .page--pro::before { inset: -1rem 0 auto; height: 12rem; }
   .availability-actions { flex-direction: column; align-items: stretch; }
   .availability-actions .btn { width: 100%; }
-  .rowlist > li {
-    align-items: flex-start;
-    padding: var(--s4);
-  }
-  .rowlist .row__actions {
-    margin-inline-start: 0;
-    width: 100%;
-  }
-  .rowlist .row__actions .btn { width: 100%; }
   .flow-progress { max-width: none; }
   .auth-card { margin-block: clamp(1.25rem, 5vw, 2.5rem); }
   /* Soften perpetual float on small screens — less motion while scrolling. */
   .mockcard { animation: none; }
-  .compose-row { flex-direction: column; align-items: stretch; }
-  .compose-row .btn { width: 100%; }
-  .compose-row__field { flex: 1 1 auto; }
-  .filter-bar label { flex: 1 1 100%; }
-  .filter-bar .btn { flex: 1 1 auto; min-width: min(100%, 8rem); }
   .dialog__actions { flex-direction: column-reverse; }
   .dialog__actions .btn { width: 100%; }
   .journey-card__actions { flex-direction: column; align-items: stretch; }
@@ -337,6 +321,34 @@
   .perspective-toggle .btn { width: 100%; }
   .home-surfaces { grid-template-columns: 1fr; }
   .signin-grid { grid-template-columns: 1fr; }
+}
+
+/* Filled content on tablet: stack dense action rows with the drawer band (≤959).
+   Phone (≤768) already stretches; this closes the 769–959 squeeze when names,
+   money, badges, and dual CTAs compete in one row. */
+@media (max-width: 959px) {
+  .page-head,
+  .workspace-head { align-items: stretch; }
+  .page-head .actions,
+  .workspace-head .actions { width: 100%; }
+  .page-head .actions .btn,
+  .workspace-head .actions .btn { flex: 1 1 auto; width: 100%; }
+  .workspace-head__identity { width: 100%; }
+  .rowlist > li {
+    align-items: flex-start;
+    padding: var(--s4);
+  }
+  .rowlist .row__actions {
+    margin-inline-start: 0;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .rowlist .row__actions .btn { width: 100%; }
+  .compose-row { flex-direction: column; align-items: stretch; }
+  .compose-row .btn { width: 100%; }
+  .compose-row__field { flex: 1 1 auto; }
+  .filter-bar label { flex: 1 1 100%; }
+  .filter-bar .btn { flex: 1 1 auto; min-width: min(100%, 8rem); }
 }
 
 /* Tablet band: roomier drawer, full-width primary actions still available. */
@@ -479,6 +491,7 @@
   background: var(--primary-050); color: var(--primary-hover);
   font-size: var(--text-xs); font-weight: var(--weight-semibold);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: none;
 }
 .account-chip--compact { display: none; }
 .nav-signout,

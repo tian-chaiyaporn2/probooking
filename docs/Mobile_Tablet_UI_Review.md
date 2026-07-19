@@ -80,6 +80,8 @@ Overflow + drawer tests now cover phone and tablet portrait (768 / 834). Added a
 2. **Clinic/pro signed-in overflow** not in the static path list (needs auth seed); covered indirectly by RolePicker + party walkthrough specs.
 3. **iPad landscape ≥960px** uses desktop top nav — intentional; drawer MQ stays aligned with `DRAWER_MQ` in `AppHeader`.
 
+**Follow-up:** filled-content misalignment (long names, money, badge clusters, tablet action rows) is covered in [`Filled_Content_Layout_Review.md`](./Filled_Content_Layout_Review.md).
+
 ---
 
 ## Implementation map
