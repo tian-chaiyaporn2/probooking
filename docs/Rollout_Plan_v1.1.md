@@ -143,7 +143,7 @@ Every paid product requires a clear benefit, willingness-to-pay evidence, margin
 
 Expand one dimension at a time:
 
-- **4A:** new employer type, same physicians/dentists.
+- **4A:** new employer type, same dental assistants/nurses.
 - **4B:** new profession, known clinic buyers.
 
 Each segment requires legal and contracting rules, verification, shift templates, supervision, payment/tax treatment, safety process, supply, demand, and economics.
