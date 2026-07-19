@@ -1,16 +1,9 @@
 import {
-  BadRequestException,
-  Body,
-  ConflictException,
   Controller,
-  ForbiddenException,
   Get,
-  Header,
   Inject,
   NotFoundException,
   Param,
-  Post,
-  Query,
   UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
@@ -22,7 +15,6 @@ import {
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
-import { isConflict } from "../errors.util.js";
 import {
   advanceOffer,
   advanceBooking,
@@ -43,23 +35,15 @@ import {
   type CancelActor,
   type CancelReason,
 } from "@probook/domain";
-import { OffersService } from "../../offers/offers.service.js";
-import { BookingsService } from "../../bookings/bookings.service.js";
-import { PaymentsService } from "../../payments/payments.service.js";
 import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
 } from "../../payments/payment.provider.js";
-import { NotificationsService } from "../notifications.service.js";
 import { MarketplaceAccessService } from "../marketplace-access.service.js";
 import {
   MARKETPLACE_REPOSITORY,
   type MarketplaceRepository,
-  type ShiftFilters,
-  type ProfessionalFilters,
-  type CallerIdentity,
 } from "../marketplace.types.js";
-import { normalizePhone } from "@probook/db";
 import { HOUR_MS, csvCell, type PostShiftDto } from "./shared.js";
 
 /**

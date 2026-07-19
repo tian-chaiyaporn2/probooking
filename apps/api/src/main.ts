@@ -4,13 +4,15 @@ import { NestFactory } from "@nestjs/core";
 import helmet from "helmet";
 import { json, urlencoded } from "express";
 import { AppModule } from "./app.module.js";
-import { devAuthEnabled, devTokenRouteEnabled } from "./modules/auth/dev-mode.util.js";
+import {
+  devAuthEnabled,
+  devTokenRouteEnabled,
+} from "./modules/auth/dev-mode.util.js";
 import { assertSigningSecretConfigured } from "./modules/auth/token.util.js";
 import { assertFieldKeyConfigured } from "./modules/marketplace/field-crypto.js";
 import { validateEnv } from "./config/env-schema.js";
 
 async function bootstrap() {
-  const isProd = process.env.NODE_ENV === "production";
   const devAuth = devAuthEnabled();
 
   // Shape-check the environment first (M10): numbers parse, booleans are true/false, enums
