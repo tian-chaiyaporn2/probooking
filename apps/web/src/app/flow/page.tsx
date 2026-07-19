@@ -80,7 +80,7 @@ export default function FlowPage() {
         ownerPhone: `+66c${uniq}`,
       });
       const pro = await registerProfessional({
-        displayName: "Dr. Demo",
+        displayName: "สมชาย ใจดี",
         profession: "dental_assistant",
         phone: `+66p${uniq}`,
         payoutRef: "xxxx-1234",

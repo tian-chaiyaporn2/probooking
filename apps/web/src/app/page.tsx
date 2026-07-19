@@ -51,10 +51,10 @@ export default function Home() {
             </p>
             <div className="mockcard">
               <div className="mockcard__row">
-                <span className="mockcard__avatar">พ</span>
+                <span className="mockcard__avatar">ส</span>
                 <div>
-                  <div className="mockcard__name">พญ. ธนพร ก.</div>
-                  <div className="mockcard__meta">อายุรแพทย์ · ตรวจสอบแล้ว</div>
+                  <div className="mockcard__name">สมชาย ใจดี</div>
+                  <div className="mockcard__meta">ผู้ช่วยทันตแพทย์ · ตรวจสอบแล้ว</div>
                 </div>
                 <span className="mockcard__stamp mockcard__stamp--end">
                   <ShieldCheckIcon /> ยืนยันแล้ว
@@ -62,7 +62,7 @@ export default function Home() {
               </div>
               <div className="mockcard__divide" />
               <div className="mockcard__line">
-                <span>เวร · คลินิกสุขุมวิท</span>
+                <span>งาน · คลินิกสุขุมวิท</span>
                 <span>8 ชม.</span>
               </div>
               <div className="mockcard__line">

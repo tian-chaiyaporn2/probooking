@@ -238,7 +238,7 @@ export async function seedDemoFixtures(
   });
   await store.setOfferState(expiredOffer.id, "Expired");
 
-  // --- Actionable states OWNED BY THE SIGN-IN DEMO ACCOUNTS (clinicA + Dr Somchai) ---
+  // --- Actionable states OWNED BY THE SIGN-IN DEMO ACCOUNTS (clinicA + Somchai) ---
   // The states above sit on secondary accounts (wanida/clinicB), so the interactive flows
   // weren't walkable from the accounts a demo tester actually signs in as. These make them so.
 
@@ -578,7 +578,7 @@ export async function seedDemoFixtures(
     text: "รอรีวิวจากทีม",
   });
 
-  // --- Extra completed bookings so Dr. Prasert reaches the 3-review cold-start threshold (REV-04) ---
+  // --- Extra completed bookings so Prasert reaches the 3-review cold-start threshold (REV-04) ---
   for (let i = 0; i < 2; i++) {
     const extraShift = await store.postShift({
       clinicWorkspaceId: clinicB.id,
