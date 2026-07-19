@@ -7,31 +7,31 @@ export const th = {
   brand: "ProBooking",
   home: {
     // EN: "Fill clinic shifts with verified professionals — payment protected"
-    tagline: "เติมเวรคลินิกด้วยบุคลากรที่ตรวจสอบแล้ว พร้อมคุ้มครองการชำระเงิน",
+    tagline: "เติมงานคลินิกด้วยบุคลากรที่ตรวจสอบแล้ว พร้อมคุ้มครองการชำระเงิน",
     // EN: "The clinic pays after they accept — funds stay protected until the shift is done"
-    lead: "คลินิกชำระเงินหลังบุคลากรตอบรับ และคุ้มครองเงินไว้จนกว่าเวรจะเสร็จ",
+    lead: "คลินิกชำระเงินหลังบุคลากรตอบรับ และคุ้มครองเงินไว้จนกว่างานจะเสร็จ",
     // EN: "Phase 0 is concierge-led: ProBooking books end to end. This page shows the booking steps and internal tools."
     phaseNote:
       "Phase 0 ใช้บริการแบบ concierge โดยทีม ProBooking ช่วยจองให้ครบวงจร หน้านี้แสดงขั้นตอนการจองและเครื่องมือของทีมภายใน",
-    marketSignal: "แพทย์และทันตแพทย์ในกรุงเทพฯ และปริมณฑล",
+    marketSignal: "บุคลากรทางการแพทย์ในกรุงเทพฯ และปริมณฑล",
     phase: "Phase 0 ในกรุงเทพฯ และปริมณฑล",
     // EN: "Book verified professionals for temporary clinic shifts in Thailand — payment protected"
     metadataDescription:
-      "จองบุคลากรที่ตรวจสอบแล้วสำหรับเวรคลินิกชั่วคราวในไทย พร้อมคุ้มครองการชำระเงิน",
+      "จองบุคลากรที่ตรวจสอบแล้วสำหรับงานคลินิกชั่วคราวในไทย พร้อมคุ้มครองการชำระเงิน",
     ctaPrimary: "เริ่ม demo",
     // Align with howTitle "จองอย่างไร"
     ctaSecondary: "ดูวิธีจอง",
     // EN: Verified · Available · Bookable · Payment Protected
-    trust: ["ตรวจสอบแล้ว", "พร้อมรับเวร", "จองได้", "คุ้มครองการชำระเงิน"],
+    trust: ["ตรวจสอบแล้ว", "พร้อมรับงาน", "จองได้", "คุ้มครองการชำระเงิน"],
     howTitle: "จองอย่างไร",
     // EN: "Four steps — from posting a shift to getting paid"
-    howSubtitle: "สี่ขั้นตอน จากประกาศเวรถึงรับเงิน",
+    howSubtitle: "สี่ขั้นตอน จากประกาศงานถึงรับเงิน",
     howPerspectiveClinic: "มุมคลินิก",
     howPerspectivePro: "มุมบุคลากร",
     stepsClinic: [
       {
-        t: "ประกาศเวร",
-        d: "ลงเวรที่ต้องการ พร้อมวันเวลา เงื่อนไข และค่าตอบแทน",
+        t: "ประกาศงาน",
+        d: "ลงประกาศงานที่ต้องการ พร้อมวันเวลา เงื่อนไข และค่าตอบแทน",
       },
       {
         t: "เชิญและเสนอ",
@@ -46,17 +46,17 @@ export const th = {
       {
         t: "รับรองและจ่าย",
         // EN: "When the shift ends, confirm completion — we pay out and keep a record"
-        d: "เมื่อเวรเสร็จ ยืนยันว่าเสร็จงาน ระบบจ่ายค่าตอบแทนและเก็บหลักฐาน",
+        d: "เมื่อจบงาน ยืนยันว่าเสร็จสิ้น ระบบจ่ายค่าตอบแทนและเก็บหลักฐาน",
       },
     ],
     stepsPro: [
       {
         t: "ยืนยันตัวตน",
-        d: "ส่งเอกสารให้ทีมตรวจสอบ แล้วเปิดรับเวรที่ตรงความเชี่ยวชาญ",
+        d: "ส่งเอกสารให้ทีมตรวจสอบ แล้วเปิดรับงานที่ตรงความเชี่ยวชาญ",
       },
       {
         t: "รับข้อเสนอ",
-        d: "สมัครเวรหรือรับคำเชิญ แล้วตรวจเงื่อนไขก่อนยอมรับ",
+        d: "สมัครงานหรือรับคำเชิญ แล้วตรวจเงื่อนไขก่อนยอมรับ",
       },
       {
         t: "ทำงานเมื่อเงินคุ้มครองแล้ว",
@@ -71,8 +71,8 @@ export const th = {
     /** @deprecated Use stepsClinic / stepsPro — kept for tests that import the old key. */
     steps: [
       {
-        t: "ประกาศเวร",
-        d: "คลินิกที่ตรวจสอบแล้วลงเวรที่เปิดรับ พร้อมเงื่อนไขและค่าตอบแทน",
+        t: "ประกาศงาน",
+        d: "คลินิกที่ตรวจสอบแล้วประกาศงานที่เปิดรับ พร้อมเงื่อนไขและค่าตอบแทน",
       },
       {
         t: "เชิญและเสนอ",
@@ -98,7 +98,7 @@ export const th = {
     audienceClinicCta: "ติดต่อทีม",
     audiencePro: "สำหรับบุคลากร",
     // EN: "Clear shift terms, protected pay, and payouts you can track"
-    audienceProDesc: "หาเวรที่เงื่อนไขชัด เงินถูกคุ้มครอง และติดตามการจ่ายได้",
+    audienceProDesc: "หางานที่เงื่อนไขชัด เงินถูกคุ้มครอง และติดตามการจ่ายได้",
     audienceProCta: "เริ่ม demo",
     audienceStaff: "สำหรับทีมภายใน",
     // EN: "Ops verifies parties and manages cases. Finance reconciles payments."
@@ -239,7 +239,7 @@ export const th = {
     emptyPendingHint: "เมื่อมีคลินิกหรือบุคลากรส่งเอกสาร รายการจะปรากฏที่นี่",
     emptyCases: "ไม่มีเคสที่เปิดอยู่ตอนนี้",
     emptyCasesHint: "เคสระงับคุณสมบัติหรือข้อยกเว้นจะแสดงเมื่อระบบเปิดเคส",
-    metricShifts: "เวร (เปิดรับ)",
+    metricShifts: "งาน (เปิดรับ)",
     metricBookings: "การจอง",
     metricCompleted: "เสร็จสิ้น",
     metricHeld: "ระงับไว้",
@@ -438,21 +438,21 @@ export const th = {
     // Action-first; role prefix kept where both parties share a view
     PendingResponse: "บุคลากร: ตรวจค่าตอบแทนและค่าบริการ แล้วกดยอมรับ",
     AwaitingPayment: "คลินิก: ยืนยันและคุ้มครองเงินเพื่อสร้างการจอง",
-    Confirmed: "บุคลากร: กดมาถึงเมื่อถึงเวร แล้วเริ่มงาน",
+    Confirmed: "บุคลากร: กดมาถึงเมื่อถึงเวลา แล้วเริ่มงาน",
     InProgress: "บุคลากร: เมื่อทำงานครบ กดส่งงานเสร็จ",
     AwaitingCompletion: "คลินิก: รับรองเสร็จงานเพื่อจ่ายเงิน",
     ServiceCompleted: "ทั้งสองฝ่าย: ให้รีวิวหลังเสร็จงาน",
   } as Record<string, string>,
   party: {
     switchRole: "เปลี่ยนบทบาท",
-    signInPromptClinic: "เข้าสู่ระบบเป็นเจ้าของคลินิกเพื่อจัดการเวร",
-    signInPromptPro: "เข้าสู่ระบบเป็นบุคลากรเพื่อหาเวรและรับงาน",
+    signInPromptClinic: "เข้าสู่ระบบเป็นเจ้าของคลินิกเพื่อจัดการงาน",
+    signInPromptPro: "เข้าสู่ระบบเป็นบุคลากรเพื่อหางานและรับค่าตอบแทน",
     pickAccount: "เลือกบัญชีเข้าสู่ระบบ",
-    postShift: "ประกาศเวรใหม่",
+    postShift: "ประกาศงานใหม่",
     compensationBaht: "ค่าตอบแทน (บาท)",
     urgent: "ด่วน",
-    myShifts: "เวรของฉัน",
-    noShifts: "ยังไม่มีเวร ประกาศเวรด้านบนเพื่อเริ่มหาบุคลากร",
+    myShifts: "งานของฉัน",
+    noShifts: "ยังไม่มีงาน ประกาศงานด้านบนเพื่อเริ่มหาบุคลากร",
     candidates: "ผู้สมัคร",
     sendOffer: "ส่งข้อเสนอ",
     confirmPay: "ยืนยันและคุ้มครองเงิน",
@@ -468,11 +468,11 @@ export const th = {
       "ยกเลิกการจองที่ยืนยันแล้วหรือไม่ อาจมีค่าธรรมเนียมหรือคืนเงินตามเงื่อนไข",
     offersToMe: "ข้อเสนอรอตอบ",
     noOffers: "ยังไม่มีข้อเสนอ",
-    noOffersDesc: "สมัครเวรด้านล่าง แล้วรอคลินิกส่งข้อเสนอมา",
+    noOffersDesc: "สมัครงานด้านล่าง แล้วรอคลินิกส่งข้อเสนอมา",
     acceptOffer: "ยอมรับ",
     declineOffer: "ปฏิเสธ",
-    openShifts: "เวรที่เปิดรับ",
-    noOpenShifts: "ยังไม่มีเวรเปิดรับ",
+    openShifts: "งานที่เปิดรับ",
+    noOpenShifts: "ยังไม่มีงานเปิดรับ",
     noOpenShiftsDesc: "ลองปรับตัวกรอง หรือกลับมาดูใหม่ภายหลัง",
     apply: "สมัคร",
     myJobs: "งานของฉัน",
@@ -500,7 +500,7 @@ export const th = {
     offerExpires: "หมดอายุ",
     compensationLabel: "ค่าตอบแทน",
     overviewOffers: "ข้อเสนอรอตอบ",
-    overviewShifts: "เวรเปิดรับ",
+    overviewShifts: "งานเปิดรับ",
     overviewJobs: "งานที่กำลังทำ",
     overviewOffersHint: "ต้องตอบรับหรือปฏิเสธ",
     overviewShiftsHint: "ตรงกับตัวกรองของคุณ",
@@ -523,13 +523,13 @@ export const th = {
     availabilityAddToday: "เปิดรับเย็นนี้ (4 ชม.)",
     availabilityOpenToRequests: "รับคำเชิญ",
     availabilityAdded: "เปิดรับช่วงว่างแล้ว",
-    marketPulseTitle: "ตลาดเวรตอนนี้",
-    marketPulseSub: "เวรด่วนและค่าตอบแทนสูงสุดที่เปิดอยู่",
-    marketPulseEmpty: "ยังไม่มีเวรเด่นในตอนนี้",
-    browseAllShifts: "ดูเวรทั้งหมด",
+    marketPulseTitle: "ตลาดงานตอนนี้",
+    marketPulseSub: "งานด่วนและค่าตอบแทนสูงสุดที่เปิดอยู่",
+    marketPulseEmpty: "ยังไม่มีงานเด่นในตอนนี้",
+    browseAllShifts: "ดูงานทั้งหมด",
     // EN: "Pay is protected once the booking is confirmed"
     paymentProtectedHint: "ค่าตอบแทนถูกคุ้มครองเมื่อยืนยันการจอง",
-    homeTrustLine: "ตรวจสอบแล้ว พร้อมรับเวร คุ้มครองการชำระเงิน",
+    homeTrustLine: "ตรวจสอบแล้ว พร้อมรับงาน คุ้มครองการชำระเงิน",
     filterCategory: "หมวด",
     filterUrgency: "ความด่วน",
     filterMinBaht: "ค่าตอบแทนขั้นต่ำ (บาท)",
@@ -558,7 +558,7 @@ export const th = {
     you: "คุณ",
     otherParty: "อีกฝ่าย",
     navClinic: "คลินิกของฉัน",
-    navPro: "เวรของฉัน",
+    navPro: "งานของฉัน",
   },
 } as const;
 

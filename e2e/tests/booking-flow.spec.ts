@@ -169,7 +169,7 @@ test("landing hero exposes demo and how-it-works CTAs with trust line", async ({
   await expect(page.getByTestId("hero-cta-primary")).toHaveText("เริ่ม demo");
   await expect(page.getByTestId("hero-cta-secondary")).toHaveText("ดูวิธีจอง");
   await expect(page.getByTestId("trust-line")).toBeVisible();
-  await expect(page.getByText("แพทย์และทันตแพทย์ในกรุงเทพฯ และปริมณฑล")).toBeVisible();
+  await expect(page.getByText("บุคลากรทางการแพทย์ในกรุงเทพฯ และปริมณฑล")).toBeVisible();
   await page.getByTestId("hero-cta-primary").click();
   await expect(page).toHaveURL(/#start$/);
 });
@@ -187,11 +187,11 @@ test("landing contact block captures real-interest clinics", async ({ page }) =>
 
 test("how-it-works toggles clinic and professional perspectives", async ({ page }) => {
   await page.goto("/#how");
-  await expect(page.getByTestId("how-steps")).toContainText("ประกาศเวร");
+  await expect(page.getByTestId("how-steps")).toContainText("ประกาศงาน");
   await page.getByTestId("how-pro").click();
   await expect(page.getByTestId("how-steps")).toContainText("ยืนยันตัวตน");
   await page.getByTestId("how-clinic").click();
-  await expect(page.getByTestId("how-steps")).toContainText("ประกาศเวร");
+  await expect(page.getByTestId("how-steps")).toContainText("ประกาศงาน");
 });
 
 test("signed-in clinic nav hides staff links and supports sign out", async ({ page }) => {
