@@ -273,6 +273,34 @@ export async function seedDemoFixtures(
     expiresAt: now + 12 * HOUR,
   });
 
+  // (c) A completed + paid booking for Somchai (ServiceCompleted) → the demo PRO can leave a
+  //     review immediately; it also appears in the clinic's completed history.
+  const somchaiDoneShift = await store.postShift({
+    clinicWorkspaceId: clinicA.id,
+    category: "general",
+    compensation: 900_000,
+    urgency: "standard",
+    shiftStart: now - 2 * DAY,
+    insuranceRequired: false,
+  });
+  await store.applyToShift(somchaiDoneShift.shiftId, somchai.id);
+  const somchaiDoneOffer = await store.createOfferForShift({
+    shiftId: somchaiDoneShift.shiftId,
+    professionalId: somchai.id,
+    sentAt: now - 4 * DAY,
+    expiresAt: now - 4 * DAY + HOUR,
+  });
+  await store.setOfferState(somchaiDoneOffer.id, "AwaitingPayment", {
+    fundingDueAt: now - 4 * DAY + HOUR,
+  });
+  const somchaiDone = await confirmFromOffer(store, somchaiDoneOffer.id, 900_000);
+  await store.markCompletion(somchaiDone.booking.id);
+  await store.recordPayout({
+    bookingId: somchaiDone.booking.id,
+    payoutAmount: 900_000,
+    idempotencyKey: `payout:${somchaiDone.booking.id}`,
+  });
+
   // --- Completed + paid booking (finance reconciliation, REP-01/02) ---
   const completedShift = await store.postShift({
     clinicWorkspaceId: clinicA.id,
