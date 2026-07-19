@@ -127,7 +127,7 @@ export const th = {
     // EN: "Reconcile payment orders and check that amounts balance"
     financeDesc: "กระทบยอดคำสั่งชำระเงิน และตรวจว่ายอดตรงกัน",
     open: "เปิด",
-    contactTitle: "สนใจใช้งานจริง?",
+    contactTitle: "สนใจใช้งานจริงไหม",
     // EN: "Phase 0 is open to Bangkok-area clinics via concierge — self-serve public booking is not open yet"
     contactNote:
       "Phase 0 เปิดให้คลินิกในกรุงเทพฯ และปริมณฑลผ่านทีม concierge ยังไม่เปิดให้จองเองบนระบบสาธารณะ",
@@ -274,12 +274,12 @@ export const th = {
     verifyConfirmTitle: "ยืนยันการตรวจสอบ",
     // EN: "Mark X (kind) as verified? This cannot be undone."
     verifyConfirmBody: (name: string, kind: string) =>
-      `ยืนยันการตรวจสอบ「${name}」(${kind})? สถานะจะเป็นตรวจสอบแล้ว และแก้กลับไม่ได้`,
+      `ยืนยันการตรวจสอบ "${name}" (${kind}) หรือไม่ สถานะจะเป็นตรวจสอบแล้ว และแก้กลับไม่ได้`,
     openCases: "เคสที่เปิดอยู่",
     resolveHold: "ปลดการระงับ",
     resolveConfirmTitle: "ยืนยันการปลดการระงับ",
     resolveConfirmBody: (subject: string) =>
-      `ปลดการระงับคุณสมบัติสำหรับ「${subject || "การจองนี้"}」? การจองจะดำเนินการต่อได้`,
+      `ปลดการระงับคุณสมบัติสำหรับ "${subject || "การจองนี้"}" หรือไม่ การจองจะดำเนินการต่อได้`,
     licence: "เลขใบอนุญาต",
     address: "ที่อยู่",
     profession: "วิชาชีพ",
@@ -465,7 +465,7 @@ export const th = {
     cancelConfirmTitle: "ยืนยันการยกเลิก",
     // EN: "Cancel this confirmed booking? Fees or refunds may apply per policy."
     cancelConfirmBody:
-      "ยกเลิกการจองที่ยืนยันแล้ว? อาจมีค่าธรรมเนียมหรือคืนเงินตามเงื่อนไข",
+      "ยกเลิกการจองที่ยืนยันแล้วหรือไม่ อาจมีค่าธรรมเนียมหรือคืนเงินตามเงื่อนไข",
     offersToMe: "ข้อเสนอรอตอบ",
     noOffers: "ยังไม่มีข้อเสนอ",
     noOffersDesc: "สมัครเวรด้านล่าง แล้วรอคลินิกส่งข้อเสนอมา",
@@ -484,10 +484,10 @@ export const th = {
     payoutLabel: "จ่ายออก",
     holdConfirmTitle: "ยืนยันการระงับการจอง",
     holdConfirmBody:
-      "ระงับคุณสมบัติของการจองนี้ไว้จนกว่าฝ่ายปฏิบัติการจะปลด?",
+      "ระงับคุณสมบัติของการจองนี้ไว้จนกว่าฝ่ายปฏิบัติการจะปลดหรือไม่",
     suspendConfirmTitle: "ยืนยันการระงับใบอนุญาต",
     suspendConfirmBody: (name: string) =>
-      `ระงับใบอนุญาตของ「${name}」? จะจองใหม่ไม่ได้จนกว่าจะปลด`,
+      `ระงับใบอนุญาตของ "${name}" หรือไม่ จะจองใหม่ไม่ได้จนกว่าจะปลด`,
     // Latin loanword per #41
     profileTitle: "Profile",
     identityVerified: "ยืนยันตัวตนแล้ว",
