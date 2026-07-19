@@ -34,10 +34,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4faf8" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
-  ],
+  themeColor: "#f4faf8",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -45,13 +42,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="th" className={`${anuphan.variable} ${sarabun.variable}`}>
       <body>
-        {/* Apply the saved theme before paint to avoid a flash of the wrong theme. */}
-        <script
-          dangerouslySetInnerHTML={{
-            // Resolve theme before paint. CSS prefers [data-theme]; media queries cover no-JS.
-            __html: `try{var t=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=(t==='dark'||t==='light')?t:(d?'dark':'light');}catch(e){}`,
-          }}
-        />
         <a className="skip-link" href="#main">
           {th.a11y.skipToContent}
         </a>
