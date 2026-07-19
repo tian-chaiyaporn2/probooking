@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { workerConfig } from "./config.js";
 
 /**
  * The worker calls controlled API actions that move money (accept-completion) and open Ops
@@ -17,11 +18,7 @@ const TTL_SECONDS = 300;
 const b64url = (input: string): string => Buffer.from(input).toString("base64url");
 
 export function workerToken(): string | null {
-  const secret = process.env.JWT_SECRET;
-  // No secret configured: send no Authorization header. The API will reject the call with
-  // 401 and the sweep logs it — far better than the worker silently believing it is
-  // authenticated, or a fallback secret existing at all.
-  if (!secret) return null;
+  const secret = workerConfig.jwtSecret;
   const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const now = Math.floor(Date.now() / 1000);
   const body = b64url(

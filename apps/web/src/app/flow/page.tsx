@@ -32,6 +32,11 @@ import {
 
 type Step = { label: string; detail: string };
 
+function alreadyCompleted(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /already|duplicate|no longer awaiting|cannot .* from ServiceCompleted/i.test(error.message);
+}
+
 /**
  * Phase 0 booking-flow demo. Drives the API: create offer -> accept (soft hold) ->
  * confirm (eligibility + prefunding) -> Confirmed booking. Exists to verify the
@@ -73,18 +78,22 @@ export default function FlowPage() {
     try {
       // Onboard + verify a clinic and professional (unique phones per run).
       const uniq = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      const clinicPhone = `+66c${uniq}`;
+      const proPhone = `+66p${uniq}`;
+      const clinicToken = await loginAs(clinicPhone);
+      const proToken = await loginAs(proPhone);
       const clinic = await registerClinic({
         branchName: "Sukhumvit Clinic",
         licenceNo: "TH-DEMO",
         address: "Bangkok",
-        ownerPhone: `+66c${uniq}`,
-      });
+        ownerPhone: clinicPhone,
+      }, clinicToken);
       const pro = await registerProfessional({
         displayName: "Dr. Demo",
         profession: "physician",
-        phone: `+66p${uniq}`,
+        phone: proPhone,
         payoutRef: "xxxx-1234",
-      });
+      }, proToken);
       log("Registered", `clinic + professional (both ${clinic.verification})`);
 
       // The verify calls are operations-guarded; obtain an ops token for the demo.
@@ -97,8 +106,6 @@ export default function FlowPage() {
       // Each party logs in as themselves (OTP). Every action below is authorised against
       // the caller's real identity — the clinic cannot accept on the professional's behalf,
       // and neither can a stranger.
-      const clinicToken = await loginAs(`+66c${uniq}`);
-      const proToken = await loginAs(`+66p${uniq}`);
       setTokens({ clinic: clinicToken, pro: proToken });
 
       const shift = await postShift({ clinicWorkspaceId: clinic.id, compensation: 1_000_000 }, clinicToken);
@@ -129,7 +136,11 @@ export default function FlowPage() {
     if (!bookingId || !tokens) return;
     setPayingOut(true);
     try {
-      await completeBooking(bookingId, tokens.pro); // CMP-01: the professional submits
+      try {
+        await completeBooking(bookingId, tokens.pro); // CMP-01: the professional submits
+      } catch (e) {
+        if (!alreadyCompleted(e)) throw e;
+      }
       const result = await acceptCompletion(bookingId, tokens.clinic); // the clinic accepts + pays
       setPayout(result);
     } catch (e) {
@@ -145,7 +156,11 @@ export default function FlowPage() {
     try {
       // Both parties review; the second submission publishes the pair (REV-03). Who is
       // reviewing is derived from the token, so neither side can review as the other.
-      await createReview(bookingId, { score: 5 }, tokens.pro);
+      try {
+        await createReview(bookingId, { score: 5 }, tokens.pro);
+      } catch (e) {
+        if (!alreadyCompleted(e)) throw e;
+      }
       const r = await createReview(bookingId, { score: 5 }, tokens.clinic);
       setReviewsPublished(r.published);
       setRating(await getRating(professionalId)); // hasRating false until 3 reviews (REV-04)

@@ -18,7 +18,6 @@ import {
   AuthGuard,
   Roles,
   CurrentUser,
-  Public,
 } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
 import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
@@ -101,7 +100,7 @@ export class OnboardingController {
     private readonly repo: MarketplaceRepository,
   ) {}
 
-  @Public()
+  @UseGuards(AuthGuard)
   @Post("clinics")
   async registerClinic(
     @Body()
@@ -111,12 +110,17 @@ export class OnboardingController {
       address: string;
       ownerPhone: string;
     },
+    @CurrentUser() user?: TokenPayload,
   ) {
     const dto = parseBody(registerClinicSchema, raw);
+    const ownerPhone = normalizePhone(dto.ownerPhone);
+    if (!this.access.isOpsCrossTenant(user) && normalizePhone(user?.sub ?? "") !== ownerPhone) {
+      throw new ForbiddenException("must authenticate as the clinic owner phone");
+    }
     try {
       return await this.repo.registerClinic({
         ...dto,
-        ownerPhone: normalizePhone(dto.ownerPhone),
+        ownerPhone,
       });
     } catch (e) {
       if (isConflict(e))
@@ -127,7 +131,7 @@ export class OnboardingController {
     }
   }
 
-  @Public()
+  @UseGuards(AuthGuard)
   @Post("professionals")
   async registerProfessional(
     @Body()
@@ -137,12 +141,17 @@ export class OnboardingController {
       phone: string;
       payoutRef: string;
     },
+    @CurrentUser() user?: TokenPayload,
   ) {
     const dto = parseBody(registerProfessionalSchema, raw);
+    const phone = normalizePhone(dto.phone);
+    if (!this.access.isOpsCrossTenant(user) && normalizePhone(user?.sub ?? "") !== phone) {
+      throw new ForbiddenException("must authenticate as the professional phone");
+    }
     try {
       return await this.repo.registerProfessional({
         ...dto,
-        phone: normalizePhone(dto.phone),
+        phone,
       });
     } catch (e) {
       if (isConflict(e))

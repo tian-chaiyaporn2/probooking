@@ -107,23 +107,25 @@ export default function JourneyPage() {
     try {
       if (stepId === "setup") {
         const uniq = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        const clinicPhone = `+66jc${uniq}`;
+        const proPhone = `+66jp${uniq}`;
+        const clinicToken = await loginAs(clinicPhone);
+        const proToken = await loginAs(proPhone);
         const clinic = await registerClinic({
           branchName: "คลินิกสุขุมวิท",
           licenceNo: "TH-JOURNEY",
           address: "กรุงเทพฯ",
-          ownerPhone: `+66jc${uniq}`,
-        });
+          ownerPhone: clinicPhone,
+        }, clinicToken);
         const pro = await registerProfessional({
           displayName: "พญ. ธนพร ก.",
           profession: "physician",
-          phone: `+66jp${uniq}`,
+          phone: proPhone,
           payoutRef: "xxxx-1234",
-        });
+        }, proToken);
         const { token: opsToken } = await getDevToken("operations");
         await verifyClinic(clinic.id, opsToken);
         await verifyProfessional(pro.id, opsToken);
-        const clinicToken = await loginAs(`+66jc${uniq}`);
-        const proToken = await loginAs(`+66jp${uniq}`);
         const shift = await postShift(
           { clinicWorkspaceId: clinic.id, compensation: 1_000_000 },
           clinicToken,

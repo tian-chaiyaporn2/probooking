@@ -329,6 +329,7 @@ export interface ConfirmBookingInput {
     tax: number;
   };
   captured: number; // integer satang (total collected)
+  providerRef?: string | null; // capture provider reference (PAY-04)
   idempotencyKey: string; // dedupes the collection event (PAY-04)
 }
 
@@ -534,7 +535,7 @@ export interface MarketplaceRepository {
     opts?: { fundingDueAt?: number; from?: OfferState },
   ): Promise<OfferRecord | null>;
   /**
-   * OFF-03: move past-deadline PendingResponse / AwaitingPayment offers to Expired.
+   * OFF-03: move due PendingResponse / AwaitingPayment / PaymentFailed offers to Expired.
    * Returns how many offers were expired this pass.
    */
   expireStaleOffers(now: number): Promise<number>;

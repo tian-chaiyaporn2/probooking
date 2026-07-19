@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateEnv } from "../src/config/env-schema.js";
+import { assertDevAuthStoreSafe } from "../src/modules/auth/dev-mode.util.js";
 
 describe("validateEnv (M10)", () => {
   it("accepts a clean demo/CI-style config", () => {
@@ -42,5 +43,37 @@ describe("validateEnv (M10)", () => {
       expect((e as Error).message).toMatch(/AUTH_DEV_MODE/);
       expect((e as Error).message).toMatch(/API_PORT/);
     }
+  });
+});
+
+describe("assertDevAuthStoreSafe", () => {
+  it("refuses AUTH_DEV_MODE with DATABASE_URL unless explicitly overridden", () => {
+    expect(() =>
+      assertDevAuthStoreSafe({
+        AUTH_DEV_MODE: "true",
+        NODE_ENV: "test",
+        DATABASE_URL: "postgresql://probook@localhost/probook",
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/ALLOW_DEV_AUTH_WITH_DATABASE/);
+  });
+
+  it("allows the CI override for isolated test databases", () => {
+    expect(() =>
+      assertDevAuthStoreSafe({
+        AUTH_DEV_MODE: "true",
+        NODE_ENV: "test",
+        DATABASE_URL: "postgresql://probook@localhost/probook_test",
+        ALLOW_DEV_AUTH_WITH_DATABASE: "true",
+      } as NodeJS.ProcessEnv),
+    ).not.toThrow();
+  });
+
+  it("allows AUTH_DEV_MODE with in-memory (no DATABASE_URL)", () => {
+    expect(() =>
+      assertDevAuthStoreSafe({
+        AUTH_DEV_MODE: "true",
+        NODE_ENV: "development",
+      } as NodeJS.ProcessEnv),
+    ).not.toThrow();
   });
 });

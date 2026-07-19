@@ -32,8 +32,20 @@ LOG="$(mktemp)"
 command -v ssh >/dev/null || { echo "✗ ssh not found"; exit 1; }
 curl -sf "http://localhost:${API_PORT}/health" >/dev/null \
   || { echo "✗ local API not responding on :${API_PORT} — start it first"; exit 1; }
+READY_JSON="$(curl -sf "http://localhost:${API_PORT}/health/ready" \
+  || { echo "✗ local API readiness check failed on :${API_PORT}"; exit 1; })"
+STORE="$(READY_JSON="$READY_JSON" node -e 'const r = JSON.parse(process.env.READY_JSON || "{}"); process.stdout.write(String(r.store || ""));')"
+if [ "$STORE" != "in-memory" ]; then
+  cat >&2 <<EOF
+✗ Refusing to tunnel: /health/ready reports store="${STORE:-unknown}" (expected in-memory).
 
-# --- Preflight: never publish a dev-mode API to the internet -------------------------
+  Public tunnel demos must run against the seeded in-memory store only. Restart the API
+  without DATABASE_URL (and with AUTH_DEV_MODE=true + SEED_ON_BOOT=true) before tunnelling.
+EOF
+  exit 1
+fi
+
+# --- Preflight: never publish staff-token bypasses to the internet --------------------
 #
 # This tunnel makes the local API — and the real database behind it — reachable by anyone
 # with the URL. CORS does not protect it: CORS is enforced by browsers and means nothing to
@@ -52,7 +64,7 @@ if [ "$DEV_TOKEN_STATUS" != "404" ]; then
   Exposing it publicly gives anyone with the tunnel URL full control of Operations and
   Finance — against your real local database.
 
-  Restart the API with AUTH_DEV_MODE unset (and a strong JWT_SECRET) before tunnelling.
+  Restart the API with DEV_TOKEN_ROUTE unset before tunnelling.
 EOF
   exit 1
 fi

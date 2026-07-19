@@ -1,7 +1,6 @@
 import { prisma } from "@probook/db";
 import { workerAuthHeaders } from "../auth.js";
-
-const API_BASE = process.env.API_BASE_URL ?? "http://localhost:4000";
+import { workerConfig } from "../config.js";
 
 /** Bound each pass; a backlog drains across passes rather than in one unbounded query. */
 const BATCH = 500;
@@ -44,9 +43,10 @@ export async function autoAcceptSweep(now: number): Promise<SweepResult> {
   let failed = 0;
   for (const booking of due) {
     try {
-      const res = await fetch(`${API_BASE}/bookings/${booking.id}/accept-completion`, {
+      const res = await fetch(`${workerConfig.apiBaseUrl}/bookings/${booking.id}/accept-completion`, {
         method: "POST",
         headers: workerAuthHeaders(),
+        signal: AbortSignal.timeout(15_000),
       });
       if (res.ok) {
         accepted++;

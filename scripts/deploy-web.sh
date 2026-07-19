@@ -18,6 +18,20 @@ ORIGIN="$(git remote get-url origin)"
 SRC_COMMIT="$(git rev-parse --short HEAD)"
 OUT="$REPO_ROOT/apps/web/out"
 
+if [ -z "${NEXT_PUBLIC_API_BASE_URL:-}" ]; then
+  if [ "${ALLOW_LOCAL_API_DEPLOY:-}" != "1" ]; then
+    cat >&2 <<EOF
+✗ NEXT_PUBLIC_API_BASE_URL is required for a deploy build.
+
+  A deployed static site cannot call localhost from a reviewer's browser. Set
+  NEXT_PUBLIC_API_BASE_URL to the public API URL, or set ALLOW_LOCAL_API_DEPLOY=1
+  only for a deliberately local-only build.
+EOF
+    exit 1
+  fi
+  echo "  … ALLOW_LOCAL_API_DEPLOY=1 set; building with the localhost API fallback." >&2
+fi
+
 # The build runs against the WORKING TREE, but the deploy commit claims a SHA. With local
 # edits present, the published site is not reproducible from that commit — and the message
 # says otherwise. Refuse rather than ship something git cannot account for.

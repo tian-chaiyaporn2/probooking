@@ -274,6 +274,7 @@ export class OffersController {
           tax: checkout.tax,
         },
         captured: checkout.total,
+        providerRef: capture.providerRef,
         idempotencyKey: `collection:${offer.id}`,
       });
       await this.access.audit(user, "confirm_booking", "booking", booking.id, {

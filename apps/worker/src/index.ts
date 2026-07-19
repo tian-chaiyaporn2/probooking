@@ -1,4 +1,4 @@
-import "./env.js"; // MUST be first: loads DATABASE_URL before @probook/db is imported
+import "./config.js"; // MUST be first: loads/validates env before @probook/db is imported
 import { prisma } from "@probook/db";
 import { autoAcceptSweep } from "./jobs/autoAccept.js";
 import { clinicCompletionReviewSweep } from "./jobs/clinicReview.js";

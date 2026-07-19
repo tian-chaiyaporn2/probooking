@@ -12,6 +12,7 @@ import {
 describe("money (integer satang, LOC-02)", () => {
   it("converts THB to satang", () => {
     expect(thb(1250.5)).toBe(125050);
+    expect(thb(1.005)).toBe(101);
   });
 
   it("rejects non-integer satang", () => {
@@ -88,6 +89,18 @@ describe("money (integer satang, LOC-02)", () => {
         refunds: satang(-100), // "balances" only if negatives were allowed
         providerCosts: satang(0),
         adjustments: satang(0),
+      }),
+    ).toBe(false);
+    expect(
+      conserves({
+        captured: satang(-100),
+        protectedRemainder: satang(0),
+        payout: satang(0),
+        fee: satang(0),
+        tax: satang(0),
+        refunds: satang(0),
+        providerCosts: satang(0),
+        adjustments: satang(-100),
       }),
     ).toBe(false);
   });

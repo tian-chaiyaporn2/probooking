@@ -133,6 +133,7 @@ import type {
 } from "./marketplace.types.js";
 
 const SHIFT_LENGTH_MS = 4 * 60 * 60 * 1000;
+const ACTIVE_OFFER_STATES = ["PendingResponse", "AwaitingPayment", "PaymentFailed"] as const;
 
 /** Row -> port record. Timestamps are epoch ms UTC across the port (see AuditRow). */
 function toApproval(r: {
@@ -392,7 +393,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       urgency: s.urgency as ShiftUrgency,
       startsAt: s.startsAt.getTime(),
       state: s.state,
-      hasActiveOffer: s.offers.some((o) => o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+      hasActiveOffer: s.offers.some((o) => ACTIVE_OFFER_STATES.includes(o.state as (typeof ACTIVE_OFFER_STATES)[number])),
       booked: s.booking !== null,
     };
   }
@@ -557,7 +558,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       where: {
         state: "Published",
         booking: null,
-        offers: { none: { state: { in: ["PendingResponse", "AwaitingPayment"] } } },
+        offers: { none: { state: { in: [...ACTIVE_OFFER_STATES] } } },
         ...(filters?.urgency ? { urgency: filters.urgency } : {}),
         ...(filters?.category ? { category: { contains: filters.category, mode: "insensitive" as const } } : {}),
         ...(filters?.minCompensation !== undefined || filters?.maxCompensation !== undefined
@@ -612,20 +613,20 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     // Prefer not treating fundingDueAt: null as already due — that would expire
     // AwaitingPayment offers that have not yet stamped a funding window.
     const nowDate = new Date(now);
-    const [pending, awaiting] = await Promise.all([
+    const [pending, funded] = await Promise.all([
       prisma.offer.updateMany({
         where: { state: "PendingResponse", expiresAt: { lte: nowDate } },
         data: { state: "Expired" },
       }),
       prisma.offer.updateMany({
         where: {
-          state: "AwaitingPayment",
+          state: { in: ["AwaitingPayment", "PaymentFailed"] },
           fundingDueAt: { not: null, lte: nowDate },
         },
         data: { state: "Expired" },
       }),
     ]);
-    return pending.count + awaiting.count;
+    return pending.count + funded.count;
   }
 
   async confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult> {
@@ -660,6 +661,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
         data: {
           bookingId: booking.id,
           state: "PaymentProtected", // funds captured/guaranteed (PAY-01, BKG-01)
+          providerRef: input.providerRef ?? null,
           captured: input.captured,
         },
       });
@@ -677,6 +679,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
           paymentOrderId: paymentOrder.id,
           type: "Collection",
           amount: input.captured,
+          providerRef: input.providerRef ?? null,
           idempotencyKey: input.idempotencyKey,
         },
       });
@@ -758,7 +761,9 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       },
     });
     return shifts.map((s) => {
-      const active = s.offers.find((o) => o.state === "PendingResponse" || o.state === "AwaitingPayment");
+      const active = s.offers.find((o) =>
+        ACTIVE_OFFER_STATES.includes(o.state as (typeof ACTIVE_OFFER_STATES)[number]),
+      );
       return {
         shiftId: s.id,
         category: s.category,
@@ -796,8 +801,43 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   // ----- §6.4 dual control -----
 
   async createApproval(input: CreateApprovalInput): Promise<ApprovalRequestRecord> {
-    const r = await prisma.approvalRequest.create({ data: { ...input, state: "Pending" } });
-    return toApproval(r);
+    return prisma.$transaction(async (tx) => {
+      if (input.capability === "finance.execute_refund" && input.refType === "Booking") {
+        const po = await tx.paymentOrder.findUnique({
+          where: { bookingId: input.refId },
+          select: { id: true, captured: true },
+        });
+        if (!po) throw new Error("no payment allocation for booking");
+        await lockPaymentOrder(tx, po.id);
+        const [events, pending] = await Promise.all([
+          tx.financialEvent.findMany({
+            where: { paymentOrderId: po.id },
+            select: { type: true, amount: true },
+          }),
+          tx.approvalRequest.aggregate({
+            where: {
+              refType: "Booking",
+              refId: input.refId,
+              state: "Pending",
+              capability: "finance.execute_refund",
+            },
+            _sum: { amount: true },
+          }),
+        ]);
+        assertLedgerHeadroom(
+          input.amount,
+          {
+            captured: po.captured,
+            events,
+            pendingRefundApprovals: pending._sum.amount ?? 0,
+          },
+          "refund",
+        );
+      }
+
+      const r = await tx.approvalRequest.create({ data: { ...input, state: "Pending" } });
+      return toApproval(r);
+    });
   }
 
   async getApproval(id: string): Promise<ApprovalRequestRecord | null> {

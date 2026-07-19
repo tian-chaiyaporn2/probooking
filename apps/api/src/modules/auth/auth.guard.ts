@@ -20,8 +20,8 @@ export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
 export const IS_PUBLIC_KEY = "isPublic";
 /**
  * Opt a handler OUT of the global AuthGuard. Same shape as `@NoThrottle`: auth fails
- * closed by default; only explicitly public surfaces (registration, browse, OTP, health)
- * skip the Bearer check.
+ * closed by default; only explicitly public surfaces (OTP, health, anonymous browse)
+ * skip the Bearer check. Registration requires an authenticated phone (or staff).
  */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 

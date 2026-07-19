@@ -4,6 +4,20 @@ import { formatThb as formatThbDomain } from "@probook/domain";
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export function isAuthError(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
 /**
  * Re-export domain money formatting so UI and API share one satang→THB rule (LOC-02).
  * Prefer this over a local float division that can drift from `packages/domain`.
@@ -23,18 +37,18 @@ function authHeaders(
  * `429: {"statusCode":429,"message":"too many OTP requests…"}` into toasts and the login
  * form. Prefer the `message`; fall back to the raw text only if it is not that shape.
  */
-async function errorFrom(res: Response): Promise<Error> {
+async function errorFrom(res: Response): Promise<ApiError> {
   const text = await res.text();
   try {
     const body = JSON.parse(text) as { message?: string | string[] };
     const msg = Array.isArray(body.message)
       ? body.message.join("; ")
       : body.message;
-    if (msg) return new Error(msg);
+    if (msg) return new ApiError(msg, res.status);
   } catch {
     // not JSON — fall through to the raw text
   }
-  return new Error(text || `Request failed (${res.status})`);
+  return new ApiError(text || `Request failed (${res.status})`, res.status);
 }
 
 async function post<T>(
@@ -149,14 +163,14 @@ export const registerClinic = (input: {
   licenceNo: string;
   address: string;
   ownerPhone: string;
-}) => post<Registered>("/clinics", input);
+}, token: string) => post<Registered>("/clinics", input, token);
 
 export const registerProfessional = (input: {
   displayName: string;
   profession: string;
   phone: string;
   payoutRef: string;
-}) => post<Registered>("/professionals", input);
+}, token: string) => post<Registered>("/professionals", input, token);
 
 export const verifyClinic = (id: string, token: string) =>
   post<Registered>(`/ops/clinics/${id}/verify`, undefined, token);

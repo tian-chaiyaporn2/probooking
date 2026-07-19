@@ -214,8 +214,15 @@ export class ShiftsController {
 
   @UseGuards(AuthGuard)
   @Get("professionals/:id/availability")
-  async listAvailability(@Param("id") professionalId: string) {
-    // AVL-02: authenticated browse only — schedule windows are not a public anonymous surface.
+  async listAvailability(
+    @Param("id") professionalId: string,
+    @CurrentUser() user?: TokenPayload,
+  ) {
+    // AVL-02: full schedule windows are owner/staff only. Clinics browse matching via the
+    // search/open-shift surfaces, not by reading another professional's private calendar.
+    if (!this.access.isInternalReader(user)) {
+      await this.access.requireProfessional(user, professionalId);
+    }
     return { availability: await this.repo.listAvailability(professionalId) };
   }
 

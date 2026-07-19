@@ -14,7 +14,7 @@ import {
   type SessionRole,
 } from "../lib/session";
 import { demoAccountLabel } from "../lib/demo-accounts";
-import { isStaffRole, sessionShowsWorkspace } from "../lib/nav-session";
+import { sessionShowsWorkspace } from "../lib/nav-session";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "./icons";
 
@@ -148,10 +148,9 @@ export function AppHeader({ current }: { current?: string }) {
 
   async function signOut() {
     const previous = session?.token;
-    const previousRole = session?.role;
     clearSession();
     setOpen(false);
-    if (previous && isStaffRole(previousRole)) {
+    if (previous) {
       try {
         await logout(previous);
       } catch {

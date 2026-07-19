@@ -32,10 +32,22 @@ export function assertNonNegative(value: Satang, what: string): void {
   if (value < 0) throw new RangeError(`${what} must not be negative, got ${value}`);
 }
 
-/** Convert whole/decimal THB to satang. `thb(1250.5)` -> 125050 satang. */
+/**
+ * Convert whole/decimal THB to satang. `thb(1250.5)` -> 125050 satang.
+ *
+ * JS numbers are binary floats, so direct `amount * 100` mishandles values like 1.005.
+ * Convert through a fixed decimal string and round the third decimal digit as integer text.
+ */
 export function thb(amount: number): Satang {
-  const s = Math.round(amount * 100);
-  return satang(s);
+  if (!Number.isFinite(amount)) {
+    throw new RangeError(`Money must be finite THB, got ${amount}`);
+  }
+  const sign = amount < 0 ? -1 : 1;
+  const fixed = Math.abs(amount).toFixed(6);
+  const [whole = "0", fraction = ""] = fixed.split(".");
+  const digits = fraction.padEnd(3, "0");
+  const cents = Number.parseInt(digits.slice(0, 2), 10) + (Number.parseInt(digits[2] ?? "0", 10) >= 5 ? 1 : 0);
+  return satang(sign * (Number.parseInt(whole, 10) * 100 + cents));
 }
 
 export function addSatang(...values: Satang[]): Satang {
@@ -116,6 +128,7 @@ export function conserves(c: Conservation): boolean {
   // Legs other than `adjustments` (signed by design) must be non-negative or a buggy
   // caller can "balance" while moving money the wrong way.
   if (
+    c.captured < 0 ||
     c.protectedRemainder < 0 ||
     c.payout < 0 ||
     c.fee < 0 ||

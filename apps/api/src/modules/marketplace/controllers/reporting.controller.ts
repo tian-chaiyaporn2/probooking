@@ -139,12 +139,17 @@ export class ReportingController {
   }
 
   @UseGuards(AuthGuard)
-  @Roles("operations", "finance", "administrator")
   @Get("bookings/:id/receipt")
-  async receipt(@Param("id") id: string) {
+  async receipt(
+    @Param("id") id: string,
+    @CurrentUser() user?: TokenPayload,
+  ) {
     // REP-01: the booking's checkout breakdown + payout statement. A booking exists
     // only after confirmation, so the captured split is final (BKG-03 snapshots).
     const b = await this.access.requireBooking(id);
+    if (!this.access.isInternalReader(user)) {
+      await this.access.partyInBooking(user, b);
+    }
     // Use recorded Payout events — after a partial cancel, compensation snapshot is not
     // what was paid (e.g. 50% CAN-02).
     const paidOut = await this.repo.sumPaidOut(id);

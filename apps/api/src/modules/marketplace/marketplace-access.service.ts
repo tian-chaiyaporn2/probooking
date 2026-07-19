@@ -47,6 +47,18 @@ export class MarketplaceAccessService {
     });
   }
 
+  /**
+   * Clinic capabilities that bind terms or move money. Operations may help with
+   * drafts/search/support (ADM-01) but must not impersonate a party on these —
+   * only administrator may escalate, and every such act is audited.
+   */
+  private static readonly PARTY_BINDING_CAPS: ReadonlySet<Capability> = new Set([
+    "clinic.send_offer",
+    "clinic.pay",
+    "clinic.cancel_confirmed",
+    "clinic.confirm_completion",
+  ]);
+
   /** Operations / administrator cross-tenant support (ADM-01). Finance is excluded. */
   isOpsCrossTenant(user?: TokenPayload): boolean {
     return user?.role === "operations" || user?.role === "administrator";
@@ -82,14 +94,28 @@ export class MarketplaceAccessService {
   }
 
   /**
-   * The caller acting as this professional. Staff may act on a professional's behalf
-   * (support flows); anyone else must BE them.
+   * The caller acting as this professional. Administrator may escalate on behalf of a
+   * party (audited). Operations may read/support via dedicated ops endpoints but must not
+   * accept offers, mark completion, or otherwise mutate as the professional.
    */
   async requireProfessional(
     user: TokenPayload | undefined,
     professionalId: string,
   ) {
-    if (this.isOpsCrossTenant(user)) return;
+    if (user?.role === "administrator") {
+      await this.audit(
+        user,
+        "staff_act_as_professional",
+        "professional",
+        professionalId,
+      );
+      return;
+    }
+    if (user?.role === "operations") {
+      throw new ForbiddenException(
+        "operations cannot act as a professional; escalate to administrator for staff-on-behalf",
+      );
+    }
     const me = await this.identityOf(user);
     if (me.professionalId !== professionalId) {
       throw new ForbiddenException("not your professional profile");
@@ -106,10 +132,28 @@ export class MarketplaceAccessService {
     workspaceId: string,
     capability: Capability,
   ): Promise<Role> {
-    // Cross-tenant staff support (ADM-01) is for operations/administrator only. Finance
-    // holds money capabilities of its own and must not inherit clinic.pay / send_offer via
-    // the old "any staff" bypass.
-    if (user?.role === "operations" || user?.role === "administrator") {
+    // Cross-tenant staff support (ADM-01): operations may help with non-binding clinic
+    // work; binding/money capabilities require administrator escalation and are audited.
+    // Finance holds money capabilities of its own and must not inherit clinic.pay /
+    // send_offer via a staff bypass.
+    if (user?.role === "administrator") {
+      if (MarketplaceAccessService.PARTY_BINDING_CAPS.has(capability)) {
+        await this.audit(
+          user,
+          "staff_act_as_clinic",
+          "clinic",
+          workspaceId,
+          { capability },
+        );
+      }
+      return "administrator";
+    }
+    if (user?.role === "operations") {
+      if (MarketplaceAccessService.PARTY_BINDING_CAPS.has(capability)) {
+        throw new ForbiddenException(
+          `operations cannot ${capability} on behalf of a clinic; escalate to administrator`,
+        );
+      }
       return "administrator";
     }
     if (user?.role === "finance") {

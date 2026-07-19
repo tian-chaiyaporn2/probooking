@@ -13,6 +13,18 @@ async function loginAs(request: any, api: string, phone: string) {
   return { authorization: `Bearer ${token}` };
 }
 
+async function registerClinic(request: any, api: string, data: any, headers?: Record<string, string>) {
+  const auth = headers ?? (await loginAs(request, api, data.ownerPhone));
+  const res = await request.post(`${api}/clinics`, { data, headers: auth });
+  return (await res.json()) as any;
+}
+
+async function registerProfessional(request: any, api: string, data: any, headers?: Record<string, string>) {
+  const auth = headers ?? (await loginAs(request, api, data.phone));
+  const res = await request.post(`${api}/professionals`, { data, headers: auth });
+  return (await res.json()) as any;
+}
+
 /** Sign in through the dashboards' staff OTP form. Under AUTH_DEV_MODE the code is echoed
  * back, so filling the phone and clicking send completes the login in one step. The form is
  * Thai (staffLogin strings), so the selectors match that copy. */
@@ -54,13 +66,19 @@ async function provisionConfirmedBooking(page: any, api: string, uniq: string) {
   const j = async (r: any) => (await r.json()) as any;
   const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
   const opsAuth = { authorization: `Bearer ${ops.token}` };
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Wk ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66wc${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Wk ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66wc${uniq}` },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Wk", profession: "physician", phone: `+66wp${uniq}`, payoutRef: "x" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Wk", profession: "physician", phone: `+66wp${uniq}`, payoutRef: "x" },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66wc${uniq}`);
   const proAuth = await loginAs(page.request, api, `+66wp${uniq}`);
@@ -304,12 +322,15 @@ test("finance reconciliation shows zero exceptions", async ({ page }) => {
 });
 
 test("ops dashboard verifies a pending clinic", async ({ page }) => {
+  const api = "http://localhost:4000";
   const uniq = `${Date.now()}`;
-  // Register a clinic (lands in Submitted) directly against the API.
-  const res = await page.request.post("http://localhost:4000/clinics", {
-    data: { branchName: `Ops Test ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66ops${uniq}` },
+  // Register a clinic (lands in Submitted) as the owner phone.
+  const clinic = await registerClinic(page.request, api, {
+    branchName: `Ops Test ${uniq}`,
+    licenceNo: "L",
+    address: "BKK",
+    ownerPhone: `+66ops${uniq}`,
   });
-  const clinic = await res.json();
 
   await page.goto("/ops");
   await staffUiLogin(page, "+66900000008"); // operations staff
@@ -330,13 +351,19 @@ test("a suspended professional cannot be confirmed (VER-04 gate)", async ({ page
   const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
   const auth = { authorization: `Bearer ${ops.token}` };
 
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Susp ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66sc${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Susp ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66sc${uniq}` },
+    auth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: auth });
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Susp", profession: "physician", phone: `+66sp${uniq}`, payoutRef: "x-1" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Susp", profession: "physician", phone: `+66sp${uniq}`, payoutRef: "x-1" },
+    auth,
+  );
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: auth });
 
   const clinicAuth = await loginAs(page.request, api, `+66sc${uniq}`);
@@ -367,9 +394,12 @@ test("verified profile separates self-declared claims from verified facts (VER-0
   const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
   const auth = { authorization: `Bearer ${ops.token}` };
 
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Profile", profession: "dentist", phone: `+66pf${uniq}`, payoutRef: "x-1" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Profile", profession: "dentist", phone: `+66pf${uniq}`, payoutRef: "x-1" },
+    auth,
+  );
 
   // Before verification: self-declared claims present, nothing verified.
   const before = await j(await page.request.get(`${api}/professionals/${pro.id}/profile`));
@@ -395,13 +425,19 @@ test("reporting: history, receipt, metrics, and finance CSV export (REP-01..03)"
   const finAuth = { authorization: `Bearer ${fin.token}` };
 
   // Drive one booking to payout so the reports have data.
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Rep ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66rr${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Rep ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66rr${uniq}` },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Rep", profession: "physician", phone: `+66rq${uniq}`, payoutRef: "x-1" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Rep", profession: "physician", phone: `+66rq${uniq}`, payoutRef: "x-1" },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66rr${uniq}`);
   const proAuth = await loginAs(page.request, api, `+66rq${uniq}`);
@@ -476,9 +512,12 @@ test("privacy & security: audit trail, OTP rate limit, patient-data guard (§7.3
   const admAuth = { authorization: `Bearer ${adm.token}` };
 
   // A privileged verify must appear in the immutable audit trail.
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Sec", profession: "physician", phone: `+66se${uniq}`, payoutRef: "x-1" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Sec", profession: "physician", phone: `+66se${uniq}`, payoutRef: "x-1" },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
 
   // Audit is administrator-only.
@@ -494,9 +533,12 @@ test("privacy & security: audit trail, OTP rate limit, patient-data guard (§7.3
   expect((await page.request.post(`${api}/auth/otp/request`, { data: { phone } })).status()).toBe(429);
 
   // Patient identifiers are rejected in messages. Build a confirmed booking first.
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Sec ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66sf${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Sec ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66sf${uniq}` },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66sf${uniq}`);
   const proAuth = await loginAs(page.request, api, `+66se${uniq}`);
@@ -559,13 +601,19 @@ test("the money lifecycle cannot be driven anonymously (authz regression guard)"
   const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
   const opsAuth = { authorization: `Bearer ${ops.token}` };
 
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Az ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66az${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Az ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66az${uniq}` },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Az", profession: "physician", phone: `+66ay${uniq}`, payoutRef: "x-1" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Az", profession: "physician", phone: `+66ay${uniq}`, payoutRef: "x-1" },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66az${uniq}`);
   const proAuth = await loginAs(page.request, api, `+66ay${uniq}`);
@@ -626,14 +674,20 @@ test("OFF-02 is enforced by the database, not only by a read (OFF-02 regression 
   const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
   const opsAuth = { authorization: `Bearer ${ops.token}` };
 
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Off ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66of${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Off ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66of${uniq}` },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
   const mk = async (tag: string) => {
-    const p = await j(await page.request.post(`${api}/professionals`, {
-      data: { displayName: `Dr ${tag}`, profession: "physician", phone: `+66${tag}${uniq}`, payoutRef: "x" },
-    }));
+    const p = await registerProfessional(
+      page.request,
+      api,
+      { displayName: `Dr ${tag}`, profession: "physician", phone: `+66${tag}${uniq}`, payoutRef: "x" },
+      opsAuth,
+    );
     await page.request.post(`${api}/ops/professionals/${p.id}/verify`, { headers: opsAuth });
     return { ...p, auth: await loginAs(page.request, api, `+66${tag}${uniq}`) };
   };
@@ -674,13 +728,19 @@ test("§6.4: a refund needs two different authorized people (dual-control guard)
   const fin2Auth = await loginAs(page.request, api, "+66900000002");
 
   // Build a confirmed booking with captured funds.
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Dc ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66dc${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Dc ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66dc${uniq}` },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Dc", profession: "physician", phone: `+66dp${uniq}`, payoutRef: "x" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Dc", profession: "physician", phone: `+66dp${uniq}`, payoutRef: "x" },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66dc${uniq}`);
   const proAuth = await loginAs(page.request, api, `+66dp${uniq}`);
@@ -796,13 +856,19 @@ test("interactive multi-role flow: clinic and professional drive a booking by ha
   // Provision a verified clinic + professional (the party pages need real, verified parties).
   const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
   const opsAuth = { authorization: `Bearer ${ops.token}` };
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Play ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66pc${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Play ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66pc${uniq}` },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Play", profession: "physician", phone: `+66pp${uniq}`, payoutRef: "x" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Play", profession: "physician", phone: `+66pp${uniq}`, payoutRef: "x" },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
 
   // Log each party in ONCE and reuse the token; re-logging-in the same phone each turn would
@@ -879,12 +945,18 @@ test("operations walkthrough: verify pending parties and resolve a credential ho
   await page.request.post(`${api}/bookings/${bookingId}/hold-credential`, { headers: opsAuth });
 
   // Two UNVERIFIED parties waiting in the verification queue.
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Pend ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66oc${uniq}` },
-  }));
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Pend", profession: "physician", phone: `+66op${uniq}`, payoutRef: "x" },
-  }));
+  const clinic = await registerClinic(page.request, api, {
+    branchName: `Pend ${uniq}`,
+    licenceNo: "L",
+    address: "BKK",
+    ownerPhone: `+66oc${uniq}`,
+  }, opsAuth);
+  const pro = await registerProfessional(page.request, api, {
+    displayName: "Dr Pend",
+    profession: "physician",
+    phone: `+66op${uniq}`,
+    payoutRef: "x",
+  }, opsAuth);
 
   // Sign in as operations exactly as the picker would (dedicated phone, no OTP-interval clash).
   const opsToken = (await loginAs(page.request, api, "+66900000020")).authorization.slice("Bearer ".length);
@@ -1003,13 +1075,19 @@ test("a professional can decline a pending offer", async ({ page }) => {
   // Verified clinic + professional, an offer made to the professional (PendingResponse).
   const ops = await j(await page.request.post(`${api}/auth/dev/token`, { data: { role: "operations" } }));
   const opsAuth = { authorization: `Bearer ${ops.token}` };
-  const clinic = await j(await page.request.post(`${api}/clinics`, {
-    data: { branchName: `Dec ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66xc${uniq}` },
-  }));
+  const clinic = await registerClinic(
+    page.request,
+    api,
+    { branchName: `Dec ${uniq}`, licenceNo: "L", address: "BKK", ownerPhone: `+66xc${uniq}` },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/clinics/${clinic.id}/verify`, { headers: opsAuth });
-  const pro = await j(await page.request.post(`${api}/professionals`, {
-    data: { displayName: "Dr Dec", profession: "physician", phone: `+66xp${uniq}`, payoutRef: "x" },
-  }));
+  const pro = await registerProfessional(
+    page.request,
+    api,
+    { displayName: "Dr Dec", profession: "physician", phone: `+66xp${uniq}`, payoutRef: "x" },
+    opsAuth,
+  );
   await page.request.post(`${api}/ops/professionals/${pro.id}/verify`, { headers: opsAuth });
   const clinicAuth = await loginAs(page.request, api, `+66xc${uniq}`);
   // Log the professional in ONCE and reuse — re-logging the same phone would trip the OTP interval.

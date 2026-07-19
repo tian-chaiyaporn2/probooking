@@ -75,6 +75,11 @@ interface MemShift {
 }
 
 const SHIFT_LEN_MS = 4 * 60 * 60 * 1000;
+const ACTIVE_OFFER_STATES = new Set<OfferState>([
+  "PendingResponse",
+  "AwaitingPayment",
+  "PaymentFailed",
+]);
 
 interface MemCandidate {
   shiftId: string;
@@ -114,7 +119,15 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   // Money ledger, mirroring Prisma's FinancialEvent rows. Without it `reconcile` returned
   // hardcoded zeros, so "0 reconciliation exceptions" (PAY-11) was unconditionally true in
   // every test run — it could not fail no matter what the money paths did.
-  private readonly events: { bookingId: string; type: "Collection" | "Payout" | "Refund"; amount: number; key: string }[] = [];
+  private readonly events: {
+    bookingId: string;
+    paymentOrderId: string;
+    type: "Collection" | "Payout" | "Refund";
+    amount: number;
+    key: string;
+    providerRef: string | null;
+    at: number;
+  }[] = [];
   // phone directory, mirroring Prisma's User.phone -> party resolution (MSG-02).
   private readonly clinicOwnerPhone = new Map<string, string>(); // workspaceId -> phone
   private readonly professionalPhone = new Map<string, string>(); // professionalId -> phone
@@ -216,9 +229,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         const booked = [...this.bookingByOffer.keys()].some((offerId) =>
           offersForShift.some((o) => o.id === offerId),
         );
-        const active = offersForShift.find(
-          (o) => o.state === "PendingResponse" || o.state === "AwaitingPayment",
-        );
+        const active = offersForShift.find((o) => ACTIVE_OFFER_STATES.has(o.state));
         return {
           shiftId: s.id,
           category: s.category,
@@ -345,9 +356,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async getShift(id: string): Promise<ShiftRecord | null> {
     const s = this.shifts.get(id);
     if (!s) return null;
-    const hasActiveOffer = [...this.offers.values()].some(
-      (o) => o.shiftId === id && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
-    );
+    const hasActiveOffer = [...this.offers.values()].some((o) => o.shiftId === id && ACTIVE_OFFER_STATES.has(o.state));
     const booked = [...this.bookings.values()].some((b) => b.shiftId === id);
     return {
       id: s.id,
@@ -391,7 +400,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (!shift) throw new Error("shift not found");
     // OFF-02: at most one active offer per shift (mirrors the Prisma partial-unique guard).
     const active = [...this.offers.values()].some(
-      (o) => o.shiftId === input.shiftId && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
+      (o) => o.shiftId === input.shiftId && ACTIVE_OFFER_STATES.has(o.state),
     );
     if (active) throw new ConflictError("shift already has an active offer");
     const record: OfferRecord = {
@@ -488,9 +497,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   async listOpenShifts(filters?: ShiftFilters): Promise<OpenShift[]> {
     const isOpen = (s: MemShift) => {
       if (s.state !== "Published") return false;
-      const hasActive = [...this.offers.values()].some(
-        (o) => o.shiftId === s.id && (o.state === "PendingResponse" || o.state === "AwaitingPayment"),
-      );
+      const hasActive = [...this.offers.values()].some((o) => o.shiftId === s.id && ACTIVE_OFFER_STATES.has(o.state));
       const booked = [...this.bookings.values()].some((b) => b.shiftId === s.id);
       if (hasActive || booked) return false;
       if (filters?.urgency && s.urgency !== filters.urgency) return false;
@@ -534,7 +541,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         o.state = "Expired";
         count++;
       } else if (
-        o.state === "AwaitingPayment" &&
+        (o.state === "AwaitingPayment" || o.state === "PaymentFailed") &&
         o.fundingDueAt !== null &&
         o.fundingDueAt <= now
       ) {
@@ -576,7 +583,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     };
     this.bookings.set(detail.id, detail);
     this.bookingByOffer.set(input.offerId, detail.id);
-    this.appendEvent(detail.id, "Collection", input.captured, input.idempotencyKey);
+    this.appendEvent(detail, "Collection", input.captured, input.idempotencyKey, input.providerRef ?? null);
     return { booking: this.toRecord(detail), paymentOrderId: detail.paymentOrderId ?? randomUUID() };
   }
 
@@ -589,6 +596,24 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   // ----- §6.4 dual control -----
 
   async createApproval(input: CreateApprovalInput): Promise<ApprovalRequestRecord> {
+    if (input.capability === "finance.execute_refund" && input.refType === "Booking") {
+      const booking = this.bookings.get(input.refId);
+      if (!booking) throw new Error("no payment allocation for booking");
+      const events = this.events.filter((e) => e.bookingId === input.refId);
+      const pending = [...this.approvals.values()]
+        .filter(
+          (a) =>
+            a.refId === input.refId &&
+            a.state === "Pending" &&
+            a.capability === "finance.execute_refund",
+        )
+        .reduce((s, a) => s + a.amount, 0);
+      assertLedgerHeadroom(
+        input.amount,
+        { captured: booking.captured, events, pendingRefundApprovals: pending },
+        "refund",
+      );
+    }
     const record: ApprovalRequestRecord = {
       id: randomUUID(),
       ...input,
@@ -633,7 +658,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     req.executorId = input.executorId;
     req.executorRole = input.executorRole;
     req.decidedAt = Date.now();
-    this.appendEvent(req.refId, "Refund", req.amount, input.idempotencyKey);
+    this.appendEvent(booking, "Refund", req.amount, input.idempotencyKey);
     return { refund: req.amount, bookingId: req.refId };
   }
   async refundAvailable(bookingId: string): Promise<number> {
@@ -723,7 +748,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     assertLedgerHeadroom(input.payoutAmount, { captured: detail.captured, events }, "payout");
     detail.state = "ServiceCompleted";
     detail.payoutState = "Paid";
-    this.appendEvent(input.bookingId, "Payout", input.payoutAmount, input.idempotencyKey);
+    this.appendEvent(detail, "Payout", input.payoutAmount, input.idempotencyKey);
     return {
       bookingState: "ServiceCompleted",
       payoutState: "Paid",
@@ -938,18 +963,24 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async exportFinancials(): Promise<FinanceExportRow[]> {
-    // Degraded: the in-memory store keeps allocation columns but no timestamped event
-    // ledger, so events are synthesised from the booking's known financial state.
     const rows: FinanceExportRow[] = [];
     for (const b of this.bookings.values()) {
       if (!b.paymentOrderId) continue;
-      const events: FinanceExportRow["events"] = [{ type: "Collection", amount: b.captured, providerRef: null, at: 0 }];
-      if (b.payoutState === "Paid") events.push({ type: "Payout", amount: b.compensation, providerRef: null, at: 0 });
+      const events = this.events
+        .filter((e) => e.bookingId === b.id)
+        .sort((a, z) => a.at - z.at)
+        .map((e) => ({
+          type: e.type,
+          amount: e.amount,
+          providerRef: e.providerRef,
+          at: e.at,
+        }));
+      const collectionRef = events.find((e) => e.type === "Collection")?.providerRef ?? null;
       rows.push({
         paymentOrderId: b.paymentOrderId,
         bookingId: b.id,
         state: b.state === "Cancelled" ? "Refunded" : "Captured",
-        providerRef: null,
+        providerRef: collectionRef,
         captured: b.captured,
         compensation: b.compensation,
         serviceFee: b.serviceFee,
@@ -974,12 +1005,10 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
 
   async getMetrics(): Promise<MarketplaceMetrics> {
     const byState = (s: string) => [...this.bookings.values()].filter((b) => b.state === s).length;
-    let captured = 0;
-    let paidOut = 0;
-    for (const b of this.bookings.values()) {
-      captured += b.captured;
-      if (b.payoutState === "Paid") paidOut += b.compensation;
-    }
+    const captured = this.events.filter((e) => e.type === "Collection").reduce((t, e) => t + e.amount, 0);
+    const paidOut = this.events.filter((e) => e.type === "Payout").reduce((t, e) => t + e.amount, 0);
+    const refunded = this.events.filter((e) => e.type === "Refund").reduce((t, e) => t + e.amount, 0);
+    const reconciliationExceptions = (await this.reconcile()).summary.exceptions;
     const openCases = [...this.supportCases.values()].filter((c) => c.state !== "Resolved").length;
     return {
       shifts: {
@@ -996,7 +1025,7 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
         held: [...this.bookings.values()].filter((b) => b.heldAt !== null).length,
       },
       cases: { open: openCases },
-      money: { captured, paidOut, refunded: 0, reconciliationExceptions: 0 },
+      money: { captured, paidOut, refunded, reconciliationExceptions },
     };
   }
 
@@ -1098,8 +1127,8 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     );
     detail.state = "Cancelled";
     detail.payoutState = input.payable > 0 ? "Paid" : "NotEligible";
-    if (input.payable > 0) this.appendEvent(input.bookingId, "Payout", input.payable, input.payoutKey);
-    this.appendEvent(input.bookingId, "Refund", input.refund, input.refundKey);
+    if (input.payable > 0) this.appendEvent(detail, "Payout", input.payable, input.payoutKey);
+    this.appendEvent(detail, "Refund", input.refund, input.refundKey);
     return {
       bookingState: "Cancelled",
       payoutState: detail.payoutState,
@@ -1115,15 +1144,24 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
    * or the in-memory store would silently accept a double-spend the real one rejects.
    */
   private appendEvent(
-    bookingId: string,
+    booking: BookingDetail,
     type: "Collection" | "Payout" | "Refund",
     amount: number,
     key: string,
+    providerRef: string | null = null,
   ): void {
     if (this.events.some((e) => e.key === key)) {
       throw new ConflictError(`financial event already recorded for key ${key}`);
     }
-    this.events.push({ bookingId, type, amount, key });
+    this.events.push({
+      bookingId: booking.id,
+      paymentOrderId: booking.paymentOrderId ?? booking.id,
+      type,
+      amount,
+      key,
+      providerRef,
+      at: Date.now(),
+    });
   }
 
   private toRecord(d: BookingDetail): BookingRecord {

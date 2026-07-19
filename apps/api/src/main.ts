@@ -4,7 +4,11 @@ import { NestFactory } from "@nestjs/core";
 import helmet from "helmet";
 import { json, urlencoded } from "express";
 import { AppModule } from "./app.module.js";
-import { devAuthEnabled, devTokenRouteEnabled } from "./modules/auth/dev-mode.util.js";
+import {
+  assertDevAuthStoreSafe,
+  devAuthEnabled,
+  devTokenRouteEnabled,
+} from "./modules/auth/dev-mode.util.js";
 import { assertSigningSecretConfigured } from "./modules/auth/token.util.js";
 import { assertFieldKeyConfigured } from "./modules/marketplace/field-crypto.js";
 import { validateEnv } from "./config/env-schema.js";
@@ -24,6 +28,9 @@ async function bootstrap() {
   // Same for the field-encryption key: a missing key should refuse to boot, not surface as
   // the first message send or clinic registration throwing (§7.3).
   assertFieldKeyConfigured();
+
+  // AUTH_DEV_MODE must not unlock a real Postgres identity graph (OTP codes in responses).
+  assertDevAuthStoreSafe();
 
   // The dev-auth bypasses can never be on in production — devAuthEnabled() already excludes
   // it — but say so loudly when on, so an operator can never mistake a bypass-enabled host

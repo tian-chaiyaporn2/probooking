@@ -1,8 +1,8 @@
 import { prisma } from "@probook/db";
 import { CLINIC_COMPLETION_REVIEW_AFTER } from "@probook/domain";
 import { workerAuthHeaders } from "../auth.js";
+import { workerConfig } from "../config.js";
 
-const API_BASE = process.env.API_BASE_URL ?? "http://localhost:4000";
 const REVIEW_KIND = "completion_review";
 const BATCH = 500;
 
@@ -45,9 +45,10 @@ export async function clinicCompletionReviewSweep(now: number): Promise<ReviewSw
   let failed = 0;
   for (const booking of due) {
     try {
-      const res = await fetch(`${API_BASE}/bookings/${booking.id}/flag-inactive`, {
+      const res = await fetch(`${workerConfig.apiBaseUrl}/bookings/${booking.id}/flag-inactive`, {
         method: "POST",
         headers: workerAuthHeaders(),
+        signal: AbortSignal.timeout(15_000),
       });
       if (res.ok) {
         flagged++;

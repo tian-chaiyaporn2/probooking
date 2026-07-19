@@ -405,30 +405,43 @@ export class BookingsController {
       throw new BadRequestException((e as Error).message);
     }
 
-    const payable = payableFromFraction(
+    const payableDesired = payableFromFraction(
       satang(booking.compensation),
       outcome.fraction,
     );
-    const refund = satang(booking.captured - payable);
+    const available = satang(await this.repo.refundAvailable(id));
+    const payable = satang(Math.min(payableDesired, available));
+    const refund = satang(available - payable);
+    let cappedCaseId: string | null = null;
+    if (payableDesired > available) {
+      const existing = await this.repo.findSupportCase(id, "cancellation_underfunded");
+      const c =
+        existing ??
+        (await this.repo.createSupportCase(
+          id,
+          "cancellation_underfunded",
+          `Cancellation payable ${payableDesired} exceeds remaining ledger funds ${available}`,
+        ));
+      cappedCaseId = c.id;
+    }
 
     // PAY-08: neither leg may exceed the captured funds. Both are derived here, so this is
     // a guard against a bad compensation/captured pair reaching the ledger — not a formality.
     this.payments.assertWithinAllocation(
       payable,
-      satang(booking.captured),
+      available,
       "cancellation payout",
     );
     this.payments.assertWithinAllocation(
       refund,
-      satang(booking.captured),
+      available,
       "cancellation refund",
     );
 
-    // PAY-07 conservation: captured == payout(payable) + refund. The platform fee is
-    // waived on cancellation (refunded to the clinic as part of `refund`), so nothing
-    // is retained as fee/tax; protected funds are fully released.
+    // PAY-07 conservation for the remaining ledger headroom: this cancellation releases
+    // only funds still available after prior payouts/refunds/pending approvals.
     this.payments.assertConserved({
-      captured: satang(booking.captured),
+      captured: available,
       protectedRemainder: satang(0),
       payout: payable,
       fee: satang(0),
@@ -450,8 +463,10 @@ export class BookingsController {
         actor,
         reason: dto.reason,
         fraction: outcome.fraction,
+        payableDesired,
         payable,
         refund,
+        ...(cappedCaseId ? { cappedCaseId } : {}),
       });
       // NOT-01: cancellation — SMS both parties.
       await this.notifications.sms(booking.professionalId, "cancelled", {
@@ -466,6 +481,7 @@ export class BookingsController {
         id,
         outcome: "cancelled",
         fraction: outcome.fraction,
+        ...(cappedCaseId ? { cappedCaseId } : {}),
         ...result,
       };
     } catch (e) {

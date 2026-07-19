@@ -27,9 +27,18 @@ export default defineConfig({
       // happens to hold: a stale CORS_ORIGINS silently blocks every browser call, and an
       // unset DATABASE_URL silently swaps the store implementation under the suite.
       env: {
+        // Inherit CI DATABASE_URL (postgres vs memory matrix). Explicit keys below pin
+        // auth/CORS so a developer's .env cannot silently change suite behaviour.
+        ...(process.env.DATABASE_URL
+          ? { DATABASE_URL: process.env.DATABASE_URL }
+          : {}),
+        ...(process.env.JWT_SECRET
+          ? { JWT_SECRET: process.env.JWT_SECRET }
+          : {}),
         API_PORT: "4000",
         NODE_ENV: "test",
         AUTH_DEV_MODE: "true",
+        ALLOW_DEV_AUTH_WITH_DATABASE: "true",
         // The suite provisions ops tokens via /auth/dev/token; that route is now decoupled
         // from demo mode and needs its own opt-in (a tunneled demo runs without it).
         DEV_TOKEN_ROUTE: "true",
