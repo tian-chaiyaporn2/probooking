@@ -22,16 +22,6 @@
     background: var(--surface);
   }
 }
-:root[data-theme="dark"] .app-header {
-  background: rgba(17, 26, 43, 0.92);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .app-header {
-    background: rgba(17, 26, 43, 0.92);
-    background: color-mix(in srgb, var(--surface) 88%, transparent);
-  }
-}
 .app-header__inner {
   max-width: 1200px; margin-inline: auto;
   padding: var(--s3) max(clamp(1rem, 4vw, 1.5rem), var(--safe-right));
@@ -173,18 +163,12 @@
   background: linear-gradient(180deg, var(--primary), var(--primary-hover));
   box-shadow: 0 2px 4px rgba(15, 23, 42, 0.1), 0 8px 18px rgba(13, 148, 136, 0.3);
 }
-/* Dark theme primary is a light teal — white text washes out; use deep ink instead. */
-:root[data-theme="dark"] .btn--primary { --btn-fg: #042f2e; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .btn--primary { --btn-fg: #042f2e; }
-}
 .btn--ghost { background: var(--surface); border-color: var(--line); color: var(--text); }
 .btn--ghost:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-050); }
 .btn--subtle { background: transparent; border-color: transparent; color: var(--muted); }
 .btn--subtle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
 .btn--lg { min-height: 3rem; padding: 0 1.4rem; font-size: var(--text-base); }
 .btn--icon { padding: 0; width: var(--touch-min); height: var(--touch-min); }
-.theme-toggle__slot { display: inline-block; width: 1.05em; height: 1.05em; }
 .btn--busy { cursor: wait; }
 .btn svg { width: 1.05em; height: 1.05em; flex: none; }
 .btn__spinner {
@@ -534,7 +518,6 @@
 }
 .rowlist__skeleton { pointer-events: none; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
-
 
 /* ---- Nav audience groups ---- */
 .app-nav__divider {

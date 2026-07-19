@@ -15,7 +15,6 @@ import {
 } from "../lib/session";
 import { demoAccountLabel } from "../lib/demo-accounts";
 import { isStaffRole, sessionShowsWorkspace } from "../lib/nav-session";
-import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "./icons";
 
 type NavLink = {
@@ -275,7 +274,6 @@ export function AppHeader({ current }: { current?: string }) {
                 {label}
               </span>
             ) : null}
-            <ThemeToggle />
             <button
               ref={toggleRef}
               type="button"
