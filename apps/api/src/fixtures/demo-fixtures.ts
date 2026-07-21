@@ -49,6 +49,9 @@ async function confirmFromOffer(
   const offer = await store.getOffer(offerId);
   if (!offer) throw new Error(`offer ${offerId} not found`);
   const checkout = buildCheckout(satang(compensation));
+  // Demo fixtures stamp historical funding windows; evaluate expiry on that clock so
+  // confirmBooking's §6.3 re-check still converts the seed booking.
+  const deadline = offer.fundingDueAt ?? offer.expiresAt;
   return store.confirmBooking({
     offerId,
     shiftId: offer.shiftId,
@@ -61,6 +64,7 @@ async function confirmFromOffer(
     },
     captured: checkout.total,
     idempotencyKey: `collection:${offerId}`,
+    now: deadline - 1,
   });
 }
 

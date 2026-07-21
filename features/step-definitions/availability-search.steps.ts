@@ -1,6 +1,6 @@
 import { Given, When, Then } from "@cucumber/cucumber";
 import assert from "node:assert/strict";
-import { newStore, seedConfirmedBooking } from "../support/store.js";
+import { newStore, seedConfirmedBooking, seedAwaitingPaymentOffer } from "../support/store.js";
 import type { ProBookingWorld } from "../support/world.js";
 
 /** Areas 2 & 3 (§9.4-2/3): availability/conflict (AVL) and search/applications (SRC/APP). */
@@ -67,6 +67,25 @@ Given(
     this.state.shift = shift;
     this.state.overlapStart = shift.startsAt + (10 - 9) * HOUR; // 10:00 relative to 09:00 start
     this.state.overlapEnd = this.state.overlapStart + (13 - 10) * HOUR; // through 13:00
+    void endsAt;
+  },
+);
+
+Given(
+  "a professional with an accepted-offer soft hold from {int}:{int} to {int}:{int}",
+  async function (this: ProBookingWorld, startH: number, startM: number, endH: number, endM: number) {
+    this.state.store = newStore();
+    const day = 1_700_000_000_000;
+    const startsAt = day + startH * HOUR + startM * 60_000;
+    const endsAt = day + endH * HOUR + endM * 60_000;
+    this.state.seed = await seedAwaitingPaymentOffer(this.state.store, {
+      now: startsAt - 48 * HOUR,
+      shiftStartOffsetHours: 48,
+    });
+    const shift = await this.state.store.getShift(this.state.seed.shiftId);
+    this.state.shift = shift;
+    this.state.overlapStart = shift.startsAt + (10 - 9) * HOUR;
+    this.state.overlapEnd = this.state.overlapStart + (13 - 10) * HOUR;
     void endsAt;
   },
 );

@@ -211,4 +211,129 @@ describe.skipIf(!DB)("PrismaMarketplaceStore (integration)", () => {
       /append-only/,
     );
   });
+
+  it("VER-04: suspendCredential targets the profession-required kind, not credentials[0]", async () => {
+    const n = uniq();
+    const pro = await store.registerProfessional({
+      displayName: "Dr Kind",
+      profession: "nurse",
+      phone: `+66sk${n}`,
+      payoutRef: "x-1",
+    });
+    await store.verifyProfessional(pro.id);
+
+    // Decoy certificate row inserted first so an unordered findFirst would pick it.
+    const decoy = await prisma.credential.create({
+      data: {
+        professionalId: pro.id,
+        kind: "certificate",
+        state: "Verified",
+        validUntil: new Date(Date.now() + 365 * 24 * 3_600_000),
+      },
+    });
+
+    expect(await store.suspendCredential(pro.id)).toBe(true);
+
+    const licence = await prisma.credential.findFirst({
+      where: { professionalId: pro.id, kind: "licence" },
+    });
+    const certificate = await prisma.credential.findUniqueOrThrow({ where: { id: decoy.id } });
+    expect(licence?.state).toBe("Suspended");
+    expect(certificate.state).toBe("Verified"); // decoy left alone
+  });
+
+  it("VER-04: listActiveBookings reports the profession-required credential state", async () => {
+    const { clinic, pro, shiftId, offerId } = await seedAcceptedOffer();
+    // Decoy certificate first — credentials[0] would previously surface this Verified row
+    // even after the nurse's licence was suspended.
+    await prisma.credential.create({
+      data: {
+        professionalId: pro.id,
+        kind: "certificate",
+        state: "Verified",
+        validUntil: new Date(Date.now() + 365 * 24 * 3_600_000),
+      },
+    });
+    await store.confirmBooking({
+      offerId,
+      shiftId,
+      clinicWorkspaceId: clinic.id,
+      professionalId: pro.id,
+      allocation: { compensation: 1_000_000, serviceFee: 120_000, tax: 0 },
+      captured: 1_120_000,
+      idempotencyKey: `collection:${offerId}`,
+    });
+    await store.suspendCredential(pro.id);
+
+    const rows = await store.listActiveBookings();
+    const row = rows.find((r) => r.professionalId === pro.id);
+    expect(row?.credential).toBe("Suspended");
+  });
+
+  it("AVL-03: concurrent acceptOffer on overlapping shifts leaves only one soft hold", async () => {
+    const n = uniq();
+    const clinic = await store.registerClinic({
+      branchName: `Race ${n}`,
+      licenceNo: "L",
+      address: "BKK",
+      ownerPhone: `+66rc${n}`,
+    });
+    await store.verifyClinic(clinic.id);
+    const pro = await store.registerProfessional({
+      displayName: "Dr Race",
+      profession: "nurse",
+      phone: `+66rp${n}`,
+      payoutRef: "x-1",
+    });
+    await store.verifyProfessional(pro.id);
+    const start = Date.now() + 120 * 3_600_000;
+    const shiftA = await store.postShift({
+      clinicWorkspaceId: clinic.id,
+      category: "general",
+      compensation: 1_000_000,
+      urgency: "standard",
+      shiftStart: start,
+      insuranceRequired: false,
+    });
+    const shiftB = await store.postShift({
+      clinicWorkspaceId: clinic.id,
+      category: "general",
+      compensation: 1_000_000,
+      urgency: "standard",
+      shiftStart: start + 60 * 60_000,
+      insuranceRequired: false,
+    });
+    await store.applyToShift(shiftA.shiftId, pro.id);
+    await store.applyToShift(shiftB.shiftId, pro.id);
+    const offerA = await store.createOfferForShift({
+      shiftId: shiftA.shiftId,
+      professionalId: pro.id,
+      sentAt: Date.now(),
+      expiresAt: Date.now() + 12 * 3_600_000,
+    });
+    const offerB = await store.createOfferForShift({
+      shiftId: shiftB.shiftId,
+      professionalId: pro.id,
+      sentAt: Date.now(),
+      expiresAt: Date.now() + 12 * 3_600_000,
+    });
+
+    const fundingDueAt = Date.now() + 30 * 60_000;
+    const results = await Promise.allSettled([
+      store.acceptOffer(offerA.id, { fundingDueAt }),
+      store.acceptOffer(offerB.id, { fundingDueAt }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled" && r.value !== null);
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(1);
+
+    const states = await prisma.offer.findMany({
+      where: { id: { in: [offerA.id, offerB.id] } },
+      select: { state: true },
+    });
+    const awaiting = states.filter((s) => s.state === "AwaitingPayment");
+    expect(awaiting).toHaveLength(1);
+  });
 });

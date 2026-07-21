@@ -113,6 +113,8 @@ export async function seedConfirmedBooking(
     },
     captured: checkout.total,
     idempotencyKey: `collection:${offer.id}`,
+    // Scenario clock: fundingDueAt is anchored to `now`, which may be far in the past.
+    now,
   });
 
   return {

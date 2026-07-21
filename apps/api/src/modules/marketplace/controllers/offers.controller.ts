@@ -5,13 +5,13 @@ import {
   ForbiddenException,
   Get,
   Inject,
+  InternalServerErrorException,
   Param,
   Post,
   UseGuards,
 } from "@nestjs/common";
 import { AuthGuard, CurrentUser } from "../../auth/auth.guard.js";
 import type { TokenPayload } from "../../auth/token.util.js";
-import { maskActor, containsProhibitedPatientData } from "../privacy.util.js";
 import {
   advanceOffer,
   isExpired,
@@ -31,6 +31,7 @@ import {
   MARKETPLACE_REPOSITORY,
   type MarketplaceRepository,
 } from "../marketplace.types.js";
+import { ConflictError, isEligibilityError } from "../errors.util.js";
 import { HOUR_MS } from "./shared.js";
 
 /**
@@ -64,16 +65,6 @@ export class OffersController {
     if (isExpired(now, offer.expiresAt)) {
       throw new BadRequestException("offer has expired (OFF-03)");
     }
-    // AVL-03: soft holds and confirmed bookings both block overlapping acceptance.
-    const overlap = await this.repo.hasScheduleOverlap(
-      offer.professionalId,
-      offer.shiftStart,
-      offer.shiftStart + 4 * HOUR_MS,
-      { excludeOfferId: id },
-    );
-    if (overlap) {
-      throw new BadRequestException("schedule overlap (AVL-03)");
-    }
     // OFF-04: acceptance -> AwaitingPayment (soft hold), never straight to a booking.
     let nextState;
     try {
@@ -82,11 +73,17 @@ export class OffersController {
       throw new BadRequestException((e as Error).message);
     }
     const { fundingDueAt } = this.offers.fundingWindow(now, offer.shiftStart);
-    // Conditional claim: concurrent expiry/withdrawal must not be overwritten.
-    const updated = await this.repo.setOfferState(id, nextState, {
-      fundingDueAt,
-      from: "PendingResponse",
-    });
+    // AVL-03 + OFF-04: claim and overlap check share one critical section so two concurrent
+    // accepts on overlapping shifts cannot both observe "no soft hold" and both succeed.
+    let updated;
+    try {
+      updated = await this.repo.acceptOffer(id, { fundingDueAt });
+    } catch (e) {
+      if (e instanceof ConflictError && e.message.includes("schedule overlap")) {
+        throw new BadRequestException("schedule overlap (AVL-03)");
+      }
+      throw e;
+    }
     if (!updated) {
       throw new ConflictException("offer is no longer pending response");
     }
@@ -268,10 +265,23 @@ export class OffersController {
       const existingAfter = await this.repo.getBookingByOffer(id);
       if (existingAfter) return { booking: existingAfter, checkout };
       // Capture succeeded but booking did not — unwind so money is not stranded.
-      await this.paymentProvider.refund({
+      const refund = await this.paymentProvider.refund({
         orderRef: `collection:${offer.id}`,
         amount: checkout.total,
       });
+      if (!refund.succeeded) {
+        // Clinic funds remain captured with no booking — escalate; do not mask as the
+        // original confirm failure.
+        throw new InternalServerErrorException(
+          `confirm failed after capture and refund also failed (${refund.reason}); orderRef=collection:${offer.id}`,
+        );
+      }
+      if (isEligibilityError(e)) {
+        throw new BadRequestException((e as Error).message);
+      }
+      if (e instanceof ConflictError) {
+        throw new ConflictException(e.message);
+      }
       throw e;
     }
   }

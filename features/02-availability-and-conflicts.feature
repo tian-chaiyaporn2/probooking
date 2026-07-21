@@ -18,7 +18,6 @@ Feature: Availability, Open to requests, and conflict prevention
     When they attempt to accept an overlapping offer from 10:00 to 13:00
     Then the overlapping acceptance is blocked
 
-  @wip
   Scenario: Accepted-offer soft hold blocks an overlapping acceptance
     Given a professional with an accepted-offer soft hold from 09:00 to 12:00
     When they attempt to accept an overlapping offer from 10:00 to 13:00
