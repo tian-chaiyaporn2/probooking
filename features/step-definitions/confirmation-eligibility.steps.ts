@@ -97,11 +97,9 @@ Then("offer eligibility reports the licence does not cover the shift", async fun
 
 Given("a confirmed booking that requires insurance", async function (this: ProBookingWorld) {
   this.state.store = newStore();
+  // Insurance is verified before confirm (seedConfirmedBooking); this scenario then
+  // lapses it post-confirmation to exercise the VER-05/06 hold path.
   this.state.seed = await seedConfirmedBooking(this.state.store, { insuranceRequired: true });
-  // Seed valid insurance at confirm time, then lapse it post-confirmation.
-  const booking = await this.state.store.getBooking(this.state.seed.bookingId);
-  await this.state.store.submitInsurance(this.state.seed.professionalId, booking.shiftEnd + HOUR);
-  await this.state.store.verifyInsurance(this.state.seed.professionalId);
 });
 
 When("the insurance becomes Expired before shift end", async function (this: ProBookingWorld) {
