@@ -453,6 +453,21 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     endsAt: number,
     opts?: { excludeOfferId?: string },
   ): Promise<boolean> {
+    return this.scheduleOverlapsSync(professionalId, startsAt, endsAt, opts);
+  }
+
+  /**
+   * Synchronous overlap check. Kept sync so acceptOffer can check-then-claim with no `await`
+   * between them — an awaited call would yield the event loop and let a second concurrent
+   * accept observe "no soft hold" before this one claims (the single-process analogue of the
+   * Prisma row lock).
+   */
+  private scheduleOverlapsSync(
+    professionalId: string,
+    startsAt: number,
+    endsAt: number,
+    opts?: { excludeOfferId?: string },
+  ): boolean {
     for (const b of this.bookings.values()) {
       if (b.professionalId !== professionalId) continue;
       if (b.state !== "Confirmed" && b.state !== "InProgress" && b.state !== "AwaitingCompletion") continue;
@@ -536,15 +551,14 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
   }
 
   async acceptOffer(id: string, opts: { fundingDueAt: number }): Promise<OfferRecord | null> {
-    // Same critical section as Prisma: overlap check + claim without an await gap.
+    // Critical section (single-process analogue of Prisma's professional row lock): read the
+    // offer, check overlap, and claim with NO `await` in between, so two concurrent accepts
+    // on overlapping shifts cannot both observe "no soft hold" and both claim. The overlap
+    // check must stay synchronous for this to hold — see scheduleOverlapsSync.
     const offer = this.offers.get(id);
     if (!offer || offer.state !== "PendingResponse") return null;
     const endsAt = offer.shiftStart + SHIFT_LEN_MS;
-    if (
-      await this.hasScheduleOverlap(offer.professionalId, offer.shiftStart, endsAt, {
-        excludeOfferId: id,
-      })
-    ) {
+    if (this.scheduleOverlapsSync(offer.professionalId, offer.shiftStart, endsAt, { excludeOfferId: id })) {
       throw new ConflictError("schedule overlap (AVL-03)");
     }
     offer.state = "AwaitingPayment";

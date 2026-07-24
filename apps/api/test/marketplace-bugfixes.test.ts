@@ -109,6 +109,28 @@ describe("marketplace bugfixes (memory store)", () => {
     ).rejects.toMatchObject({ message: expect.stringContaining("schedule overlap") });
   });
 
+  it("two concurrent accepts on overlapping shifts leave only one soft hold (AVL-03, memory parity)", async () => {
+    // Store parity with the Prisma row-lock integration test: acceptOffer's check-then-claim
+    // is one synchronous critical section, so a Promise.all of two overlapping accepts cannot
+    // both observe "no soft hold". Would fail if the overlap check regained an `await` gap.
+    const store = new InMemoryMarketplaceStore();
+    const { clinic, pro } = await seedVerifiedPair(store);
+    const start = Date.now() + 84 * 3_600_000;
+    const a = await seedPendingOffer(store, clinic.id, pro.id, start);
+    const b = await seedPendingOffer(store, clinic.id, pro.id, start + 60 * 60_000); // overlaps (4h shifts)
+
+    const dueAt = Date.now() + 30 * 60_000;
+    const results = await Promise.allSettled([
+      store.acceptOffer(a.offer.id, { fundingDueAt: dueAt }),
+      store.acceptOffer(b.offer.id, { fundingDueAt: dueAt }),
+    ]);
+    const claimed = results.filter((r) => r.status === "fulfilled" && r.value !== null);
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(claimed).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictError);
+  });
+
   it("confirmBooking refuses when the required credential was suspended after accept (VER-04)", async () => {
     const store = new InMemoryMarketplaceStore();
     const { clinic, pro } = await seedVerifiedPair(store);
