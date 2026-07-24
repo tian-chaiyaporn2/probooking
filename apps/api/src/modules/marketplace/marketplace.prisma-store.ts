@@ -7,8 +7,11 @@ import {
   ratingFromCounts,
   DEFAULT_SERVICE_FEE_BPS,
   credentialKind,
+  checkConfirmationEligibility,
+  isExpired,
+  type ConfirmationContext,
 } from "@probook/domain";
-import { ConflictError, isConflict } from "./errors.util.js";
+import { ConflictError, EligibilityError, isConflict } from "./errors.util.js";
 import { LIST_LIMITS } from "./list-limits.js";
 import { encryptField, decryptField, blindIndex } from "./field-crypto.js";
 import {
@@ -17,12 +20,52 @@ import {
 } from "./money-ledger.util.js";
 import { normalizePhone } from "@probook/db";
 
+/** Soft-hold offer states that block overlapping acceptance (AVL-03 / §6.3). */
+const SOFT_HOLD_STATES = ["AwaitingPayment", "PaymentFailed"] as const;
+
 /** Row-lock a payment order so concurrent money commands serialize (PAY-08). */
 async function lockPaymentOrder(
   tx: Pick<typeof prisma, "$queryRaw">,
   paymentOrderId: string,
 ): Promise<void> {
   await tx.$queryRaw`SELECT id FROM "PaymentOrder" WHERE id = ${paymentOrderId} FOR UPDATE`;
+}
+
+/** Serialize accept/confirm for one professional so AVL-03 overlap checks cannot race. */
+async function lockProfessional(
+  tx: Pick<typeof prisma, "$queryRaw">,
+  professionalId: string,
+): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "ProfessionalProfile" WHERE id = ${professionalId} FOR UPDATE`;
+}
+
+type DbClient = Pick<typeof prisma, "booking" | "offer">;
+
+/** AVL-03: active booking or soft hold overlapping [startsAt, endsAt). */
+async function scheduleOverlaps(
+  db: DbClient,
+  professionalId: string,
+  startsAt: number,
+  endsAt: number,
+  opts?: { excludeOfferId?: string },
+): Promise<boolean> {
+  const bookingCount = await db.booking.count({
+    where: {
+      professionalId,
+      state: { in: ["Confirmed", "InProgress", "AwaitingCompletion"] },
+      shift: { startsAt: { lt: new Date(endsAt) }, endsAt: { gt: new Date(startsAt) } },
+    },
+  });
+  if (bookingCount > 0) return true;
+  const softHoldCount = await db.offer.count({
+    where: {
+      professionalId,
+      state: { in: [...SOFT_HOLD_STATES] },
+      ...(opts?.excludeOfferId ? { id: { not: opts.excludeOfferId } } : {}),
+      shift: { startsAt: { lt: new Date(endsAt) }, endsAt: { gt: new Date(startsAt) } },
+    },
+  });
+  return softHoldCount > 0;
 }
 interface SnapshotableShift {
   id: string;
@@ -495,25 +538,7 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     endsAt: number,
     opts?: { excludeOfferId?: string },
   ): Promise<boolean> {
-    // Overlap when an active booking's shift spans into [startsAt, endsAt).
-    const bookingCount = await prisma.booking.count({
-      where: {
-        professionalId,
-        state: { in: ["Confirmed", "InProgress", "AwaitingCompletion"] },
-        shift: { startsAt: { lt: new Date(endsAt) }, endsAt: { gt: new Date(startsAt) } },
-      },
-    });
-    if (bookingCount > 0) return true;
-    // Soft holds (AwaitingPayment) also block the window — AVL-03 / §6.3.
-    const softHoldCount = await prisma.offer.count({
-      where: {
-        professionalId,
-        state: "AwaitingPayment",
-        ...(opts?.excludeOfferId ? { id: { not: opts.excludeOfferId } } : {}),
-        shift: { startsAt: { lt: new Date(endsAt) }, endsAt: { gt: new Date(startsAt) } },
-      },
-    });
-    return softHoldCount > 0;
+    return scheduleOverlaps(prisma, professionalId, startsAt, endsAt, opts);
   }
 
   async searchProfessionals(filters: ProfessionalFilters): Promise<ProfessionalSearchResult[]> {
@@ -611,6 +636,42 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
     return this.toRecord(offer as OfferWithShift);
   }
 
+  async acceptOffer(id: string, opts: { fundingDueAt: number }): Promise<OfferRecord | null> {
+    // AVL-03: lock the professional, re-check overlap, then claim — one critical section so
+    // concurrent accepts on overlapping shifts cannot both succeed.
+    return prisma.$transaction(async (tx) => {
+      const offer = await tx.offer.findUnique({
+        where: { id },
+        include: { shift: true },
+      });
+      if (!offer || offer.state !== "PendingResponse") return null;
+
+      await lockProfessional(tx, offer.professionalId);
+
+      const startsAt = offer.shift.startsAt.getTime();
+      const endsAt = offer.shift.endsAt.getTime();
+      if (
+        await scheduleOverlaps(tx, offer.professionalId, startsAt, endsAt, {
+          excludeOfferId: id,
+        })
+      ) {
+        throw new ConflictError("schedule overlap (AVL-03)");
+      }
+
+      const claimed = await tx.offer.updateMany({
+        where: { id, state: "PendingResponse" },
+        data: { state: "AwaitingPayment", fundingDueAt: new Date(opts.fundingDueAt) },
+      });
+      if (claimed.count !== 1) return null;
+
+      const updated = await tx.offer.findUnique({
+        where: { id },
+        include: { shift: true },
+      });
+      return updated ? this.toRecord(updated as OfferWithShift) : null;
+    });
+  }
+
   async expireStaleOffers(now: number): Promise<number> {
     // Prefer not treating fundingDueAt: null as already due — that would expire
     // AwaitingPayment offers that have not yet stamped a funding window.
@@ -633,11 +694,68 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
 
   async confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult> {
     // Atomic (BKG-02): offer -> Converted + booking + Payment Protected money records
-    // all commit together, or none do.
+    // all commit together, or none do. §6.3 eligibility and AVL-03 overlap are re-checked
+    // under a professional row lock so a suspend/expiry/concurrent confirm between the
+    // controller's pre-capture read and this write cannot create an illegal booking.
     return prisma.$transaction(async (tx) => {
-      // OFF-03/§6.3: only an offer still awaiting payment converts. The caller checked this
-      // on a snapshot read taken before the eligibility round-trip; a withdrawal or expiry
-      // committing in between would otherwise be converted into a live booking anyway.
+      await lockProfessional(tx, input.professionalId);
+
+      const offer = await tx.offer.findUnique({
+        where: { id: input.offerId },
+        include: {
+          shift: { include: { workspace: true } },
+          professional: { include: { insurance: true, credentials: true } },
+        },
+      });
+      // OFF-03/§6.3: only an offer still awaiting payment converts.
+      if (!offer || offer.state !== "AwaitingPayment") {
+        throw new ConflictError("offer is no longer awaiting payment (concurrent update)");
+      }
+
+      const now = input.now ?? Date.now();
+      const fundingDeadline = offer.fundingDueAt?.getTime() ?? offer.expiresAt.getTime();
+      const shiftEnd = offer.shift.endsAt.getTime();
+      const kind = credentialKind(offer.professional.profession);
+      const cred = offer.professional.credentials.find((c) => c.kind === kind);
+      const insuranceRequired = offer.shift.insuranceRequired;
+      const insuranceValid =
+        !insuranceRequired ||
+        offer.professional.insurance.some(
+          (i) =>
+            i.state === "Verified" &&
+            i.validUntil !== null &&
+            i.validUntil.getTime() >= shiftEnd,
+        );
+      const overlap = await scheduleOverlaps(
+        tx,
+        offer.professionalId,
+        offer.shift.startsAt.getTime(),
+        offer.shift.endsAt.getTime(),
+        { excludeOfferId: offer.id },
+      );
+
+      const ctx: ConfirmationContext = {
+        clinicActiveVerified: offer.shift.workspace.verification === "Verified",
+        professionalActiveVerified: offer.professional.verification === "Verified",
+        credentialValidThroughShiftEnd:
+          cred?.state === "Verified" &&
+          cred.validUntil !== null &&
+          cred.validUntil.getTime() >= shiftEnd,
+        insuranceRequired,
+        insuranceValidThroughShiftEnd: insuranceValid,
+        clinicServiceSupported: true,
+        shiftCategorySupported: true,
+        hasSuspension: cred?.state === "Suspended",
+        hasBlockingHold: false,
+        hasScheduleOverlap: overlap,
+        offerExpired: isExpired(now, fundingDeadline),
+        durablePrefundingSucceeded: true, // capture already succeeded before this call
+      };
+      const eligibility = checkConfirmationEligibility(ctx);
+      if (!eligibility.eligible) {
+        throw new EligibilityError(eligibility.failures);
+      }
+
       const converted = await tx.offer.updateMany({
         where: { id: input.offerId, state: "AwaitingPayment" },
         data: { state: "Converted" },
@@ -645,7 +763,6 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       if (converted.count !== 1) {
         throw new ConflictError("offer is no longer awaiting payment (concurrent update)");
       }
-      const offer = await tx.offer.findUniqueOrThrow({ where: { id: input.offerId } });
       const booking = await tx.booking.create({
         data: {
           offerId: input.offerId,
@@ -967,8 +1084,16 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
   }
 
   async suspendCredential(professionalId: string): Promise<boolean> {
+    // VER-04: suspend the profession-required credential only (licence for nurses,
+    // certificate for dental assistants). findFirst without a kind filter could suspend a
+    // decoy row and leave the gate credential active.
+    const pro = await prisma.professionalProfile.findUnique({
+      where: { id: professionalId },
+      select: { profession: true },
+    });
+    if (!pro) return false;
     const cred = await prisma.credential.findFirst({
-      where: { professionalId },
+      where: { professionalId, kind: credentialKind(pro.profession) },
     });
     if (!cred) return false;
     if (cred.state === "Suspended") return true; // idempotent
@@ -1521,22 +1646,31 @@ export class PrismaMarketplaceStore implements MarketplaceRepository {
       where: { state: { in: ["Confirmed", "InProgress", "AwaitingCompletion"] } },
       include: {
         professional: {
-          select: { displayName: true, credentials: { select: { state: true } } },
+          select: {
+            displayName: true,
+            profession: true,
+            credentials: { select: { kind: true, state: true } },
+          },
         },
         shift: { include: { workspace: { select: { branchName: true } } } },
       },
       orderBy: { confirmedAt: "desc" },
       take: 50,
     });
-    return bookings.map((b) => ({
-      bookingId: b.id,
-      professionalId: b.professionalId,
-      professionalName: b.professional.displayName,
-      clinicName: b.shift.workspace.branchName,
-      state: b.state,
-      held: b.heldAt !== null,
-      credential: b.professional.credentials[0]?.state ?? "Submitted",
-    }));
+    return bookings.map((b) => {
+      const kind = credentialKind(b.professional.profession);
+      const cred = b.professional.credentials.find((c) => c.kind === kind);
+      return {
+        bookingId: b.id,
+        professionalId: b.professionalId,
+        professionalName: b.professional.displayName,
+        clinicName: b.shift.workspace.branchName,
+        state: b.state,
+        held: b.heldAt !== null,
+        // VER-04: Ops must see the gate credential, not an arbitrary credentials[0] row.
+        credential: cred?.state ?? "Submitted",
+      };
+    });
   }
 
   async postMessage(bookingId: string, senderId: string, body: string): Promise<MessageRecord> {

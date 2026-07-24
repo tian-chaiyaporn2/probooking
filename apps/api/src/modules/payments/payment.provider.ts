@@ -27,9 +27,14 @@ export interface RefundRequest {
   amount: Satang;
 }
 
+type RefundResult =
+  | { succeeded: true; providerRef: string }
+  | { succeeded: false; reason: string };
+
 export interface PaymentProvider {
   capture(req: CaptureRequest): Promise<CaptureResult>;
-  refund(req: RefundRequest): Promise<{ succeeded: true; providerRef: string }>;
+  /** Unwind a capture. May fail — callers must check `succeeded` before assuming funds are free. */
+  refund(req: RefundRequest): Promise<RefundResult>;
 }
 
 @Injectable()
@@ -48,7 +53,7 @@ export class MockPaymentProvider implements PaymentProvider {
    * Unwind a capture when confirm fails after funds were collected (no booking created).
    * Mock is always successful; a real provider would reverse the partner transaction.
    */
-  async refund(req: RefundRequest): Promise<{ succeeded: true; providerRef: string }> {
+  async refund(req: RefundRequest): Promise<RefundResult> {
     return { succeeded: true, providerRef: `mock_refund_${req.orderRef}` };
   }
 }

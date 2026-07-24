@@ -92,6 +92,13 @@ export async function seedConfirmedBooking(
     insuranceRequired: opts.insuranceRequired ?? false,
   });
   await store.applyToShift(shiftId, professionalId);
+  // When the shift requires insurance, VER-05 evidence must be valid through shift end
+  // before confirmBooking's §6.3 re-check will convert the offer.
+  if (opts.insuranceRequired) {
+    const shiftEnd = now + (opts.shiftStartOffsetHours ?? 48) * HOUR + 4 * HOUR;
+    await store.submitInsurance(professionalId, shiftEnd + HOUR);
+    await store.verifyInsurance(professionalId);
+  }
   const offer = await store.createOfferForShift({
     shiftId,
     professionalId,
@@ -113,6 +120,8 @@ export async function seedConfirmedBooking(
     },
     captured: checkout.total,
     idempotencyKey: `collection:${offer.id}`,
+    // Scenario clock: fundingDueAt is anchored to `now`, which may be far in the past.
+    now,
   });
 
   return {

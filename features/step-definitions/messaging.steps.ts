@@ -34,6 +34,7 @@ When("the offer is confirmed into a booking", async function (this: ProBookingWo
     },
     captured: checkout.total,
     idempotencyKey: `collection:${o.offerId}`,
+    now: o.fundingDueAt - 1,
   });
   this.state.bookingId = booking.id;
 });

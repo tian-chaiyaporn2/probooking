@@ -6,16 +6,6 @@ import { Given, When, Then } from "@cucumber/cucumber";
  * Do not implement these until the matching product hooks exist.
  */
 
-// ----- AVL: soft-hold overlap (hasScheduleOverlap ignores AwaitingPayment) -----
-Given("a professional with an accepted-offer soft hold from {int}:{int} to {int}:{int}", function (
-  _h1: number,
-  _m1: number,
-  _h2: number,
-  _m2: number,
-) {
-  return "pending";
-});
-
 Given("a professional marked Open to requests with no fixed block for a window", function () {
   return "pending";
 });

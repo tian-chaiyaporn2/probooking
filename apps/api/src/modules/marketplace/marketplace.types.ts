@@ -330,6 +330,12 @@ export interface ConfirmBookingInput {
   };
   captured: number; // integer satang (total collected)
   idempotencyKey: string; // dedupes the collection event (PAY-04)
+  /**
+   * Clock for §6.3 expiry evaluation. Defaults to Date.now(). Demo/BDD seeds of
+   * historical bookings pass the scenario clock so past funding windows still convert;
+   * the HTTP confirm path never supplies this.
+   */
+  now?: number;
 }
 
 export interface ConfirmBookingResult {
@@ -534,6 +540,12 @@ export interface MarketplaceRepository {
     opts?: { fundingDueAt?: number; from?: OfferState },
   ): Promise<OfferRecord | null>;
   /**
+   * OFF-04 / AVL-03: claim PendingResponse → AwaitingPayment and assert no schedule
+   * overlap in the same critical section (soft holds + bookings). Returns null if the
+   * offer is no longer pending; throws ConflictError on schedule overlap.
+   */
+  acceptOffer(id: string, opts: { fundingDueAt: number }): Promise<OfferRecord | null>;
+  /**
    * OFF-03: move past-deadline PendingResponse / AwaitingPayment offers to Expired.
    * Returns how many offers were expired this pass.
    */
@@ -541,7 +553,9 @@ export interface MarketplaceRepository {
   /**
    * Atomically (BKG-02) transition the offer to Converted AND create the Booking and
    * its Payment Protected money records (PaymentOrder + FinancialAllocation + a
-   * Collection FinancialEvent) in one transaction. Returns booking + payment order id.
+   * Collection FinancialEvent) in one transaction. Re-checks §6.3 eligibility and
+   * AVL-03 overlap under a professional row lock so concurrent confirms cannot race.
+   * Returns booking + payment order id.
    */
   confirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult>;
   getBookingByOffer(offerId: string): Promise<BookingRecord | null>;

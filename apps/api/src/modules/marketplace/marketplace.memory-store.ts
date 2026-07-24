@@ -54,11 +54,17 @@ import {
   advanceVerification,
   aggregateRating,
   autoAcceptDueAt,
+  checkConfirmationEligibility,
   credentialKind,
+  isExpired,
+  type ConfirmationContext,
 } from "@probook/domain";
-import { ConflictError } from "./errors.util.js";
+import { ConflictError, EligibilityError } from "./errors.util.js";
 import { assertLedgerHeadroom, remainingLedgerFunds } from "./money-ledger.util.js";
 import type { OfferState, VerificationState, RatingSummary, Role } from "@probook/domain";
+
+/** Soft-hold offer states that block overlapping acceptance (AVL-03 / §6.3). */
+const SOFT_HOLD_STATES = new Set(["AwaitingPayment", "PaymentFailed"]);
 
 interface MemReview {
   id: string;
@@ -447,6 +453,21 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     endsAt: number,
     opts?: { excludeOfferId?: string },
   ): Promise<boolean> {
+    return this.scheduleOverlapsSync(professionalId, startsAt, endsAt, opts);
+  }
+
+  /**
+   * Synchronous overlap check. Kept sync so acceptOffer can check-then-claim with no `await`
+   * between them — an awaited call would yield the event loop and let a second concurrent
+   * accept observe "no soft hold" before this one claims (the single-process analogue of the
+   * Prisma row lock).
+   */
+  private scheduleOverlapsSync(
+    professionalId: string,
+    startsAt: number,
+    endsAt: number,
+    opts?: { excludeOfferId?: string },
+  ): boolean {
     for (const b of this.bookings.values()) {
       if (b.professionalId !== professionalId) continue;
       if (b.state !== "Confirmed" && b.state !== "InProgress" && b.state !== "AwaitingCompletion") continue;
@@ -454,10 +475,10 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
       if (!shift) continue;
       if (shift.startsAt < endsAt && shift.startsAt + SHIFT_LEN_MS > startsAt) return true;
     }
-    // Soft hold: AwaitingPayment offers block the same window (AVL-03 / §6.3).
+    // Soft holds: AwaitingPayment and PaymentFailed both block the window (AVL-03 / §6.3).
     for (const o of this.offers.values()) {
       if (o.professionalId !== professionalId) continue;
-      if (o.state !== "AwaitingPayment") continue;
+      if (!SOFT_HOLD_STATES.has(o.state)) continue;
       if (opts?.excludeOfferId && o.id === opts.excludeOfferId) continue;
       if (o.shiftStart < endsAt && o.shiftStart + SHIFT_LEN_MS > startsAt) return true;
     }
@@ -529,6 +550,22 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     return offer;
   }
 
+  async acceptOffer(id: string, opts: { fundingDueAt: number }): Promise<OfferRecord | null> {
+    // Critical section (single-process analogue of Prisma's professional row lock): read the
+    // offer, check overlap, and claim with NO `await` in between, so two concurrent accepts
+    // on overlapping shifts cannot both observe "no soft hold" and both claim. The overlap
+    // check must stay synchronous for this to hold — see scheduleOverlapsSync.
+    const offer = this.offers.get(id);
+    if (!offer || offer.state !== "PendingResponse") return null;
+    const endsAt = offer.shiftStart + SHIFT_LEN_MS;
+    if (this.scheduleOverlapsSync(offer.professionalId, offer.shiftStart, endsAt, { excludeOfferId: id })) {
+      throw new ConflictError("schedule overlap (AVL-03)");
+    }
+    offer.state = "AwaitingPayment";
+    offer.fundingDueAt = opts.fundingDueAt;
+    return offer;
+  }
+
   async expireStaleOffers(now: number): Promise<number> {
     let count = 0;
     for (const o of this.offers.values()) {
@@ -556,6 +593,34 @@ export class InMemoryMarketplaceStore implements MarketplaceRepository {
     if (!offer || offer.state !== "AwaitingPayment") {
       throw new ConflictError("offer is no longer awaiting payment (concurrent update)");
     }
+
+    // Re-check §6.3 + AVL-03 at confirm time (parity with Prisma's in-transaction gates).
+    const eligibility = await this.getOfferEligibility(input.offerId);
+    const now = input.now ?? Date.now();
+    const fundingDeadline = offer.fundingDueAt ?? offer.expiresAt;
+    const overlap = await this.hasScheduleOverlap(
+      offer.professionalId,
+      offer.shiftStart,
+      offer.shiftStart + SHIFT_LEN_MS,
+      { excludeOfferId: offer.id },
+    );
+    const ctx: ConfirmationContext = {
+      clinicActiveVerified: eligibility?.clinicVerified ?? false,
+      professionalActiveVerified: eligibility?.professionalVerified ?? false,
+      credentialValidThroughShiftEnd: eligibility?.credentialValidThroughShiftEnd ?? false,
+      insuranceRequired: eligibility?.insuranceRequired ?? false,
+      insuranceValidThroughShiftEnd: eligibility?.insuranceValidThroughShiftEnd ?? false,
+      clinicServiceSupported: true,
+      shiftCategorySupported: true,
+      hasSuspension: !(eligibility?.professionalNotSuspended ?? false),
+      hasBlockingHold: false,
+      hasScheduleOverlap: overlap,
+      offerExpired: isExpired(now, fundingDeadline),
+      durablePrefundingSucceeded: true,
+    };
+    const gate = checkConfirmationEligibility(ctx);
+    if (!gate.eligible) throw new EligibilityError(gate.failures);
+
     offer.state = "Converted"; // atomic with the booking here by construction
     const shift = this.shifts.get(input.shiftId);
     const shiftStart = shift?.startsAt ?? offer?.shiftStart ?? 0;

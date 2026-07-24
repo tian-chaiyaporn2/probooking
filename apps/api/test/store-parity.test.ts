@@ -279,6 +279,100 @@ describe.each(stores)("$name store contract", ({ make }) => {
     const expired = await store.expireStaleOffers(Date.now());
     expect(expired).toBeGreaterThanOrEqual(1);
   });
+
+  it("treats a PaymentFailed offer as a soft hold that blocks schedule overlap (AVL-03)", async () => {
+    const store = make();
+    const n = uniq();
+    const clinic = await store.registerClinic({
+      branchName: `PF ${n}`,
+      licenceNo: "L",
+      address: "BKK",
+      ownerPhone: `+66pf${n}`,
+    });
+    await store.verifyClinic(clinic.id);
+    const pro = await store.registerProfessional({
+      displayName: "P",
+      profession: "nurse",
+      phone: `+66ppf${n}`,
+      payoutRef: "x",
+    });
+    await store.verifyProfessional(pro.id);
+    const start = Date.now() + 72 * 3_600_000;
+    const { shiftId } = await store.postShift({
+      clinicWorkspaceId: clinic.id,
+      category: "general",
+      compensation: 1_000_000,
+      urgency: "standard",
+      shiftStart: start,
+      insuranceRequired: false,
+    });
+    await store.applyToShift(shiftId, pro.id);
+    const offer = await store.createOfferForShift({
+      shiftId,
+      professionalId: pro.id,
+      sentAt: Date.now(),
+      expiresAt: Date.now() + 12 * 3_600_000,
+    });
+    await store.setOfferState(offer.id, "AwaitingPayment", {
+      fundingDueAt: Date.now() + 30 * 60_000,
+    });
+    await store.setOfferState(offer.id, "PaymentFailed");
+
+    expect(
+      await store.hasScheduleOverlap(pro.id, start + 60 * 60_000, start + 5 * 3_600_000),
+    ).toBe(true);
+  });
+
+  it("confirmBooking refuses after Ops suspends the required credential (VER-04)", async () => {
+    const store = make();
+    const n = uniq();
+    const clinic = await store.registerClinic({
+      branchName: `SU ${n}`,
+      licenceNo: "L",
+      address: "BKK",
+      ownerPhone: `+66su${n}`,
+    });
+    await store.verifyClinic(clinic.id);
+    const pro = await store.registerProfessional({
+      displayName: "P",
+      profession: "nurse",
+      phone: `+66sup${n}`,
+      payoutRef: "x",
+    });
+    await store.verifyProfessional(pro.id);
+    const { shiftId } = await store.postShift({
+      clinicWorkspaceId: clinic.id,
+      category: "general",
+      compensation: 1_000_000,
+      urgency: "standard",
+      shiftStart: Date.now() + 48 * 3_600_000,
+      insuranceRequired: false,
+    });
+    await store.applyToShift(shiftId, pro.id);
+    const offer = await store.createOfferForShift({
+      shiftId,
+      professionalId: pro.id,
+      sentAt: Date.now(),
+      expiresAt: Date.now() + 12 * 3_600_000,
+    });
+    await store.setOfferState(offer.id, "AwaitingPayment", {
+      fundingDueAt: Date.now() + 30 * 60_000,
+    });
+    await store.suspendCredential(pro.id);
+
+    await expect(
+      store.confirmBooking({
+        offerId: offer.id,
+        shiftId,
+        clinicWorkspaceId: clinic.id,
+        professionalId: pro.id,
+        allocation: { compensation: 1_000_000, serviceFee: 120_000, tax: 0 },
+        captured: 1_120_000,
+        idempotencyKey: `collection:${offer.id}`,
+      }),
+    ).rejects.toThrow(/NOT_ELIGIBLE/);
+    expect(await store.getBookingByOffer(offer.id)).toBeNull();
+  });
 });
 
 /**
